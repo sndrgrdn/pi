@@ -1,0 +1,14 @@
+{
+  "providers": {
+    "anthropic": {
+      "modelOverrides": {
+        "claude-opus-4-6": {
+          "contextWindow": 300000
+        },
+        "claude-sonnet-4-6": {
+          "contextWindow": 300000
+        }
+      }
+    }
+  }
+}

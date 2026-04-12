@@ -1,0 +1,19 @@
+{
+  "lastChangelogVersion": "0.66.1",
+  "theme": "catppuccin-macchiato",
+  "defaultThinkingLevel": "high",
+  "hideThinkingBlock": true,
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-opus-4-6",
+  "packages": [
+    "npm:pi-upgrade"
+  ],
+  "editorPaddingX": 1,
+  "enabledModels": [
+    "openai-codex/gpt-5.3-codex",
+    "anthropic/claude-opus-4-5",
+    "opencode-go/kimi-k2.5",
+    "openai-codex/gpt-5.4",
+    "anthropic/claude-opus-4-6"
+  ]
+}

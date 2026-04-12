@@ -1,0 +1,8 @@
+{
+  "devDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*",
+    "@types/node": "*",
+    "typescript": "*"
+  }
+}

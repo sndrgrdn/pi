@@ -1,0 +1,6 @@
+.cache
+node_modules
+sessions
+*.disabled
+/fff
+auth.json
