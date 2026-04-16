@@ -1,19 +1,21 @@
 {
-  "lastChangelogVersion": "0.66.1",
+  "lastChangelogVersion": "0.67.3",
   "theme": "catppuccin-macchiato",
   "defaultThinkingLevel": "high",
   "hideThinkingBlock": true,
   "defaultProvider": "anthropic",
   "defaultModel": "claude-opus-4-6",
   "packages": [
-    "npm:pi-upgrade"
+    "npm:pi-upgrade",
+    "git:github.com/earendil-works/pi-review",
+    "npm:@plannotator/pi-extension"
   ],
   "editorPaddingX": 1,
   "enabledModels": [
     "openai-codex/gpt-5.3-codex",
     "anthropic/claude-opus-4-5",
-    "opencode-go/kimi-k2.5",
     "openai-codex/gpt-5.4",
     "anthropic/claude-opus-4-6"
-  ]
+  ],
+  "quietStartup": true
 }

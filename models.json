@@ -1,5 +1,25 @@
 {
   "providers": {
+    "llama-cpp": {
+      "baseUrl": "http://localhost:9876/v1",
+      "api": "openai-completions",
+      "apiKey": "none",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false,
+        "maxTokensField": "max_tokens"
+      },
+      "models": [
+        {
+          "id": "gemma-4-26b",
+          "name": "Gemma 4 26B A4B (Local)",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 65536,
+          "maxTokens": 16384
+        }
+      ]
+    },
     "anthropic": {
       "modelOverrides": {
         "claude-opus-4-6": {
