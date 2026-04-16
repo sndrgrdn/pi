@@ -2,9 +2,8 @@
  * CC Prompt Patch — patches pi's built-in provider (no token swap)
  *
  * Uses pi's OWN OAuth token. Only patches the request payload:
- * 1. Sanitizes trigger phrases from system prompt (trips the API classifier)
- * 2. Adds billing header for subscription rate-limit bucket
- * 3. Strips the separate identity prefix block that triggers detection
+ * 1. Adds billing header for subscription rate-limit bucket
+ * 2. Strips the separate identity prefix block that triggers detection
  *
  * Preserves ALL of pi's built-in behaviors: prompt caching, session routing,
  * compaction, tool name mapping, thinking modes, token refresh, etc.
@@ -15,22 +14,6 @@
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-
-function sanitizeSystemPrompt(text: string): string {
-	return text
-		.replace(/operating inside pi, a coding agent harness\./g, "operating as a coding assistant.")
-		.replace(/Pi documentation/g, "Documentation")
-		.replace(/pi itself,/g, "the tool itself,")
-		.replace(/pi packages/g, "packages")
-		.replace(/read pi \.md/g, "read .md")
-		.replace(/pi-coding-agent/g, "coding-agent")
-		.replace(/@mariozechner\/pi-ai/g, "@anthropic/ai")
-		.replace(/@mariozechner\/pi-tui/g, "@anthropic/tui")
-		.replace(/about pi\b/g, "about this tool")
-		.replace(/pi update\b/g, "update")
-		.replace(/Run pi update/g, "Run update")
-		.replace(/\bpi\b([\s,.])/g, "the assistant$1");
-}
 
 export default function (pi: ExtensionAPI) {
 	pi.on("before_provider_request", async (event, _ctx) => {
@@ -53,14 +36,14 @@ export default function (pi: ExtensionAPI) {
 				if (block.text.startsWith("x-anthropic-billing-header")) continue;
 				if (block.text.startsWith("You are") && block.text.includes("official CLI")) continue;
 
-				newBlocks.push({ ...block, text: sanitizeSystemPrompt(block.text) });
+				newBlocks.push(block);
 			}
 
 			payload.system = newBlocks;
 		} else if (typeof payload.system === "string") {
 			payload.system = [
 				{ type: "text", text: "x-anthropic-billing-header: cc_version=2.1.96.000; cc_entrypoint=cli;" },
-				{ type: "text", text: sanitizeSystemPrompt(payload.system) },
+				{ type: "text", text: payload.system },
 			];
 		}
 
@@ -71,9 +54,5 @@ export default function (pi: ExtensionAPI) {
 		}
 
 		return payload;
-	});
-
-	pi.on("session_start", async (_e, ctx) => {
-		ctx.ui.notify("cc-patch: prompt sanitization active", "info");
 	});
 }
