@@ -1,22 +1,12 @@
 {
-  "name": "pi-fff-extension",
+  "name": "pi-fff-vendored",
+  "version": "0.2.4",
   "private": true,
-  "version": "0.1.0",
   "type": "module",
-  "scripts": {
-    "typecheck": "tsc --noEmit"
-  },
   "pi": {
-    "extensions": ["./src/index.ts"]
+    "extensions": ["./index.ts"]
   },
   "dependencies": {
-    "@ff-labs/fff-node": "^0.5.1"
-  },
-  "devDependencies": {
-    "@mariozechner/pi-coding-agent": "*",
-    "@mariozechner/pi-tui": "*",
-    "@sinclair/typebox": "*",
-    "@types/node": "^24.5.2",
-    "typescript": "^6.0.2"
+    "@ff-labs/fff-node": "^0.5.2"
   }
 }

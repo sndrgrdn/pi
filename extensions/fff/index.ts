@@ -3,8 +3,6 @@
  *
  * Overrides built-in `find` and `grep` tools with FFF and can also replace
  * @-mention autocomplete suggestions in the interactive editor.
- *
- * https://github.com/SamuelLHuber/pi-fff
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
@@ -14,14 +12,15 @@ import {
 	truncateHead,
 	DEFAULT_MAX_BYTES,
 	formatSize,
-	ExtensionContext
 } from "@mariozechner/pi-coding-agent";
 import { Text, type AutocompleteItem, type AutocompleteProvider, type AutocompleteSuggestions } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { join } from "path";
 import { FileFinder } from "@ff-labs/fff-node";
 import type { GrepCursor, GrepMode, GrepResult, SearchResult } from "@ff-labs/fff-node";
+import { execSync } from "child_process";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "fs";
+import { isAbsolute, join, relative, resolve } from "path";
+import { homedir } from "os";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -38,6 +37,98 @@ const GREP_MAX_LINE_LENGTH = 500;
 const MENTION_MAX_RESULTS = 20;
 
 type FffMode = "both" | "tools-only";
+
+// ---------------------------------------------------------------------------
+// Path normalisation helpers
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Path helpers
+// ---------------------------------------------------------------------------
+
+/** Expand ~ and strip leading @ from a raw path. */
+function expandPath(raw: string): string {
+	let p = raw;
+	if (p.startsWith("@")) p = p.slice(1);
+	if (p === "~" || p.startsWith("~/")) {
+		p = join(homedir(), p.slice(1));
+	}
+	return p;
+}
+
+/** Resolve a raw path param to an absolute path. */
+function resolveAbsolute(raw: string, cwd: string): string {
+	const expanded = expandPath(raw);
+	return isAbsolute(expanded) ? expanded : resolve(cwd, expanded);
+}
+
+/** Find the git root for a directory, or return the directory itself. */
+function findGitRoot(dir: string): string {
+	try {
+		return execSync("git rev-parse --show-toplevel", {
+			cwd: dir,
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+			timeout: 3000,
+		}).trim();
+	} catch {
+		return dir;
+	}
+}
+
+/** Check if absPath lives under basePath. */
+function isUnder(absPath: string, basePath: string): boolean {
+	const rel = relative(basePath, absPath);
+	return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+}
+
+/** Check if two paths are the same directory. */
+function isSameDir(a: string, b: string): boolean {
+	return resolve(a) === resolve(b);
+}
+
+/**
+ * Given a resolved absolute target path, determine the best base directory
+ * for an FFF finder. Returns { basePath, constraint } where constraint is
+ * the FFF query prefix (relative dir with trailing /, glob, or file path).
+ */
+function resolveFinderTarget(
+	absTarget: string,
+	activeCwd: string,
+): { basePath: string; constraint: string | null } {
+	// If it's a glob (contains * ? {), it applies to the current cwd
+	if (/[*?{]/.test(absTarget)) {
+		return { basePath: activeCwd, constraint: absTarget };
+	}
+
+	let isDir = false;
+	try { isDir = existsSync(absTarget) && statSync(absTarget).isDirectory(); } catch {}
+
+	// If target is under activeCwd, just use a relative constraint
+	if (isSameDir(absTarget, activeCwd) || isUnder(absTarget, activeCwd)) {
+		const rel = relative(activeCwd, absTarget);
+		if (rel === "" || rel === ".") return { basePath: activeCwd, constraint: null };
+		const constraint = isDir ? (rel.endsWith("/") ? rel : `${rel}/`) : rel;
+		return { basePath: activeCwd, constraint };
+	}
+
+	// Target is outside activeCwd — find the right base
+	const targetDir = isDir ? absTarget : resolve(absTarget, "..");
+	const basePath = findGitRoot(targetDir);
+
+	if (isSameDir(absTarget, basePath)) {
+		return { basePath, constraint: null };
+	}
+
+	const rel = relative(basePath, absTarget);
+	if (rel.startsWith("..") || isAbsolute(rel)) {
+		// Can't make relative — use target dir directly
+		return { basePath: targetDir, constraint: null };
+	}
+
+	const constraint = isDir ? (rel.endsWith("/") ? rel : `${rel}/`) : rel;
+	return { basePath, constraint };
+}
 
 // ---------------------------------------------------------------------------
 // Cursor store — maps opaque IDs to GrepCursor values across tool calls
@@ -193,8 +284,8 @@ class FffEditor extends CustomEditor {
 // ---------------------------------------------------------------------------
 
 export default function fffExtension(pi: ExtensionAPI) {
-	let finder: FileFinder | null = null;
-	let finderCwd: string | null = null;
+	const MAX_FINDERS = 4;
+	const finderPool = new Map<string, FileFinder>();
 	let activeCwd = process.cwd();
 	const cursorStore = new CursorStore();
 
@@ -237,18 +328,32 @@ export default function fffExtension(pi: ExtensionAPI) {
 		return readConfigMode();
 	}
 
-	async function ensureFinder(cwd: string): Promise<FileFinder> {
-		if (finder && !finder.isDestroyed && finderCwd === cwd) return finder;
-		if (finder && !finder.isDestroyed && finderCwd !== cwd) {
-			finder.destroy();
-			finder = null;
-			finderCwd = null;
+	async function ensureFinder(basePath: string): Promise<FileFinder> {
+		const key = resolve(basePath);
+
+		// Return existing finder if alive
+		const existing = finderPool.get(key);
+		if (existing && !existing.isDestroyed) {
+			// Move to end (most recent) by re-inserting
+			finderPool.delete(key);
+			finderPool.set(key, existing);
+			return existing;
 		}
 
+		// Evict oldest if at capacity
+		if (finderPool.size >= MAX_FINDERS) {
+			const oldestKey = finderPool.keys().next().value!;
+			const oldest = finderPool.get(oldestKey);
+			if (oldest && !oldest.isDestroyed) oldest.destroy();
+			finderPool.delete(oldestKey);
+		}
+
+		// Only the primary finder (activeCwd) gets frecency/history dbs.
+		// LMDB only allows one open env per db path per process.
+		const isPrimary = key === resolve(activeCwd);
 		const result = FileFinder.create({
-			basePath: cwd,
-			frecencyDbPath: FRECENCY_DB_PATH,
-			historyDbPath: HISTORY_DB_PATH,
+			basePath: key,
+			...(isPrimary ? { frecencyDbPath: FRECENCY_DB_PATH, historyDbPath: HISTORY_DB_PATH } : {}),
 			aiMode: true,
 		});
 
@@ -256,30 +361,20 @@ export default function fffExtension(pi: ExtensionAPI) {
 			throw new Error(`Failed to create FFF file finder: ${result.error}`);
 		}
 
-		const createdFinder = result.value;
-		finder = createdFinder;
-		finderCwd = cwd;
+		const finder = result.value;
+		finderPool.set(key, finder);
+		const scanResult = await finder.waitForScan(15000);
+		if (scanResult.ok && !scanResult.value) {
+			// timed out but finder is still usable with partial index
+		}
 
-		// Warm up scan in the background so session startup is not blocked.
-		void (async () => {
-			try {
-				const scanResult = await createdFinder.waitForScan(15000);
-				if (scanResult.ok && !scanResult.value) {
-					// timed out but finder is still usable with partial index
-				}
-			} catch {
-				// ignore warmup failures; finder can still serve partial results
-			}
-		})();
-
-		return createdFinder;
+		return finder;
 	}
 
-	function destroyFinder() {
-		if (finder && !finder.isDestroyed) {
-			finder.destroy();
-			finder = null;
-			finderCwd = null;
+	function destroyAllFinders() {
+		for (const [key, f] of finderPool) {
+			if (!f.isDestroyed) f.destroy();
+			finderPool.delete(key);
 		}
 	}
 
@@ -319,18 +414,20 @@ export default function fffExtension(pi: ExtensionAPI) {
 		type: "string",
 	});
 
-	pi.on("session_start", (_event, ctx) => {
-		activeCwd = ctx.cwd;
-		applyEditorMode(ctx);
-		void ensureFinder(activeCwd).catch((e: unknown) => {
+	pi.on("session_start", async (_event, ctx) => {
+		try {
+			activeCwd = ctx.cwd;
+			await ensureFinder(activeCwd);
+			applyEditorMode(ctx);
+		} catch (e: unknown) {
 			const msg = e instanceof Error ? e.message : String(e);
 			ctx.ui.notify(`FFF init failed: ${msg}`, "error");
-		});
+		}
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
 		ctx.ui.setEditorComponent(undefined);
-		destroyFinder();
+		destroyAllFinders();
 	});
 
 	// --- grep tool (overrides built-in) ---
@@ -374,12 +471,25 @@ export default function fffExtension(pi: ExtensionAPI) {
 		async execute(_toolCallId, params, signal) {
 			if (signal?.aborted) throw new Error("Operation aborted");
 
-			const f = await ensureFinder(activeCwd);
+			let basePath = activeCwd;
+			let constraint: string | null = null;
+
+			if (params.path && !/[*?{]/.test(params.path)) {
+				const absTarget = resolveAbsolute(params.path, activeCwd);
+				const target = resolveFinderTarget(absTarget, activeCwd);
+				basePath = target.basePath;
+				constraint = target.constraint;
+			} else if (params.path) {
+				// Glob constraint — stays on activeCwd finder
+				constraint = params.path;
+			}
+
+			const f = await ensureFinder(basePath);
 			const effectiveLimit = Math.max(1, params.limit ?? DEFAULT_GREP_LIMIT);
 
 			let query = params.pattern;
-			if (params.path) {
-				query = `${params.path} ${query}`;
+			if (constraint) {
+				query = `${constraint} ${query}`;
 			}
 
 			const isLiteral = params.literal !== false;
@@ -510,12 +620,24 @@ export default function fffExtension(pi: ExtensionAPI) {
 		async execute(_toolCallId, params, signal) {
 			if (signal?.aborted) throw new Error("Operation aborted");
 
-			const f = await ensureFinder(activeCwd);
+			let basePath = activeCwd;
+			let constraint: string | null = null;
+
+			if (params.path && !/[*?{]/.test(params.path)) {
+				const absTarget = resolveAbsolute(params.path, activeCwd);
+				const target = resolveFinderTarget(absTarget, activeCwd);
+				basePath = target.basePath;
+				constraint = target.constraint;
+			} else if (params.path) {
+				constraint = params.path;
+			}
+
+			const f = await ensureFinder(basePath);
 			const effectiveLimit = Math.max(1, params.limit ?? DEFAULT_FIND_LIMIT);
 
 			let query = params.pattern;
-			if (params.path) {
-				query = `${params.path} ${query}`;
+			if (constraint) {
+				query = `${constraint} ${query}`;
 			}
 
 			const searchResult = f.fileSearch(query, {
@@ -751,51 +873,52 @@ export default function fffExtension(pi: ExtensionAPI) {
 	pi.registerCommand("fff-health", {
 		description: "Show FFF file finder health and status",
 		handler: async (_args, ctx) => {
-			if (!finder || finder.isDestroyed) {
-				ctx.ui.notify("FFF not initialized", "warning");
+			if (finderPool.size === 0) {
+				ctx.ui.notify("FFF not initialized (no finders)", "warning");
 				return;
 			}
 
-			const health = finder.healthCheck();
-			if (!health.ok) {
-				ctx.ui.notify(`Health check failed: ${health.error}`, "error");
-				return;
+			const allLines: string[] = [];
+			for (const [key, f] of finderPool) {
+				if (f.isDestroyed) continue;
+				const health = f.healthCheck();
+				if (!health.ok) {
+					allLines.push(`[${key}] Health check failed: ${health.error}`);
+					continue;
+				}
+				const h = health.value;
+				allLines.push(
+					`[${key}]`,
+					`  FFF v${h.version}`,
+					`  Git: ${h.git.repositoryFound ? `yes (${h.git.workdir ?? "unknown"})` : "no"}`,
+					`  Picker: ${h.filePicker.initialized ? `${h.filePicker.indexedFiles ?? 0} files` : "not initialized"}`,
+				);
+				const progress = f.getScanProgress();
+				if (progress.ok) {
+					allLines.push(`  Scanning: ${progress.value.isScanning ? "yes" : "no"} (${progress.value.scannedFilesCount} files)`);
+				}
 			}
-
-			const h = health.value;
-			const lines = [
-				`FFF v${h.version}`,
-				`Mode: ${getMode()}`,
-				`Git: ${h.git.repositoryFound ? `yes (${h.git.workdir ?? "unknown"})` : "no"}`,
-				`Picker: ${h.filePicker.initialized ? `${h.filePicker.indexedFiles ?? 0} files` : "not initialized"}`,
-				`Frecency: ${h.frecency.initialized ? "active" : "disabled"}`,
-				`Query tracker: ${h.queryTracker.initialized ? "active" : "disabled"}`,
-			];
-
-			const progress = finder.getScanProgress();
-			if (progress.ok) {
-				lines.push(`Scanning: ${progress.value.isScanning ? "yes" : "no"} (${progress.value.scannedFilesCount} files)`);
-			}
-
-			ctx.ui.notify(lines.join("\n"), "info");
+			allLines.unshift(`Mode: ${getMode()}`, `Finders: ${finderPool.size}`);
+			ctx.ui.notify(allLines.join("\n"), "info");
 		},
 	});
 
 	pi.registerCommand("fff-rescan", {
 		description: "Trigger FFF to rescan files",
 		handler: async (_args, ctx) => {
-			if (!finder || finder.isDestroyed) {
-				ctx.ui.notify("FFF not initialized", "warning");
+			if (finderPool.size === 0) {
+				ctx.ui.notify("FFF not initialized (no finders)", "warning");
 				return;
 			}
 
-			const result = finder.scanFiles();
-			if (!result.ok) {
-				ctx.ui.notify(`Rescan failed: ${result.error}`, "error");
-				return;
+			let ok = 0;
+			for (const [key, f] of finderPool) {
+				if (f.isDestroyed) continue;
+				const result = f.scanFiles();
+				if (result.ok) ok++;
 			}
 
-			ctx.ui.notify("FFF rescan triggered", "info");
+			ctx.ui.notify(`FFF rescan triggered for ${ok} finder(s)`, "info");
 		},
 	});
 }
