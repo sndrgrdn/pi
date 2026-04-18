@@ -72,6 +72,14 @@ parallel safe work: read, search, check, disjoint edit.
 - `constraints` param for file/path filter, not inside pattern
 - constraints must be relative path or glob (`src/`, `*.ts`), not absolute path
 
+## Subagent
+
+- default to subagent for exploration/discovery. main context = finite resource
+- subagent burn through files, summarize, discard detail. disposable scratch pad
+- exploration in main context = noise that cramp later work
+- only skip subagent when scope *known* tiny AND result needed inline
+- `explore` agent for codebase discovery. `general` for delegated tasks
+
 ## Git & GitHub
 
 - `status`/`diff`/`log` always ok. push only when ask

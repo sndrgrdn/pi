@@ -1,6 +1,7 @@
 ---
 name: pi-docs
 description: Pi coding agent documentation lookup. Use when asked about pi itself, its SDK, extensions, themes, skills, prompt templates, TUI, keybindings, custom providers, models, packages, or how to customize pi.
+disable-model-invocation: true
 ---
 
 # Pi Documentation
