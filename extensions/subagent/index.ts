@@ -33,6 +33,15 @@ export interface CallerDefaults {
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
 const COLLAPSED_ITEM_COUNT = 10;
+const TERMINAL_MESSAGE_GRACE_MS = 1500;
+const FORCE_KILL_AFTER_GRACE_MS = 5000;
+
+/** Check if message is terminal (assistant done, no pending tool calls) */
+function isTerminalAssistantMessage(msg: Message): boolean {
+	if (msg.role !== "assistant") return false;
+	if (msg.stopReason && msg.stopReason !== "toolUse") return true;
+	return !msg.content.some((part) => typeof part !== "string" && part.type === "toolCall");
+}
 
 function formatTokens(count: number): string {
 	if (count < 1000) return count.toString();
@@ -333,6 +342,50 @@ async function runSingleAgent(
 				env: { ...process.env, PI_SUBAGENT_NAME: agent.name },
 			});
 			let buffer = "";
+			let resolved = false;
+			let sawTerminalAssistantMessage = false;
+			let terminalDrainTimer: ReturnType<typeof setTimeout> | null = null;
+			let forceKillTimer: ReturnType<typeof setTimeout> | null = null;
+			let abortListener: (() => void) | null = null;
+
+			const clearTimers = () => {
+				if (terminalDrainTimer) {
+					clearTimeout(terminalDrainTimer);
+					terminalDrainTimer = null;
+				}
+				if (forceKillTimer) {
+					clearTimeout(forceKillTimer);
+					forceKillTimer = null;
+				}
+			};
+
+			const safeResolve = (code: number) => {
+				if (resolved) return;
+				resolved = true;
+				clearTimers();
+				if (abortListener) signal?.removeEventListener("abort", abortListener);
+				if (buffer.trim()) processLine(buffer);
+				proc.stdout?.removeAllListeners("data");
+				proc.stderr?.removeAllListeners("data");
+				proc.stdout?.destroy();
+				proc.stderr?.destroy();
+				resolve(code);
+			};
+
+			const scheduleTerminalResolve = () => {
+				if (!sawTerminalAssistantMessage || resolved) return;
+				if (terminalDrainTimer) clearTimeout(terminalDrainTimer);
+				terminalDrainTimer = setTimeout(() => {
+					if (resolved) return;
+					if (proc.exitCode === null) {
+						proc.kill("SIGTERM");
+						forceKillTimer = setTimeout(() => {
+							if (proc.exitCode === null) proc.kill("SIGKILL");
+						}, FORCE_KILL_AFTER_GRACE_MS);
+					}
+					safeResolve(proc.exitCode ?? 0);
+				}, TERMINAL_MESSAGE_GRACE_MS);
+			};
 
 			const processLine = (line: string) => {
 				if (!line.trim()) return;
@@ -361,6 +414,10 @@ async function runSingleAgent(
 						if (!currentResult.model && msg.model) currentResult.model = msg.model;
 						if (msg.stopReason) currentResult.stopReason = msg.stopReason;
 						if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage;
+						if (isTerminalAssistantMessage(msg)) {
+							sawTerminalAssistantMessage = true;
+							scheduleTerminalResolve();
+						}
 					}
 					emitUpdate();
 				}
@@ -376,31 +433,33 @@ async function runSingleAgent(
 				const lines = buffer.split("\n");
 				buffer = lines.pop() || "";
 				for (const line of lines) processLine(line);
+				scheduleTerminalResolve();
 			});
 
 			proc.stderr.on("data", (data) => {
 				currentResult.stderr += data.toString();
+				scheduleTerminalResolve();
 			});
 
-			proc.on("close", (code) => {
-				if (buffer.trim()) processLine(buffer);
-				resolve(code ?? 0);
+			// Prefer process exit, but do not wait indefinitely once a terminal
+			// assistant message has already been emitted. Some extension stacks
+			// keep the child event loop alive after the final JSON event.
+			proc.on("exit", (code) => {
+				setTimeout(() => safeResolve(code ?? 0), 200);
 			});
 
-			proc.on("error", () => {
-				resolve(1);
-			});
+			proc.on("error", () => safeResolve(1));
 
 			if (signal) {
-				const killProc = () => {
+				abortListener = () => {
 					wasAborted = true;
 					proc.kill("SIGTERM");
 					setTimeout(() => {
-						if (!proc.killed) proc.kill("SIGKILL");
-					}, 5000);
+						if (proc.exitCode === null) proc.kill("SIGKILL");
+					}, FORCE_KILL_AFTER_GRACE_MS);
 				};
-				if (signal.aborted) killProc();
-				else signal.addEventListener("abort", killProc, { once: true });
+				if (signal.aborted) abortListener();
+				else signal.addEventListener("abort", abortListener, { once: true });
 			}
 		});
 
