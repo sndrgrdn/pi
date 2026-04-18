@@ -452,14 +452,14 @@ export default function fffExtension(pi: ExtensionAPI) {
 
 	pi.registerTool({
 		name: "grep",
-		label: "grep (fff)",
+		label: "Grep",
 		description: [
-			`Search file contents for a pattern using FFF (fast, frecency-ranked, git-aware).`,
+			`Search file contents for a pattern.`,
 			`Returns matching lines with file paths and line numbers. Respects .gitignore.`,
-			`Supports plain text, regex, and fuzzy search modes. Smart case by default.`,
+			`Supports plain text and regex modes. Smart case by default.`,
 			`Output truncated to ${DEFAULT_GREP_LIMIT} matches or ${DEFAULT_MAX_BYTES / 1024}KB.`,
 		].join(" "),
-		promptSnippet: "Search file contents for patterns (FFF: frecency-ranked, git-aware, respects .gitignore)",
+		promptSnippet: "Search file contents for patterns (respects .gitignore)",
 		promptGuidelines: [
 			"Search for bare identifiers (e.g. 'InProgressQuote'), not code syntax or multi-token regex.",
 			"Plain text search is faster and more reliable than regex. Prefer it.",
@@ -602,14 +602,14 @@ export default function fffExtension(pi: ExtensionAPI) {
 
 	pi.registerTool({
 		name: "find",
-		label: "find (fff)",
+		label: "find",
 		description: [
-			`Fuzzy file search by name using FFF (fast, frecency-ranked, git-aware).`,
+			`Fuzzy file search by name, ranked by recent usage.`,
 			`Returns matching file paths relative to project root. Respects .gitignore.`,
-			`Supports fuzzy matching, path prefixes ('src/'), and glob constraints ('*.ts', '**/*.spec.ts').`,
+			`Supports fuzzy matching (typo-tolerant), path prefixes ('src/'), and glob constraints ('*.ts', '**/*.spec.ts').`,
 			`Output truncated to ${DEFAULT_FIND_LIMIT} results or ${DEFAULT_MAX_BYTES / 1024}KB.`,
 		].join(" "),
-		promptSnippet: "Find files by name (FFF: fuzzy, frecency-ranked, git-aware, respects .gitignore)",
+		promptSnippet: "Find files by name (fuzzy, typo-tolerant, ranked by recent usage)",
 		promptGuidelines: [
 			"Keep queries short -- prefer 1-2 terms max.",
 			"Multiple words narrow results (waterfall), they are not OR.",
@@ -743,19 +743,20 @@ export default function fffExtension(pi: ExtensionAPI) {
 
 	pi.registerTool({
 		name: "multi_grep",
-		label: "multi_grep (fff)",
+		label: "multi_grep",
 		description: [
 			`Search file contents for lines matching ANY of multiple patterns (OR logic).`,
-			`Uses SIMD-accelerated Aho-Corasick multi-pattern matching. Faster than regex alternation.`,
+			`Faster than regex alternation for multiple patterns.`,
 			`Patterns are literal text -- never escape special characters.`,
 			`Use the constraints parameter for file filtering ('*.rs', 'src/', '!test/').`,
 		].join(" "),
-		promptSnippet: "Multi-pattern OR search across file contents (FFF: SIMD-accelerated, frecency-ranked)",
+		promptSnippet: "Multi-pattern OR search across file contents",
 		promptGuidelines: [
 			"Use multi_grep when you need to find multiple identifiers at once (OR logic).",
 			"Include all naming conventions: snake_case, PascalCase, camelCase variants.",
 			"Patterns are literal text. Never escape special characters.",
 			"Use the constraints parameter for file type/path filtering, not inside patterns.",
+			"Constraints must be relative paths or globs (e.g. 'src/', '*.ts'), not absolute paths.",
 		],
 		parameters: multiGrepSchema,
 
@@ -765,13 +766,39 @@ export default function fffExtension(pi: ExtensionAPI) {
 				throw new Error("patterns array must have at least 1 element");
 			}
 
+			// Normalize constraints: convert absolute paths to relative
+			let normalizedConstraints = params.constraints;
+			if (normalizedConstraints) {
+				const parts = normalizedConstraints.split(/\s+/);
+				const normalized = parts.map((part) => {
+					// Handle negations with absolute paths
+					if (part.startsWith("!") && part.length > 1) {
+						const inner = part.slice(1);
+						if (inner.startsWith("/") && !/[*?{]/.test(inner)) {
+							const rel = relative(activeCwd, inner);
+							return rel.startsWith("..") ? part : `!${rel || "."}`;
+						}
+						return part;
+					}
+					// Skip globs and non-absolute paths
+					if (/[*?{]/.test(part) || !part.startsWith("/")) {
+						return part;
+					}
+					// Convert absolute path to relative
+					const rel = relative(activeCwd, part);
+					if (rel.startsWith("..")) return part;
+					return rel || ".";
+				});
+				normalizedConstraints = normalized.join(" ");
+			}
+
 			const f = await ensureFinder(activeCwd);
 			const effectiveLimit = Math.max(1, params.limit ?? DEFAULT_GREP_LIMIT);
 			const prevCursor = params.cursor ? cursorStore.get(params.cursor) : undefined;
 
 			const grepResult = f.multiGrep({
 				patterns: params.patterns,
-				constraints: params.constraints,
+				constraints: normalizedConstraints,
 				maxMatchesPerFile: Math.min(effectiveLimit, 50),
 				smartCase: true,
 				cursor: prevCursor ?? null,

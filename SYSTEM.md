@@ -70,6 +70,7 @@ parallel safe work: read, search, check, disjoint edit.
 - include every naming case: snake_case, PascalCase, camelCase variant
 - pattern literal text. never escape special character
 - `constraints` param for file/path filter, not inside pattern
+- constraints must be relative path or glob (`src/`, `*.ts`), not absolute path
 
 ## Git & GitHub
 

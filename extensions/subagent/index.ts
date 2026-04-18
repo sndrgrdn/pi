@@ -22,9 +22,10 @@ import { StringEnum } from "@mariozechner/pi-ai";
 import { type ExtensionAPI, getMarkdownTheme, withFileMutationQueue } from "@mariozechner/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
-import { type AgentConfig, type AgentScope, type ThinkingLevel, discoverAgents } from "./agents.js";
+import { type AgentConfig, type AgentScope, type ThinkingLevel, discoverAgents, resolveModel } from "./agents.js";
 
 export interface CallerDefaults {
+	provider?: string;
 	model?: string;
 	thinking?: ThinkingLevel;
 }
@@ -250,7 +251,7 @@ async function runSingleAgent(
 	signal: AbortSignal | undefined,
 	onUpdate: OnUpdateCallback | undefined,
 	makeDetails: (results: SingleResult[]) => SubagentDetails,
-	callerDefaults?: CallerDefaults,
+	callerDefaults: CallerDefaults,
 ): Promise<SingleResult> {
 	const agent = agents.find((a) => a.name === agentName);
 
@@ -279,11 +280,12 @@ async function runSingleAgent(
 		// default: clean sandbox, no extensions
 		args.push("--no-extensions");
 	}
-	// Model: use agent's model, or inherit from caller
-	const effectiveModel = agent.model ?? callerDefaults?.model;
+	// Model: resolve from agent config (provider-keyed), or inherit from caller
+	const resolvedAgentModel = resolveModel(agent.model, callerDefaults.provider);
+	const effectiveModel = resolvedAgentModel ?? callerDefaults.model;
 	if (effectiveModel) args.push("--model", effectiveModel);
 	// Thinking: use agent's thinking level, or inherit from caller
-	const effectiveThinking = agent.thinking ?? callerDefaults?.thinking;
+	const effectiveThinking = agent.thinking ?? callerDefaults.thinking;
 	if (effectiveThinking) args.push("--thinking", effectiveThinking);
 	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
 
@@ -473,8 +475,12 @@ export default function (pi: ExtensionAPI) {
 			const confirmProjectAgents = params.confirmProjectAgents ?? true;
 
 			// Caller defaults: inherit model/thinking from parent when agent doesn't specify
+			const callerModelRef = ctx.model
+				? `${ctx.model.provider}/${ctx.model.id}`
+				: undefined;
 			const callerDefaults: CallerDefaults = {
-				model: ctx.model?.id,
+				provider: ctx.model?.provider,
+				model: callerModelRef,
 				thinking: pi.getThinkingLevel(),
 			};
 

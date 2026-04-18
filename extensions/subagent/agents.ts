@@ -19,17 +19,35 @@ const THINKING_LEVELS: ReadonlySet<string> = new Set<ThinkingLevel>([
   "off", "minimal", "low", "medium", "high", "xhigh"
 ])
 
+/** Model must be provider-keyed map */
+export type ModelConfig = Record<string, string>
+
 export interface AgentConfig {
   name: string
   description: string
   tools?: string[]
-  model?: string
+  model?: ModelConfig
   thinking?: ThinkingLevel
   /** undefined/false = --no-extensions (default), true = all, string[] = specific extensions */
   extensions?: boolean | string[]
   systemPrompt: string
   source: "user" | "project"
   filePath: string
+}
+
+/**
+ * Resolve provider-keyed model config for caller provider only.
+ * @param config - Model config from agent (provider map or undefined)
+ * @param callerProvider - Caller provider ID (e.g. "anthropic")
+ * @returns Resolved model ID or undefined (inherit from caller)
+ */
+export function resolveModel(config: ModelConfig | undefined, callerProvider?: string): string | undefined {
+  if (!config || !callerProvider) return undefined
+
+  const model = config[callerProvider]
+  if (!model) return undefined
+
+  return `${callerProvider}/${model}`
 }
 
 export interface AgentDiscoveryResult {
@@ -145,6 +163,21 @@ function parseThinking(value: unknown): ThinkingLevel | undefined {
   return THINKING_LEVELS.has(str) ? (str as ThinkingLevel) : undefined
 }
 
+function parseModel(value: unknown): ModelConfig | undefined {
+  if (!value || typeof value !== "object") return undefined
+
+  const parsed: Record<string, string> = {}
+  for (const [provider, model] of Object.entries(value as Record<string, unknown>)) {
+    if (!provider || typeof model !== "string") continue
+    const providerId = provider.trim()
+    const modelId = model.trim()
+    if (!providerId || !modelId) continue
+    parsed[providerId] = modelId
+  }
+
+  return Object.keys(parsed).length > 0 ? parsed : undefined
+}
+
 // ── Agent loading ───────────────────────────────────────────────────
 
 export function loadAgentsFromDir(
@@ -176,7 +209,7 @@ export function loadAgentsFromDir(
       continue
     }
 
-    const { frontmatter, body } = parseFrontmatter<Record<string, string>>(content)
+    const { frontmatter, body } = parseFrontmatter<Record<string, unknown>>(content)
     if (!frontmatter.name || !frontmatter.description) continue
 
     const tools = frontmatter.tools
@@ -194,7 +227,7 @@ export function loadAgentsFromDir(
       name: frontmatter.name,
       description: frontmatter.description,
       tools: tools && tools.length > 0 ? tools : undefined,
-      model: frontmatter.model,
+      model: parseModel(frontmatter.model),
       thinking,
       extensions: resolvedExtensions,
       systemPrompt: body,
