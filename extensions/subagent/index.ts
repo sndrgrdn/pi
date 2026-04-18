@@ -374,16 +374,18 @@ async function runSingleAgent(
 
 			const scheduleTerminalResolve = () => {
 				if (!sawTerminalAssistantMessage || resolved) return;
-				if (terminalDrainTimer) clearTimeout(terminalDrainTimer);
+				if (terminalDrainTimer) return; // only schedule once, don't reset on each data event
 				terminalDrainTimer = setTimeout(() => {
 					if (resolved) return;
 					if (proc.exitCode === null) {
 						proc.kill("SIGTERM");
 						forceKillTimer = setTimeout(() => {
 							if (proc.exitCode === null) proc.kill("SIGKILL");
+							safeResolve(proc.exitCode ?? 0);
 						}, FORCE_KILL_AFTER_GRACE_MS);
+					} else {
+						safeResolve(proc.exitCode);
 					}
-					safeResolve(proc.exitCode ?? 0);
 				}, TERMINAL_MESSAGE_GRACE_MS);
 			};
 
