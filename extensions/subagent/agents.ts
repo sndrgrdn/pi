@@ -13,12 +13,18 @@ import {
 } from "@mariozechner/pi-coding-agent"
 
 export type AgentScope = "user" | "project" | "both"
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh"
+
+const THINKING_LEVELS: ReadonlySet<string> = new Set<ThinkingLevel>([
+  "off", "minimal", "low", "medium", "high", "xhigh"
+])
 
 export interface AgentConfig {
   name: string
   description: string
   tools?: string[]
   model?: string
+  thinking?: ThinkingLevel
   /** undefined/false = --no-extensions (default), true = all, string[] = specific extensions */
   extensions?: boolean | string[]
   systemPrompt: string
@@ -133,6 +139,12 @@ function parseExtensions(value: unknown): AgentConfig["extensions"] {
     .filter(Boolean)
 }
 
+function parseThinking(value: unknown): ThinkingLevel | undefined {
+  if (!value) return undefined
+  const str = String(value).trim().toLowerCase()
+  return THINKING_LEVELS.has(str) ? (str as ThinkingLevel) : undefined
+}
+
 // ── Agent loading ───────────────────────────────────────────────────
 
 export function loadAgentsFromDir(
@@ -176,12 +188,14 @@ export function loadAgentsFromDir(
     const resolvedExtensions = Array.isArray(extensions)
       ? resolveExtensions(extensions, dir, effectiveCwd)
       : extensions
+    const thinking = parseThinking(frontmatter.thinking)
 
     agents.push({
       name: frontmatter.name,
       description: frontmatter.description,
       tools: tools && tools.length > 0 ? tools : undefined,
       model: frontmatter.model,
+      thinking,
       extensions: resolvedExtensions,
       systemPrompt: body,
       source,

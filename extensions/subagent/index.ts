@@ -22,7 +22,12 @@ import { StringEnum } from "@mariozechner/pi-ai";
 import { type ExtensionAPI, getMarkdownTheme, withFileMutationQueue } from "@mariozechner/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
-import { type AgentConfig, type AgentScope, discoverAgents } from "./agents.js";
+import { type AgentConfig, type AgentScope, type ThinkingLevel, discoverAgents } from "./agents.js";
+
+export interface CallerDefaults {
+	model?: string;
+	thinking?: ThinkingLevel;
+}
 
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
@@ -245,6 +250,7 @@ async function runSingleAgent(
 	signal: AbortSignal | undefined,
 	onUpdate: OnUpdateCallback | undefined,
 	makeDetails: (results: SingleResult[]) => SubagentDetails,
+	callerDefaults?: CallerDefaults,
 ): Promise<SingleResult> {
 	const agent = agents.find((a) => a.name === agentName);
 
@@ -273,7 +279,12 @@ async function runSingleAgent(
 		// default: clean sandbox, no extensions
 		args.push("--no-extensions");
 	}
-	if (agent.model) args.push("--model", agent.model);
+	// Model: use agent's model, or inherit from caller
+	const effectiveModel = agent.model ?? callerDefaults?.model;
+	if (effectiveModel) args.push("--model", effectiveModel);
+	// Thinking: use agent's thinking level, or inherit from caller
+	const effectiveThinking = agent.thinking ?? callerDefaults?.thinking;
+	if (effectiveThinking) args.push("--thinking", effectiveThinking);
 	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
 
 	let tmpPromptDir: string | null = null;
@@ -287,7 +298,7 @@ async function runSingleAgent(
 		messages: [],
 		stderr: "",
 		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-		model: agent.model,
+		model: effectiveModel,
 		step,
 	};
 
@@ -461,6 +472,12 @@ export default function (pi: ExtensionAPI) {
 			const agents = discovery.agents.filter((a) => a.name !== parentAgentName);
 			const confirmProjectAgents = params.confirmProjectAgents ?? true;
 
+			// Caller defaults: inherit model/thinking from parent when agent doesn't specify
+			const callerDefaults: CallerDefaults = {
+				model: ctx.model?.id,
+				thinking: pi.getThinkingLevel(),
+			};
+
 			const hasChain = (params.chain?.length ?? 0) > 0;
 			const hasTasks = (params.tasks?.length ?? 0) > 0;
 			const hasSingle = Boolean(params.agent && params.task);
@@ -546,6 +563,7 @@ export default function (pi: ExtensionAPI) {
 						signal,
 						chainUpdate,
 						makeDetails("chain"),
+						callerDefaults,
 					);
 					results.push(result);
 
@@ -626,6 +644,7 @@ export default function (pi: ExtensionAPI) {
 							}
 						},
 						makeDetails("parallel"),
+						callerDefaults,
 					);
 					allResults[index] = result;
 					emitParallelUpdate();
@@ -660,6 +679,7 @@ export default function (pi: ExtensionAPI) {
 					signal,
 					onUpdate,
 					makeDetails("single"),
+					callerDefaults,
 				);
 				const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
 				if (isError) {
