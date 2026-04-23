@@ -4,3 +4,4 @@ sessions
 *.disabled
 /fff
 auth.json
+APPEND_SYSTEM.md
