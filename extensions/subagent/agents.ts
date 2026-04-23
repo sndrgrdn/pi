@@ -209,7 +209,14 @@ export function loadAgentsFromDir(
       continue
     }
 
-    const { frontmatter, body } = parseFrontmatter<Record<string, unknown>>(content)
+    const { frontmatter, body } = parseFrontmatter<{
+      name?: string
+      description?: string
+      tools?: string
+      extensions?: unknown
+      thinking?: unknown
+      model?: unknown
+    }>(content)
     if (!frontmatter.name || !frontmatter.description) continue
 
     const tools = frontmatter.tools

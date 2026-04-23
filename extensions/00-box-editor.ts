@@ -85,6 +85,12 @@ let savedPi: ExtensionAPI;
 export default function (pi: ExtensionAPI) {
   savedPi = pi;
 
+  pi.on("session_shutdown", () => {
+    // ctx becomes stale after shutdown; its getters (e.g. ctx.model) throw.
+    // Clear so render's optional chaining can short-circuit safely.
+    savedCtx = undefined;
+  });
+
   pi.on("session_start", (_event, ctx) => {
     savedCtx = ctx;
     savedTheme = ctx.ui.theme;

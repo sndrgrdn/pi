@@ -17,16 +17,27 @@
           "input": ["text", "image"],
           "contextWindow": 65536,
           "maxTokens": 16384
+        },
+        {
+          "id": "qwen-3.6-35b",
+          "name": "Qwen 3.6 35B-A3B (Local)",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 262144,
+          "maxTokens": 32768
         }
       ]
     },
     "anthropic": {
       "modelOverrides": {
         "claude-opus-4-6": {
-          "contextWindow": 300000
+          "contextWindow": 200000
+        },
+        "claude-opus-4-7": {
+          "contextWindow": 200000
         },
         "claude-sonnet-4-6": {
-          "contextWindow": 300000
+          "contextWindow": 200000
         }
       }
     }

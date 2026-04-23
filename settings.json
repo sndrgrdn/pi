@@ -1,21 +1,22 @@
 {
-  "lastChangelogVersion": "0.67.3",
+  "lastChangelogVersion": "0.69.0",
   "theme": "catppuccin-macchiato",
   "defaultThinkingLevel": "high",
   "hideThinkingBlock": true,
   "defaultProvider": "anthropic",
-  "defaultModel": "claude-opus-4-6",
+  "defaultModel": "claude-opus-4-7",
   "packages": [
-    "npm:pi-upgrade",
-    "git:github.com/earendil-works/pi-review",
-    "npm:@plannotator/pi-extension"
+    "npm:@plannotator/pi-extension",
+    "git:github.com/earendil-works/pi-review"
   ],
-  "editorPaddingX": 1,
+  "editorPaddingX": 2,
   "enabledModels": [
+    "anthropic/claude-opus-4-5-20251101",
     "openai-codex/gpt-5.3-codex",
-    "anthropic/claude-opus-4-5",
     "openai-codex/gpt-5.4",
-    "anthropic/claude-opus-4-6"
+    "anthropic/claude-opus-4-7"
   ],
-  "quietStartup": true
+  "steeringMode": "all",
+  "doubleEscapeAction": "tree",
+  "treeFilterMode": "default"
 }

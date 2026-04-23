@@ -14,7 +14,7 @@ import {
 	formatSize,
 } from "@mariozechner/pi-coding-agent";
 import { Text, type AutocompleteItem, type AutocompleteProvider, type AutocompleteSuggestions } from "@mariozechner/pi-tui";
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
 import { FileFinder } from "@ff-labs/fff-node";
 import type { GrepCursor, GrepMode, GrepResult, SearchResult } from "@ff-labs/fff-node";
 import { execSync } from "child_process";

@@ -7,7 +7,7 @@ import {
 } from "@mariozechner/pi-coding-agent"
 import type { TruncationResult } from "@mariozechner/pi-coding-agent"
 import { Text } from "@mariozechner/pi-tui"
-import { Type } from "@sinclair/typebox"
+import { Type } from "typebox"
 import * as path from "node:path"
 import { buildRgArgs, buildTree, renderTree, FILE_LIMIT } from "./ls.ts"
 
@@ -113,7 +113,7 @@ export default function (pi: ExtensionAPI) {
         (context.lastComponent instanceof Text ? context.lastComponent : null) ?? new Text("", 0, 0)
 
       if (context.isError) {
-        const msg = result.content.find((c: any) => c.type === "text")?.text || "Failed"
+        const msg = (result.content.find((c: any) => c.type === "text") as any)?.text || "Failed"
         text.setText(theme.fg("error", msg))
         return text
       }

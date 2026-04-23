@@ -1,6 +1,6 @@
 import { StringEnum, type TextContent } from "@mariozechner/pi-ai";
 import { Text } from "@mariozechner/pi-tui";
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
 import { createOperationSignal, isAbortError } from "./network.ts";
 import { ExaSearchProvider } from "./providers/exa.ts";
 import type { SearchProvider } from "./providers/types.ts";
