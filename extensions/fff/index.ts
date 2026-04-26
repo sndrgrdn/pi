@@ -7,7 +7,6 @@
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import {
-	CustomEditor,
 	getAgentDir,
 	truncateHead,
 	DEFAULT_MAX_BYTES,
@@ -18,7 +17,7 @@ import { Type } from "typebox";
 import { FileFinder } from "@ff-labs/fff-node";
 import type { GrepCursor, GrepMode, GrepResult, SearchResult } from "@ff-labs/fff-node";
 import { execSync } from "child_process";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, statSync } from "fs";
 import { isAbsolute, join, relative, resolve } from "path";
 import { homedir } from "os";
 
@@ -29,14 +28,10 @@ import { homedir } from "os";
 const FFF_DB_DIR = join(getAgentDir(), "fff");
 const FRECENCY_DB_PATH = join(FFF_DB_DIR, "frecency.mdb");
 const HISTORY_DB_PATH = join(FFF_DB_DIR, "history.mdb");
-const CONFIG_PATH = join(FFF_DB_DIR, "config.json");
-
 const DEFAULT_GREP_LIMIT = 100;
 const DEFAULT_FIND_LIMIT = 200;
 const GREP_MAX_LINE_LENGTH = 500;
 const MENTION_MAX_RESULTS = 20;
-
-type FffMode = "both" | "tools-only";
 
 // ---------------------------------------------------------------------------
 // Path normalisation helpers
@@ -264,21 +259,6 @@ class FffAtMentionProvider implements AutocompleteProvider {
 	}
 }
 
-class FffEditor extends CustomEditor {
-	constructor(
-		tui: any,
-		theme: any,
-		keybindings: any,
-		private createProvider: (base: AutocompleteProvider) => AutocompleteProvider,
-	) {
-		super(tui, theme, keybindings);
-	}
-
-	override setAutocompleteProvider(provider: AutocompleteProvider): void {
-		super.setAutocompleteProvider(this.createProvider(provider));
-	}
-}
-
 // ---------------------------------------------------------------------------
 // Extension
 // ---------------------------------------------------------------------------
@@ -293,39 +273,6 @@ export default function fffExtension(pi: ExtensionAPI) {
 		mkdirSync(FFF_DB_DIR, { recursive: true });
 	} catch {
 		// ignore
-	}
-
-	function normalizeMode(value: string | undefined): FffMode {
-		return value === "tools-only" ? "tools-only" : "both";
-	}
-
-	function readConfigMode(): FffMode {
-		try {
-			if (!existsSync(CONFIG_PATH)) return "both";
-			const parsed = JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as { mode?: string };
-			return normalizeMode(parsed.mode);
-		} catch {
-			return "both";
-		}
-	}
-
-	function writeConfigMode(mode: FffMode): void {
-		try {
-			writeFileSync(CONFIG_PATH, JSON.stringify({ mode }, null, 2), "utf8");
-		} catch {
-			// ignore
-		}
-	}
-
-	function getMode(): FffMode {
-		const flag = pi.getFlag("fff-mode");
-		if (typeof flag === "string" && flag.length > 0) {
-			return normalizeMode(flag);
-		}
-		if (process.env.PI_FFF_MODE) {
-			return normalizeMode(process.env.PI_FFF_MODE);
-		}
-		return readConfigMode();
 	}
 
 	async function ensureFinder(basePath: string): Promise<FileFinder> {
@@ -393,40 +340,24 @@ export default function fffExtension(pi: ExtensionAPI) {
 		}));
 	}
 
-	function applyEditorMode(ctx: { ui: { setEditorComponent: (factory: any) => void } }) {
-		const mode = getMode();
-		if (mode === "tools-only") {
-			ctx.ui.setEditorComponent(undefined);
-			return;
-		}
-
-		ctx.ui.setEditorComponent((tui: any, theme: any, keybindings: any) =>
-			new FffEditor(tui, theme, keybindings, (baseProvider) =>
-				new FffAtMentionProvider(baseProvider, getMentionItems),
-			),
-		);
+	function applyAutocomplete(ctx: { ui: { addAutocompleteProvider: (factory: (current: AutocompleteProvider) => AutocompleteProvider) => void } }) {
+		ctx.ui.addAutocompleteProvider((baseProvider) => new FffAtMentionProvider(baseProvider, getMentionItems));
 	}
 
-	// --- Flags / lifecycle ---
-
-	pi.registerFlag("fff-mode", {
-		description: "FFF mode: both or tools-only (overrides config/env when provided)",
-		type: "string",
-	});
+	// --- Lifecycle ---
 
 	pi.on("session_start", async (_event, ctx) => {
 		try {
 			activeCwd = ctx.cwd;
 			await ensureFinder(activeCwd);
-			applyEditorMode(ctx);
+			applyAutocomplete(ctx);
 		} catch (e: unknown) {
 			const msg = e instanceof Error ? e.message : String(e);
 			ctx.ui.notify(`FFF init failed: ${msg}`, "error");
 		}
 	});
 
-	pi.on("session_shutdown", async (_event, ctx) => {
-		ctx.ui.setEditorComponent(undefined);
+	pi.on("session_shutdown", async () => {
 		destroyAllFinders();
 	});
 
@@ -883,20 +814,6 @@ export default function fffExtension(pi: ExtensionAPI) {
 
 	// --- commands ---
 
-	pi.registerCommand("fff-mode", {
-		description: "Set FFF mode: /fff-mode both | tools-only",
-		handler: async (args, ctx) => {
-			const raw = (args || "").trim();
-			if (raw !== "both" && raw !== "tools-only") {
-				ctx.ui.notify("Usage: /fff-mode both | tools-only", "warning");
-				return;
-			}
-			writeConfigMode(raw);
-			applyEditorMode(ctx);
-			ctx.ui.notify(`FFF mode set to '${raw}'`, "info");
-		},
-	});
-
 	pi.registerCommand("fff-health", {
 		description: "Show FFF file finder health and status",
 		handler: async (_args, ctx) => {
@@ -925,7 +842,7 @@ export default function fffExtension(pi: ExtensionAPI) {
 					allLines.push(`  Scanning: ${progress.value.isScanning ? "yes" : "no"} (${progress.value.scannedFilesCount} files)`);
 				}
 			}
-			allLines.unshift(`Mode: ${getMode()}`, `Finders: ${finderPool.size}`);
+			allLines.unshift(`Finders: ${finderPool.size}`);
 			ctx.ui.notify(allLines.join("\n"), "info");
 		},
 	});
