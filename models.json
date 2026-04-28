@@ -11,14 +11,6 @@
       },
       "models": [
         {
-          "id": "gemma-4-26b",
-          "name": "Gemma 4 26B A4B (Local)",
-          "reasoning": true,
-          "input": ["text", "image"],
-          "contextWindow": 65536,
-          "maxTokens": 16384
-        },
-        {
           "id": "qwen-3.6-35b",
           "name": "Qwen 3.6 35B-A3B (Local)",
           "reasoning": true,
