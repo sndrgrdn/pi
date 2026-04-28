@@ -9,7 +9,112 @@ import type { TruncationResult } from "@mariozechner/pi-coding-agent"
 import { Text } from "@mariozechner/pi-tui"
 import { Type } from "typebox"
 import * as path from "node:path"
-import { buildRgArgs, buildTree, renderTree, FILE_LIMIT } from "./ls.ts"
+
+const IGNORE_PATTERNS = [
+  "node_modules/",
+  "__pycache__/",
+  ".git/",
+  "dist/",
+  "build/",
+  "target/",
+  "vendor/",
+  "bin/",
+  "obj/",
+  ".idea/",
+  ".vscode/",
+  ".zig-cache/",
+  "zig-out",
+  ".coverage",
+  "coverage/",
+  "tmp/",
+  "temp/",
+  ".cache/",
+  "cache/",
+  "logs/",
+  ".venv/",
+  "venv/",
+  "env/",
+]
+
+const FILE_LIMIT = 500
+
+interface DirTree {
+  dirs: Set<string>
+  filesByDir: Map<string, string[]>
+}
+
+/** Build ripgrep arguments from default + custom ignore patterns. */
+function buildRgArgs(customIgnore?: string[]): string[] {
+  const args = ["--files"]
+  for (const pattern of IGNORE_PATTERNS) {
+    args.push("--glob", `!${pattern}*`)
+  }
+  if (customIgnore) {
+    for (const pattern of customIgnore) {
+      args.push("--glob", `!${pattern}`)
+    }
+  }
+  args.push(".")
+  return args
+}
+
+/** Build a directory tree structure from a flat list of relative file paths. */
+function buildTree(files: string[]): DirTree {
+  const dirs = new Set<string>()
+  const filesByDir = new Map<string, string[]>()
+
+  for (const file of files) {
+    const dir = path.dirname(file)
+    const parts = dir === "." ? [] : dir.split("/")
+
+    for (let i = 0; i <= parts.length; i++) {
+      const dirPath = i === 0 ? "." : parts.slice(0, i).join("/")
+      dirs.add(dirPath)
+    }
+
+    const existing = filesByDir.get(dir)
+    if (existing) {
+      existing.push(path.basename(file))
+    } else {
+      filesByDir.set(dir, [path.basename(file)])
+    }
+  }
+
+  return { dirs, filesByDir }
+}
+
+/** Render a DirTree as an indented string. Directories first, then files, sorted. */
+function renderTree(tree: DirTree): string {
+  const { dirs, filesByDir } = tree
+
+  function renderDir(dirPath: string, depth: number): string {
+    const indent = "  ".repeat(depth)
+    let output = ""
+
+    if (depth > 0) {
+      output += `${indent}${path.basename(dirPath)}/\n`
+    }
+
+    const childIndent = "  ".repeat(depth + 1)
+
+    const children = Array.from(dirs)
+      .filter((d) => path.dirname(d) === dirPath && d !== dirPath)
+      .toSorted()
+
+    for (const child of children) {
+      output += renderDir(child, depth + 1)
+    }
+
+    const dirFiles = filesByDir.get(dirPath) ?? []
+    for (const file of dirFiles.toSorted()) {
+      output += `${childIndent}${file}\n`
+    }
+
+    return output
+  }
+
+  return renderDir(".", 0)
+}
 
 const lsSchema = Type.Object({
   path: Type.Optional(
