@@ -1,4 +1,9 @@
-import { CustomEditor, type ExtensionAPI, type ExtensionContext, type Theme } from "@mariozechner/pi-coding-agent";
+import {
+  CustomEditor,
+  type ExtensionAPI,
+  type ExtensionContext,
+  type Theme,
+} from "@mariozechner/pi-coding-agent";
 import { visibleWidth } from "@mariozechner/pi-tui";
 
 const ANSI_SGR_REGEX = /\x1b\[[^m]*m/g;
@@ -19,13 +24,27 @@ function applyBg(line: string, width: number): string {
   return BG_ANSI + patched + " ".repeat(pad);
 }
 
+function createEditorTheme(editorTheme: any, theme: Theme): any {
+  return {
+    ...editorTheme,
+    borderColor: editorTheme?.borderColor ?? ((text: string) => theme.fg("borderMuted", text)),
+    selectList: editorTheme?.selectList ?? {
+      selectedPrefix: (text: string) => theme.fg("accent", text),
+      selectedText: (text: string) => theme.fg("text", text),
+      description: (text: string) => theme.fg("muted", text),
+      scrollInfo: (text: string) => theme.fg("muted", text),
+      noMatch: (text: string) => theme.fg("muted", text),
+    },
+  };
+}
+
 class BoxEditor extends CustomEditor {
   constructor(
     tui: any,
     editorTheme: any,
     keybindings: any,
-    private readonly theme: Theme,
-    private readonly getCtx: () => ExtensionContext | undefined,
+    private readonly piTheme: Theme,
+    private readonly ctx: ExtensionContext,
     private readonly pi: ExtensionAPI
   ) {
     super(tui, editorTheme, keybindings);
@@ -50,17 +69,16 @@ class BoxEditor extends CustomEditor {
       result.push(BG_ANSI + " ".repeat(width));
     }
 
-    const ctx = this.getCtx();
     const px = this.getPaddingX?.() ?? 1;
-    const provider = ctx?.model?.provider ?? "unknown";
-    const model = ctx?.model?.name ?? ctx?.model?.id ?? "unknown";
-    const hasThinking = ctx?.model?.reasoning;
+    const provider = this.ctx.model.provider;
+    const model = this.ctx.model.name ?? this.ctx.model.id;
+    const hasThinking = this.ctx.model.reasoning;
     const level = this.pi.getThinkingLevel?.() ?? "off";
-    const dot = this.theme.fg("dim", " · ");
+    const dot = this.piTheme.fg("dim", " · ");
 
-    let infoText = this.theme.fg("text", model) + dot + this.theme.fg("dim", provider);
+    let infoText = this.piTheme.fg("text", model) + dot + this.piTheme.fg("dim", provider);
     if (hasThinking && level !== "off") {
-      const colorFn = this.theme.getThinkingBorderColor(level);
+      const colorFn = this.piTheme.getThinkingBorderColor(level);
       infoText += dot + colorFn(level);
     }
 
@@ -71,19 +89,11 @@ class BoxEditor extends CustomEditor {
   }
 }
 
-let savedCtx: ExtensionContext | undefined;
-
 export default function (pi: ExtensionAPI) {
-  pi.on("session_shutdown", () => {
-    // ctx becomes stale after shutdown; its getters (e.g. ctx.model) throw.
-    savedCtx = undefined;
-  });
-
   pi.on("session_start", (_event, ctx) => {
-    savedCtx = ctx;
     ctx.ui.setEditorComponent(
       (tui, editorTheme, keybindings) =>
-        new BoxEditor(tui, editorTheme, keybindings, ctx.ui.theme, () => savedCtx, pi)
+        new BoxEditor(tui, createEditorTheme(editorTheme, ctx.ui.theme), keybindings, ctx.ui.theme, ctx, pi)
     );
   });
 }
