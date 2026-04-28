@@ -70,9 +70,10 @@ class BoxEditor extends CustomEditor {
     }
 
     const px = this.getPaddingX?.() ?? 1;
-    const provider = this.ctx.model.provider;
-    const model = this.ctx.model.name ?? this.ctx.model.id;
-    const hasThinking = this.ctx.model.reasoning;
+    const modelInfo = this.ctx.model;
+    const provider = modelInfo?.provider ?? "unknown";
+    const model = modelInfo?.name ?? modelInfo?.id ?? "unknown";
+    const hasThinking = modelInfo?.reasoning;
     const level = this.pi.getThinkingLevel?.() ?? "off";
     const dot = this.piTheme.fg("dim", " · ");
 
