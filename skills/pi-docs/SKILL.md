@@ -54,5 +54,3 @@ For implementation questions, check `examples/` after reading docs:
 | Extensions | `examples/extensions/` (40+ examples) |
 | SDK usage | `examples/sdk/` (13 numbered examples) |
 | Custom providers | `examples/extensions/custom-provider-*/` |
-
-List examples with `ls` before reading to find the most relevant one.
