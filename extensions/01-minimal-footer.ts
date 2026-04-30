@@ -26,11 +26,11 @@ export default function (pi: ExtensionAPI) {
           // context usage (null after compaction until next response)
           // ctx goes stale on session replacement/shutdown; guard render
           let tokens: number | undefined;
-          let pct: number | null = null;
+          let pct: number | undefined;
           try {
             const usage = ctx.getContextUsage();
-            tokens = usage?.tokens;
-            pct = usage?.percent != null ? Math.round(usage.percent) : null;
+            tokens = usage?.tokens ?? undefined;
+            pct = usage?.percent != null ? Math.round(usage.percent) : undefined;
           } catch {
             // stale ctx after session replacement/shutdown; render blanks
           }
