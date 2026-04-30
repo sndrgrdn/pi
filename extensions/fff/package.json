@@ -4,13 +4,15 @@
   "private": true,
   "type": "module",
   "pi": {
-    "extensions": ["./index.ts"]
+    "extensions": [
+      "./index.ts"
+    ]
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ff-labs/fff-node": "*"
+    "@ff-labs/fff-node": "^0.6.4"
   },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",
