@@ -36,7 +36,7 @@ export default function (pi: ExtensionAPI) {
 		description: [
 			"Execute a deterministic, non-interactive shell command.",
 			`Use ${tmpdir()} for temporary work outside the workspace.`,
-			"Do not use bash for file reading, writing, editing, or searching — use dedicated tools (read, edit, apply_patch, write, rg/fd/sg).",
+			"rg, fd, sg, git, test runners, and build tools run through bash. Do not use bash to replace dedicated file tools (read, edit, apply_patch, write).",
 			"Avoid cat/head/tail, sed/awk, echo/printf/heredoc writes, find, and grep unless explicitly requested.",
 			`Non-zero exit codes fail the tool. Output truncated to last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB.`,
 		].join(" "),

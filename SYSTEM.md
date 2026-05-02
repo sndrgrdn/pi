@@ -87,8 +87,8 @@ Parallelize only independent work: read, search, check, disjoint edits.
 - 2 weak searches → stop, read best candidate file
 
 **subagent**
-- always delegate exploration, investigation, and research to subagent. keeps main context clean for edits
-- read files directly only when you need content for an immediate edit
+- delegate broad exploration, investigation, and research to subagent. keeps main context clean for edits
+- read files directly when you already know the path and need content for an immediate edit
 - chain when one step's output feeds the next
 - parallel only for independent areas. serialize on shared files, contracts, schema, public API
 - prompt with: goal, paths, constraints, expected output
