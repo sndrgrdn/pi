@@ -27,7 +27,7 @@ function convertLineEndings(text: string, ending: string) {
 }
 
 function simpleDiff(path: string, oldText: string, newText: string) {
-	return `--- ${path}\n+++ ${path}\n@@\n${oldText.split("\n").map((line) => `-${line}`).join("\n")}\n${newText.split("\n").map((line) => `+${line}`).join("\n")}\n`;
+	return `--- ${path}\n+++ ${path}\n@@\n${oldText.split("\n").map((line) => `-  ${line}`).join("\n")}\n${newText.split("\n").map((line) => `+  ${line}`).join("\n")}\n`;
 }
 
 function apply(content: string, oldString: string, newString: string, replaceAll = false) {
