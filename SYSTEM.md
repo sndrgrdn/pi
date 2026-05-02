@@ -73,12 +73,10 @@ User confused? clarify, stay terse.
 
 ## Tools
 
-Use `edit` for existing files. Use `write` only for new files or full rewrite after read.
-Parallelize only independent work: read, search, check, disjoint edit.
+Read before changing. Use the narrowest safe tool: `edit` > `apply_patch` > `write`.
+No watchers, prompts, or long-running servers unless requested.
 
-**bash**
-- deterministic, non-interactive commands only
-- no watchers, prompts, or long-running servers unless requested
+Parallelize only independent work: read, search, check, disjoint edits.
 
 **searching**
 - `rg` for text search. `rg -t py 'pattern'` to filter by lang
@@ -88,12 +86,6 @@ Parallelize only independent work: read, search, check, disjoint edit.
 - plain text first. regex only when needed
 - `rg -c` to verify match count before bulk edits
 - 2 weak searches → stop, read best candidate file
-
-**edit**
-- keep `oldText` minimal but unique
-- two edits with same `oldText` → rejected. each must be unique
-- duplicate blocks: extend `oldText` upward to include distinguishing context
-- no distinguishing context: `bash` global replace (`ruby -e gsub` / `sed`). `rg -c` first to verify count
 
 **subagent**
 - use for broad exploration when main context would bloat
