@@ -58,7 +58,7 @@ export default function (pi: ExtensionAPI) {
 				const { out, firstChangedLine } = apply(source.text, oldText, newText, replaceAll);
 				await writeFile(absolutePath, joinBom(out, source.bom), "utf-8");
 				const details: EditToolDetails = { diff: simpleDiff(path, oldText, newText), firstChangedLine };
-				return { content: [{ type: "text", text: `Applied edit to ${path}` }], details };
+				return { content: [{ type: "text", text: `Applied edit to ${path}:${firstChangedLine}` }], details };
 			});
 		},
 	});
