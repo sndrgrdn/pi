@@ -177,7 +177,7 @@ interface SubagentDetails {
 
 function getFinalOutput(messages: Message[]): string {
 	for (let i = messages.length - 1; i >= 0; i--) {
-		const msg = messages[i];
+		const msg = messages[i]!;
 		if (msg.role === "assistant") {
 			for (const part of msg.content) {
 				if (part.type === "text") return part.text;
@@ -215,7 +215,7 @@ async function mapWithConcurrencyLimit<TIn, TOut>(
 		while (true) {
 			const current = nextIndex++;
 			if (current >= items.length) return;
-			results[current] = await fn(items[current], current);
+			results[current] = await fn(items[current]!, current);
 		}
 	});
 	await Promise.all(workers);
@@ -602,7 +602,7 @@ export default function (pi: ExtensionAPI) {
 				let previousOutput = "";
 
 				for (let i = 0; i < params.chain.length; i++) {
-					const step = params.chain[i];
+					const step = params.chain[i]!;
 					const taskWithContext = step.task.replace(/\{previous\}/g, previousOutput);
 
 					// Create update callback that includes all previous results
@@ -648,7 +648,7 @@ export default function (pi: ExtensionAPI) {
 					previousOutput = getFinalOutput(result.messages);
 				}
 				return {
-					content: [{ type: "text", text: getFinalOutput(results[results.length - 1].messages) || "(no output)" }],
+					content: [{ type: "text", text: getFinalOutput(results[results.length - 1]!.messages) || "(no output)" }],
 					details: makeDetails("chain")(results),
 				};
 			}
@@ -671,9 +671,9 @@ export default function (pi: ExtensionAPI) {
 				// Initialize placeholder results
 				for (let i = 0; i < params.tasks.length; i++) {
 					allResults[i] = {
-						agent: params.tasks[i].agent,
-						agentSource: "unknown",
-						task: params.tasks[i].task,
+						agent: params.tasks[i]!.agent,
+						agentSource: "unknown" as const,
+						task: params.tasks[i]!.task,
 						exitCode: -1, // -1 = still running
 						messages: [],
 						stderr: "",
@@ -779,7 +779,7 @@ export default function (pi: ExtensionAPI) {
 					theme.fg("accent", `chain (${args.chain.length} steps)`) +
 					theme.fg("muted", ` [${scope}]`);
 				for (let i = 0; i < Math.min(args.chain.length, 3); i++) {
-					const step = args.chain[i];
+					const step = args.chain[i]!;
 					// Clean up {previous} placeholder for display
 					const cleanTask = step.task.replace(/\{previous\}/g, "").trim();
 					const preview = cleanTask.length > 40 ? `${cleanTask.slice(0, 40)}...` : cleanTask;
@@ -841,7 +841,7 @@ export default function (pi: ExtensionAPI) {
 			};
 
 			if (details.mode === "single" && details.results.length === 1) {
-				const r = details.results[0];
+				const r = details.results[0]!;
 				const isError = r.exitCode !== 0 || r.stopReason === "error" || r.stopReason === "aborted";
 				const icon = isError ? theme.fg("error", "✗") : theme.fg("success", "✓");
 				const displayItems = getDisplayItems(r.messages);

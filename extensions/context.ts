@@ -544,7 +544,7 @@ function openFileInExternalEditor(tui: TUI, filePath: string): { ok: boolean; re
 
     try {
         tui.stop();
-        const [editor, ...editorArgs] = editorCmd.split(" ");
+        const [editor, ...editorArgs] = editorCmd.split(" ") as [string, ...string[]];
         const result = spawnSync(editor, [...editorArgs, filePath], {
             stdio: "inherit",
             shell: process.platform === "win32",

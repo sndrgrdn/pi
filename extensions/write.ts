@@ -16,8 +16,8 @@ const joinBom = (text: string, bom: boolean) => bom ? `\uFEFF${text}` : text;
 async function existingBom(path: string) {
 	try {
 		return splitBom(await readFile(path, "utf-8")).bom;
-	} catch (error: any) {
-		if (error?.code === "ENOENT") return false;
+	} catch (error) {
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
 		throw error;
 	}
 }

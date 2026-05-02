@@ -1227,7 +1227,7 @@ function renderTodoList(
 		}
 		const maxItems = expanded ? sectionTodos.length : Math.min(sectionTodos.length, 3);
 		for (let i = 0; i < maxItems; i++) {
-			lines.push(`  ${renderTodoHeading(theme, sectionTodos[i], currentSessionId)}`);
+			lines.push(`  ${renderTodoHeading(theme, sectionTodos[i]!, currentSessionId)}`);
 		}
 		if (!expanded && sectionTodos.length > maxItems) {
 			lines.push(theme.fg("dim", `  ... ${sectionTodos.length - maxItems} more`));

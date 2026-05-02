@@ -6,9 +6,12 @@ import { homedir } from "os";
 import { dirname, resolve } from "path";
 import { Type } from "typebox";
 
-type Change = { path: string; moveTo?: string; oldText: string; newText: string; bom: boolean; type: "add" | "update" | "delete" | "move" };
+type ChangeType = "add" | "update" | "delete" | "move";
+type Change = { path: string; moveTo?: string; displayPath: string; oldText: string; newText: string; bom: boolean; type: ChangeType; diff: string; additions: number; deletions: number; firstChangedLine: number };
 type Section = { action: "add" | "update" | "delete"; path: string; moveTo?: string; lines: string[] };
-type ApplyPatchDetails = { diff: string; files: string[] };
+type ApplyPatchDetails = { diff: string; files: string[]; summary: string };
+type PatchPreview = { diff: string; summary: string; files: string[] } | { error: string };
+type ApplyPatchRenderState = { preview?: PatchPreview; previewArgsKey?: string; previewPending?: boolean };
 
 const schema = Type.Object({
 	patchText: Type.String({ description: "Patch text using Begin Patch / Add File / Update File / Delete File sections" }),
@@ -18,9 +21,17 @@ const splitBom = (text: string) => text.charCodeAt(0) === 0xfeff ? { bom: true, 
 const joinBom = (text: string, bom: boolean) => bom ? `\uFEFF${text}` : text;
 const normalize = (text: string) => text.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
 const shortenPath = (path: string) => path.startsWith(homedir()) ? `~${path.slice(homedir().length)}` : path;
+const marker = (type: ChangeType) => type === "add" ? "A" : type === "delete" ? "D" : type === "move" ? "R" : "M";
+const lineOf = (s: string, index: number) => s.slice(0, index).split("\n").length;
 
-function diff(path: string, oldText: string, newText: string) {
-	return `--- ${path}\n+++ ${path}\n@@\n${oldText.split("\n").map((line) => `-${line}`).join("\n")}\n${newText.split("\n").map((line) => `+${line}`).join("\n")}\n`;
+function countPatchLines(lines: string[]) {
+	let additions = 0;
+	let deletions = 0;
+	for (const line of lines) {
+		if (line.startsWith("+") && !line.startsWith("+++")) additions++;
+		else if (line.startsWith("-") && !line.startsWith("---")) deletions++;
+	}
+	return { additions, deletions };
 }
 
 function parseSections(patchText: string) {
@@ -37,13 +48,13 @@ function parseSections(patchText: string) {
 		const del = line.match(/^\*\*\* Delete File: (.+)$/);
 		const move = line.match(/^\*\*\* Move to: (.+)$/);
 		if (add || update || del) {
-			current = { action: add ? "add" : update ? "update" : "delete", path: (add ?? update ?? del)![1], lines: [] };
+			current = { action: add ? "add" : update ? "update" : "delete", path: (add ?? update ?? del)![1]!, lines: [] };
 			sections.push(current);
 			continue;
 		}
 		if (move) {
 			if (!current || current.action !== "update") throw new Error("Move to is only valid after Update File");
-			current.moveTo = move[1];
+			current.moveTo = move[1]!;
 			continue;
 		}
 		if (!current) throw new Error(`patch line outside file section: ${line}`);
@@ -64,12 +75,14 @@ function updateContent(path: string, original: string, lines: string[]) {
 	let cursor = 0;
 	let oldChunk: string[] = [];
 	let newChunk: string[] = [];
+	let firstChangedLine: number | undefined;
 	const flush = () => {
 		if (oldChunk.length === 0 && newChunk.length === 0) return;
 		const oldText = oldChunk.join("\n") + "\n";
 		const newText = newChunk.join("\n") + "\n";
 		const index = content.indexOf(oldText, cursor);
 		if (index < 0) throw new Error(`apply_patch verification failed: hunk not found in ${path}`);
+		firstChangedLine ??= lineOf(content, index);
 		content = content.slice(0, index) + newText + content.slice(index + oldText.length);
 		cursor = index + newText.length;
 		oldChunk = [];
@@ -98,26 +111,73 @@ function updateContent(path: string, original: string, lines: string[]) {
 		}
 	}
 	flush();
-	return content;
+	return { content, firstChangedLine: firstChangedLine ?? 1 };
+}
+
+function sectionDiff(section: Section, oldText: string, newText: string, type: ChangeType) {
+	const from = type === "add" ? "/dev/null" : section.path;
+	const to = type === "delete" ? "/dev/null" : (section.moveTo ?? section.path);
+	if (section.action === "update") return `--- ${from}\n+++ ${to}\n${section.lines.join("\n")}\n`;
+	const lines = (section.action === "add" ? newText.split("\n").map((line) => `+${line}`) : oldText.split("\n").map((line) => `-${line}`)).join("\n");
+	return `--- ${from}\n+++ ${to}\n@@\n${lines}\n`;
+}
+
+function summarize(changes: Change[]) {
+	return changes.map((change) => `${marker(change.type)} ${shortenPath(change.displayPath)}:${change.firstChangedLine} +${change.additions} -${change.deletions}`).join("\n");
 }
 
 async function deriveChanges(cwd: string, patchText: string): Promise<Change[]> {
 	const changes: Change[] = [];
-	for (const section of parseSections(patchText)) {
+	const sections = parseSections(patchText);
+	const actionsByPath = new Map<string, Set<Section["action"]>>();
+	for (const section of sections) {
+		const absolutePath = resolve(cwd, section.path.replace(/^@/, ""));
+		const actions = actionsByPath.get(absolutePath) ?? new Set<Section["action"]>();
+		actions.add(section.action);
+		actionsByPath.set(absolutePath, actions);
+	}
+	for (const [path, actions] of actionsByPath) {
+		if (actions.has("add") && actions.has("delete")) throw new Error(`patch rejected: cannot add and delete same file in one patch: ${path}`);
+	}
+	for (const section of sections) {
 		const absolutePath = resolve(cwd, section.path.replace(/^@/, ""));
 		if (section.action === "add") {
-			changes.push({ path: absolutePath, oldText: "", newText: addContent(section.lines), bom: false, type: "add" });
+			const newText = addContent(section.lines);
+			const { additions, deletions } = countPatchLines(section.lines);
+			changes.push({ path: absolutePath, displayPath: section.path, oldText: "", newText, bom: false, type: "add", diff: sectionDiff(section, "", newText, "add"), additions, deletions, firstChangedLine: 1 });
 			continue;
 		}
 		const source = splitBom(await readFile(absolutePath, "utf-8"));
 		if (section.action === "delete") {
-			changes.push({ path: absolutePath, oldText: source.text, newText: "", bom: source.bom, type: "delete" });
+			const diff = sectionDiff(section, source.text, "", "delete");
+			const deletions = source.text.split("\n").filter((line, index, lines) => line.length > 0 || index < lines.length - 1).length;
+			changes.push({ path: absolutePath, displayPath: section.path, oldText: source.text, newText: "", bom: source.bom, type: "delete", diff, additions: 0, deletions, firstChangedLine: 1 });
 			continue;
 		}
-		const newText = updateContent(section.path, source.text, section.lines);
-		changes.push({ path: absolutePath, moveTo: section.moveTo ? resolve(cwd, section.moveTo.replace(/^@/, "")) : undefined, oldText: source.text, newText, bom: source.bom, type: section.moveTo ? "move" : "update" });
+		const { content: newText, firstChangedLine } = updateContent(section.path, source.text, section.lines);
+		const type = section.moveTo ? "move" : "update";
+		const { additions, deletions } = countPatchLines(section.lines);
+		changes.push({ path: absolutePath, moveTo: section.moveTo ? resolve(cwd, section.moveTo.replace(/^@/, "")) : undefined, displayPath: section.moveTo ?? section.path, oldText: source.text, newText, bom: source.bom, type, diff: sectionDiff(section, source.text, newText, type), additions, deletions, firstChangedLine });
 	}
 	return changes;
+}
+
+function toPreview(changes: Change[]): PatchPreview {
+	return {
+		diff: changes.map((change) => change.diff).join("\n"),
+		summary: summarize(changes),
+		files: changes.map((change) => change.displayPath),
+	};
+}
+
+async function computePreview(cwd: string, patchText: string): Promise<PatchPreview> {
+	try {
+		const changes = await deriveChanges(cwd, patchText);
+		if (changes.length === 0) return { error: "patch rejected: no file sections found" };
+		return toPreview(changes);
+	} catch (error) {
+		return { error: error instanceof Error ? error.message : String(error) };
+	}
 }
 
 function formatPatchCall(patchText: string | undefined, theme: any) {
@@ -129,12 +189,6 @@ function formatPatchCall(patchText: string | undefined, theme: any) {
 	return `${theme.fg("toolTitle", theme.bold("apply_patch"))} ${target}`;
 }
 
-function renderPatchCall(args: { patchText?: string }, theme: any, context: any) {
-	const text = context.lastComponent instanceof Text ? context.lastComponent : new Text("", 0, 0);
-	text.setText(formatPatchCall(args?.patchText, theme));
-	return text;
-}
-
 function limitRenderedLines(text: string, expanded: boolean, theme: any) {
 	const lines = text.split("\n");
 	const maxLines = expanded ? lines.length : 10;
@@ -144,6 +198,44 @@ function limitRenderedLines(text: string, expanded: boolean, theme: any) {
 	return output;
 }
 
+function renderPreview(preview: PatchPreview | undefined, expanded: boolean, theme: any) {
+	if (!preview) return undefined;
+	if ("error" in preview) return theme.fg("error", preview.error);
+	const summary = theme.fg("toolOutput", preview.summary);
+	const diff = limitRenderedLines(renderDiff(preview.diff), expanded, theme);
+	return `${summary}\n\n${diff}`;
+}
+
+function renderPatchCall(args: { patchText?: string }, theme: any, context: any) {
+	const state = context.state as ApplyPatchRenderState;
+	const component = context.lastComponent instanceof Container ? context.lastComponent : new Container();
+	const argsKey = args?.patchText ?? "";
+	if (state.previewArgsKey !== argsKey) {
+		state.preview = undefined;
+		state.previewPending = false;
+		state.previewArgsKey = argsKey;
+	}
+	if (context.argsComplete && args?.patchText && !state.preview && !state.previewPending) {
+		state.previewPending = true;
+		const requestKey = argsKey;
+		void computePreview(context.cwd, args.patchText).then((preview) => {
+			if (state.previewArgsKey === requestKey) {
+				state.preview = preview;
+				state.previewPending = false;
+				context.invalidate();
+			}
+		});
+	}
+	component.clear();
+	component.addChild(new Text(formatPatchCall(args?.patchText, theme), 0, 0));
+	const previewText = renderPreview(state.preview, Boolean(context.expanded), theme);
+	if (previewText) {
+		component.addChild(new Spacer(1));
+		component.addChild(new Text(previewText, 0, 0));
+	}
+	return component;
+}
+
 function renderPatchResult(result: { content: Array<{ type: string; text?: string }>; details?: ApplyPatchDetails }, options: { expanded?: boolean }, theme: any, context: any) {
 	const component = context.lastComponent instanceof Container ? context.lastComponent : new Container();
 	component.clear();
@@ -151,18 +243,21 @@ function renderPatchResult(result: { content: Array<{ type: string; text?: strin
 	if (context.isError) {
 		output = result.content.filter((c) => c.type === "text").map((c) => c.text ?? "").join("\n");
 		if (output) output = theme.fg("error", output);
-	} else if (result.details?.diff) {
-		output = renderDiff(result.details.diff);
+	} else if (result.details?.summary) {
+		const state = context.state as ApplyPatchRenderState;
+		output = theme.fg("toolOutput", result.details.summary);
+		if (!state.preview || "error" in state.preview || state.preview.diff !== result.details.diff) {
+			output += `\n\n${limitRenderedLines(renderDiff(result.details.diff), Boolean(options.expanded), theme)}`;
+		}
 	}
 	if (!output) return component;
-	output = limitRenderedLines(output, Boolean(options.expanded), theme);
 	component.addChild(new Spacer(1));
 	component.addChild(new Text(output, 1, 0));
 	return component;
 }
 
 export default function (pi: ExtensionAPI) {
-	pi.registerTool<typeof schema, ApplyPatchDetails | undefined>({
+	pi.registerTool<typeof schema, ApplyPatchDetails | undefined, ApplyPatchRenderState>({
 		name: "apply_patch",
 		label: "apply_patch",
 		description: "Apply a structured patch to add, update, delete, or move files. Use this for multi-location or multi-file edits instead of batching edit calls. Patch text must start with *** Begin Patch and end with *** End Patch. Each file section must use *** Add File: <path>, *** Update File: <path>, or *** Delete File: <path>; updates may include *** Move to: <path>. Add File content lines must start with +. Update hunks use @@ markers with space context lines, - removals, and + additions.",
@@ -174,7 +269,6 @@ export default function (pi: ExtensionAPI) {
 			if (signal?.aborted) throw new Error("Operation aborted");
 			const changes = await deriveChanges(ctx.cwd, patchText);
 			if (changes.length === 0) throw new Error("patch rejected: no file sections found");
-			const touched = changes.map((change) => change.moveTo ?? change.path);
 			for (const change of changes) {
 				await withFileMutationQueue(change.path, async () => {
 					if (signal?.aborted) throw new Error("Operation aborted");
@@ -188,10 +282,11 @@ export default function (pi: ExtensionAPI) {
 					if (change.moveTo) await rm(change.path);
 				});
 			}
-			const fullDiff = changes.map((change) => diff(change.moveTo ?? change.path, change.oldText, change.newText)).join("\n");
+			const preview = toPreview(changes);
+			if ("error" in preview) throw new Error(preview.error);
 			return {
-				content: [{ type: "text", text: `Applied patch to ${touched.length} file(s):\n${touched.join("\n")}` }],
-				details: { diff: fullDiff, files: touched },
+				content: [{ type: "text", text: `Applied patch to ${changes.length} file(s):\n${preview.summary}` }],
+				details: preview,
 			};
 		},
 	});

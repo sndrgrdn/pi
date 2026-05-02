@@ -4,11 +4,16 @@ import {
   type ExtensionContext,
   type Theme,
 } from "@mariozechner/pi-coding-agent";
-import { visibleWidth } from "@mariozechner/pi-tui";
+import { visibleWidth, type EditorComponent } from "@mariozechner/pi-tui";
 
 const ANSI_SGR_REGEX = /\x1b\[[^m]*m/g;
 const BG_ANSI = "\x1b[48;2;24;25;38m";
 const FLOOR_FG = "\x1b[38;2;24;25;38m";
+
+type WrappedEditor = EditorComponent & {
+  getPaddingX?: () => number;
+  isShowingAutocomplete?: () => boolean;
+};
 
 function stripAnsi(s: string): string {
   return s.replace(ANSI_SGR_REGEX, "");
@@ -45,13 +50,15 @@ class BoxEditor extends CustomEditor {
     keybindings: any,
     private readonly piTheme: Theme,
     private readonly ctx: ExtensionContext,
-    private readonly pi: ExtensionAPI
+    private readonly pi: ExtensionAPI,
+    private readonly wrapped?: WrappedEditor
   ) {
     super(tui, editorTheme, keybindings);
   }
 
-  render(width: number): string[] {
-    const parentLines = super.render(width);
+  override render(width: number): string[] {
+    const source = this.wrapped ?? this;
+    const parentLines = this.wrapped ? this.wrapped.render(width) : super.render(width);
     const result: string[] = [];
 
     // Replace borders with bg blanks, apply bg to content lines.
@@ -65,11 +72,11 @@ class BoxEditor extends CustomEditor {
     }
 
     // Autocomplete spacer.
-    if (this.isShowingAutocomplete?.()) {
+    if (source.isShowingAutocomplete?.()) {
       result.push(BG_ANSI + " ".repeat(width));
     }
 
-    const px = this.getPaddingX?.() ?? 1;
+    const px = source.getPaddingX?.() ?? 1;
     const modelInfo = this.ctx.model;
     const provider = modelInfo?.provider ?? "unknown";
     const model = modelInfo?.name ?? modelInfo?.id ?? "unknown";
@@ -92,9 +99,13 @@ class BoxEditor extends CustomEditor {
 
 export default function (pi: ExtensionAPI) {
   pi.on("session_start", (_event, ctx) => {
+    const previousFactory = ctx.ui.getEditorComponent();
     ctx.ui.setEditorComponent(
-      (tui, editorTheme, keybindings) =>
-        new BoxEditor(tui, createEditorTheme(editorTheme, ctx.ui.theme), keybindings, ctx.ui.theme, ctx, pi)
+      (tui, editorTheme, keybindings) => {
+        const themed = createEditorTheme(editorTheme, ctx.ui.theme);
+        const wrapped = previousFactory?.(tui, themed, keybindings);
+        return new BoxEditor(tui, themed, keybindings, ctx.ui.theme, ctx, pi, wrapped);
+      }
     );
   });
 }
