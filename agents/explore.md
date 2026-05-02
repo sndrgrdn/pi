@@ -2,7 +2,7 @@
 name: explore
 description: |
   Fast agent for exploring codebases. Use for finding files, searching code, or answering questions about structure. Specify thoroughness: quick, medium, or thorough.
-tools: read, grep, ls, find, parallel_web_search, parallel_web_fetch
+tools: read, grep, ls, find, exa_web_search_exa, exa_web_fetch_exa
 extensions: npm:pi-mcp-adapter
 model:
   anthropic: claude-haiku-4-5
