@@ -7,9 +7,9 @@ import { Type } from "typebox";
 
 const schema = Type.Object({
 	path: Type.String({ description: "Path to the file to edit (relative or absolute)" }),
-	oldString: Type.String({ description: "Exact text to replace. Must match once unless replaceAll is true." }),
+	oldString: Type.String({ description: "Exact text to replace. Must match exactly once in the file unless replaceAll=true." }),
 	newString: Type.String({ description: "Replacement text. Must be different from oldString." }),
-	replaceAll: Type.Optional(Type.Boolean({ description: "Replace every occurrence of oldString instead of requiring a unique match" })),
+	replaceAll: Type.Optional(Type.Boolean({ description: "Replace every occurrence of oldString. Only use when every occurrence should change." })),
 }, { additionalProperties: false });
 
 const resolvePath = (cwd: string, path: string) => resolve(cwd, path.replace(/^@/, ""));
@@ -43,7 +43,10 @@ export default function (pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "edit",
 		label: "edit",
-		description: "Perform one exact string replacement in a file. Read the file first and copy only the real file content into oldString, not any rendered line-number prefix. Preserves UTF-8 BOM and the file's existing line ending style. oldString must match exactly once unless replaceAll=true; use replaceAll only when every occurrence should change. Use apply_patch for multi-location or multi-file changes.",
+		description: [
+			"Perform one exact string replacement in a file.",
+			"Preserves UTF-8 BOM and existing line endings.",
+		].join(" "),
 		promptSnippet: "Replace one exact string in a file",
 		parameters: schema,
 		async execute(_id, { path, oldString, newString, replaceAll }, signal, _onUpdate, ctx) {

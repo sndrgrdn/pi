@@ -1,31 +1,52 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { createLocalBashOperations, DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, truncateTail, type BashToolDetails } from "@mariozechner/pi-coding-agent";
+import { Text } from "@mariozechner/pi-tui";
 import { randomBytes } from "crypto";
 import { writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { isAbsolute, join, resolve } from "path";
 import { Type } from "typebox";
 
+const DEFAULT_TIMEOUT_SECONDS = 120;
+
 const schema = Type.Object({
 	command: Type.String({ description: "Bash command to execute" }),
-	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (optional, no default timeout)" })),
-	workdir: Type.Optional(Type.String({ description: "Working directory for the command. Defaults to the current session directory." })),
+	timeout: Type.Optional(Type.Number({ description: `Timeout in seconds. Defaults to ${DEFAULT_TIMEOUT_SECONDS}s. Set for commands that may hang or run long.` })),
+	workdir: Type.Optional(Type.String({ description: `Working directory. Defaults to session cwd. Prefer over "cd ... &&".` })),
+	description: Type.Optional(Type.String({ description: "Clear, concise description of what this command does in 5-10 words" })),
 });
 
 const resolveWorkdir = (cwd: string, workdir?: string) => workdir ? (isAbsolute(workdir) ? workdir : resolve(cwd, workdir)) : cwd;
+
+function renderBashCall(args: { command?: string; timeout?: number; description?: string }, theme: any, context: any) {
+	const text = context.lastComponent instanceof Text ? context.lastComponent : new Text("", 0, 0);
+	const title = args.description?.trim() || args.command || "...";
+	const timeout = args.timeout ? theme.fg("muted", ` (timeout ${args.timeout}s)`) : "";
+	let output = theme.fg("toolTitle", theme.bold(`$ ${title}`)) + timeout;
+	if (args.description?.trim() && args.command) output += `\n${theme.fg("muted", args.command)}`;
+	text.setText(output);
+	return text;
+}
 
 export default function (pi: ExtensionAPI) {
 	const ops = createLocalBashOperations();
 	pi.registerTool({
 		name: "bash",
 		label: "bash",
-		description: `Execute a deterministic, non-interactive shell command for terminal operations such as git, package managers, test runners, and build tools. Runs in the current working directory unless workdir is provided; prefer workdir over \"cd ... &&\". Quote paths that contain spaces. Do not use bash for routine file reading, writing, editing, or content search when dedicated tools are available. Set timeout for commands that may hang. Non-zero exit codes fail the tool and include output. Output is truncated to the last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB; full output is saved to a temp file when truncated.`,
+		description: [
+			"Execute a deterministic, non-interactive shell command.",
+			`Use ${tmpdir()} for temporary work outside the workspace.`,
+			"Do not use bash for file reading, writing, editing, or searching — use dedicated tools (read, edit, apply_patch, write, rg/fd/sg).",
+			"Avoid cat/head/tail, sed/awk, echo/printf/heredoc writes, find, and grep unless explicitly requested.",
+			`Non-zero exit codes fail the tool. Output truncated to last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB.`,
+		].join(" "),
 		promptSnippet: "Run a deterministic shell command",
 		parameters: schema,
+		renderCall: renderBashCall,
 		async execute(_id, { command, timeout, workdir }, signal, onUpdate, ctx) {
 			let output = "";
 			const result = await ops.exec(command, resolveWorkdir(ctx.cwd, workdir), {
-				timeout,
+				timeout: timeout ?? DEFAULT_TIMEOUT_SECONDS,
 				signal,
 				onData: (data) => {
 					output += data.toString("utf-8");

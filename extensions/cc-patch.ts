@@ -39,9 +39,8 @@ export default function (pi: ExtensionAPI) {
 		if (!isAnthropicTarget(payload, ctx.model as { provider?: string; id?: string } | undefined)) return;
 
 		if (Array.isArray(payload.system)) {
-			const newBlocks: any[] = [];
+			const newBlocks: unknown[] = [];
 
-			// Billing header as first block for subscription rate-limit routing
 			newBlocks.push({
 				type: "text",
 				text: "x-anthropic-billing-header: cc_version=2.1.96.000; cc_entrypoint=cli;",

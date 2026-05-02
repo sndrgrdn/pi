@@ -19,10 +19,10 @@ import * as path from "node:path";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { Message } from "@mariozechner/pi-ai";
 import { StringEnum } from "@mariozechner/pi-ai";
-import { type ExtensionAPI, getMarkdownTheme, withFileMutationQueue } from "@mariozechner/pi-coding-agent";
+import { type ExtensionAPI, getAgentDir, getMarkdownTheme, withFileMutationQueue } from "@mariozechner/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { Type } from "typebox";
-import { type AgentConfig, type AgentScope, type ThinkingLevel, discoverAgents, resolveModel } from "./agents.js";
+import { type AgentConfig, type AgentScope, type ThinkingLevel, discoverAgents, loadAgentsFromDir, resolveModel } from "./agents.js";
 
 export interface CallerDefaults {
 	provider?: string;
@@ -279,21 +279,16 @@ async function runSingleAgent(
 	}
 
 	const args: string[] = ["--mode", "json", "-p", "--no-session"];
-	// Handle extensions: true = all, string[] = specific, undefined/false = --no-extensions
 	if (agent.extensions === true) {
-		// load all discovered extensions (no flag needed)
 	} else if (Array.isArray(agent.extensions) && agent.extensions.length > 0) {
 		args.push("--no-extensions");
 		for (const ext of agent.extensions) args.push("-e", ext);
 	} else {
-		// default: clean sandbox, no extensions
 		args.push("--no-extensions");
 	}
-	// Model: resolve from agent config (provider-keyed), or inherit from caller
 	const resolvedAgentModel = resolveModel(agent.model, callerDefaults.provider);
 	const effectiveModel = resolvedAgentModel ?? callerDefaults.model;
 	if (effectiveModel) args.push("--model", effectiveModel);
-	// Thinking: use agent's thinking level, or inherit from caller
 	const effectiveThinking = agent.thinking ?? callerDefaults.thinking;
 	if (effectiveThinking) args.push("--thinking", effectiveThinking);
 	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
@@ -374,7 +369,7 @@ async function runSingleAgent(
 
 			const scheduleTerminalResolve = () => {
 				if (!sawTerminalAssistantMessage || resolved) return;
-				if (terminalDrainTimer) return; // only schedule once, don't reset on each data event
+				if (terminalDrainTimer) return;
 				terminalDrainTimer = setTimeout(() => {
 					if (resolved) return;
 					if (proc.exitCode === null) {
@@ -472,27 +467,23 @@ async function runSingleAgent(
 		if (tmpPromptPath)
 			try {
 				fs.unlinkSync(tmpPromptPath);
-			} catch {
-				/* ignore */
-			}
+			} catch {}
 		if (tmpPromptDir)
 			try {
 				fs.rmdirSync(tmpPromptDir);
-			} catch {
-				/* ignore */
-			}
+			} catch {}
 	}
 }
 
 const TaskItem = Type.Object({
-	agent: Type.String({ description: "Name of the agent to invoke" }),
+	agent: Type.String({ description: "Agent name to invoke." }),
 	task: Type.String({ description: "Task to delegate to the agent" }),
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
 });
 
 const ChainItem = Type.Object({
-	agent: Type.String({ description: "Name of the agent to invoke" }),
-	task: Type.String({ description: "Task with optional {previous} placeholder for prior output" }),
+	agent: Type.String({ description: "Agent name to invoke." }),
+	task: Type.String({ description: "Task description. Use {previous} placeholder to inject prior chain step output." }),
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
 });
 
@@ -502,10 +493,10 @@ const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
 });
 
 const SubagentParams = Type.Object({
-	agent: Type.Optional(Type.String({ description: "Name of the agent to invoke (for single mode)" })),
-	task: Type.Optional(Type.String({ description: "Task to delegate (for single mode)" })),
-	tasks: Type.Optional(Type.Array(TaskItem, { description: "Array of {agent, task} for parallel execution" })),
-	chain: Type.Optional(Type.Array(ChainItem, { description: "Array of {agent, task} for sequential execution" })),
+	agent: Type.Optional(Type.String({ description: "Agent name (single mode)." })),
+	task: Type.Optional(Type.String({ description: "Task to delegate (single mode)." })),
+	tasks: Type.Optional(Type.Array(TaskItem, { description: "Array of {agent, task} for independent parallel execution." })),
+	chain: Type.Optional(Type.Array(ChainItem, { description: "Array of {agent, task} for sequential execution. Each step can use {previous} for prior output." })),
 	agentScope: Type.Optional(AgentScopeSchema),
 	confirmProjectAgents: Type.Optional(
 		Type.Boolean({ description: "Prompt before running project-local agents. Default: true.", default: true }),
@@ -517,14 +508,22 @@ export default function (pi: ExtensionAPI) {
 	// Prevent recursion: exclude parent agent when running as subagent
 	const parentAgentName = process.env.PI_SUBAGENT_NAME;
 
+	// Discover user agents at registration time for the tool description
+	const userAgentsDir = path.join(getAgentDir(), "agents");
+	const earlyAgents = loadAgentsFromDir(userAgentsDir, "user")
+		.filter((a) => a.name !== parentAgentName);
+	const agentListStr = earlyAgents.length > 0
+		? earlyAgents.map((a) => `${a.name}: ${a.description.trim().split("\n")[0]}`).join("; ")
+		: "none discovered";
+
 	pi.registerTool({
 		name: "subagent",
 		label: "Subagent",
 		description: [
-			"Delegate tasks to specialized subagents with isolated context.",
-			"Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder).",
-			'Default agent scope is "user" (from ~/.pi/agent/agents).',
-			'To enable project-local agents in .pi/agents, set agentScope: "both" (or "project").',
+			"Delegate tasks to specialized subagents, each with an isolated context window.",
+			"Three modes: single (one agent + task), parallel (independent tasks), chain (sequential with {previous} output forwarding).",
+			`Agents: ${agentListStr}.`,
+			"Set agentScope to \"both\" to also discover project-local agents.",
 		].join(" "),
 		parameters: SubagentParams,
 

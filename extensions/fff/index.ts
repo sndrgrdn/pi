@@ -13,18 +13,10 @@ import type { MixedItem } from "@ff-labs/fff-node";
 import { mkdirSync } from "fs";
 import { join, resolve } from "path";
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const FFF_DB_DIR = join(getAgentDir(), "fff");
 const FRECENCY_DB_PATH = join(FFF_DB_DIR, "frecency.mdb");
 const HISTORY_DB_PATH = join(FFF_DB_DIR, "history.mdb");
 const MENTION_MAX_RESULTS = 20;
-
-// ---------------------------------------------------------------------------
-// Mention autocomplete helpers
-// ---------------------------------------------------------------------------
 
 function extractAtPrefix(textBeforeCursor: string): string | null {
 	const match = textBeforeCursor.match(/(?:^|[ \t])(@(?:"[^"]*|[^\s]*))$/);
@@ -74,7 +66,6 @@ class FffAtMentionProvider implements AutocompleteProvider {
 			if (items.length === 0) return null;
 			return { items, prefix: atPrefix };
 		} catch {
-			// If FFF lookup fails unexpectedly, fall back to built-in provider.
 			return this.base.getSuggestions(lines, cursorLine, cursorCol, options);
 		}
 	}
@@ -84,10 +75,6 @@ class FffAtMentionProvider implements AutocompleteProvider {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Extension
-// ---------------------------------------------------------------------------
-
 export default function fffExtension(pi: ExtensionAPI) {
 	const MAX_FINDERS = 4;
 	const finderPool = new Map<string, FileFinder>();
@@ -95,23 +82,18 @@ export default function fffExtension(pi: ExtensionAPI) {
 
 	try {
 		mkdirSync(FFF_DB_DIR, { recursive: true });
-	} catch {
-		// ignore
-	}
+	} catch {}
 
 	async function ensureFinder(basePath: string): Promise<FileFinder> {
 		const key = resolve(basePath);
 
-		// Return existing finder if alive
 		const existing = finderPool.get(key);
 		if (existing && !existing.isDestroyed) {
-			// Move to end (most recent) by re-inserting
 			finderPool.delete(key);
 			finderPool.set(key, existing);
 			return existing;
 		}
 
-		// Evict oldest if at capacity
 		if (finderPool.size >= MAX_FINDERS) {
 			const oldestKey = finderPool.keys().next().value!;
 			const oldest = finderPool.get(oldestKey);
@@ -134,11 +116,7 @@ export default function fffExtension(pi: ExtensionAPI) {
 
 		const finder = result.value;
 		finderPool.set(key, finder);
-		const scanResult = await finder.waitForScan(15000);
-		if (scanResult.ok && !scanResult.value) {
-			// timed out but finder is still usable with partial index
-		}
-
+		await finder.waitForScan(15000);
 		return finder;
 	}
 
@@ -177,8 +155,6 @@ export default function fffExtension(pi: ExtensionAPI) {
 		ctx.ui.addAutocompleteProvider((baseProvider) => new FffAtMentionProvider(baseProvider, getMentionItems));
 	}
 
-	// --- Lifecycle ---
-
 	pi.on("session_start", async (_event, ctx) => {
 		try {
 			activeCwd = ctx.cwd;
@@ -193,8 +169,6 @@ export default function fffExtension(pi: ExtensionAPI) {
 	pi.on("session_shutdown", async () => {
 		destroyAllFinders();
 	});
-
-	// --- Commands ---
 
 	pi.registerCommand("fff-health", {
 		description: "Show FFF file finder health and status",

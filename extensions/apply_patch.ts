@@ -14,7 +14,7 @@ type PatchPreview = { diff: string; summary: string; files: string[] } | { error
 type ApplyPatchRenderState = { preview?: PatchPreview; previewArgsKey?: string; previewPending?: boolean };
 
 const schema = Type.Object({
-	patchText: Type.String({ description: "Patch text using Begin Patch / Add File / Update File / Delete File sections" }),
+	patchText: Type.String({ description: "Patch text. Must start with *** Begin Patch and end with *** End Patch. File sections: *** Add File: <path>, *** Update File: <path>, *** Delete File: <path> (updates may include *** Move to: <path>). Add lines prefixed +. Update hunks use @@ markers, space context, - removals, + additions." }),
 }, { additionalProperties: false });
 
 const splitBom = (text: string) => text.charCodeAt(0) === 0xfeff ? { bom: true, text: text.slice(1) } : { bom: false, text };
@@ -260,7 +260,10 @@ export default function (pi: ExtensionAPI) {
 	pi.registerTool<typeof schema, ApplyPatchDetails | undefined, ApplyPatchRenderState>({
 		name: "apply_patch",
 		label: "apply_patch",
-		description: "Apply a structured patch to add, update, delete, or move files. Use this for multi-location or multi-file edits instead of batching edit calls. Patch text must start with *** Begin Patch and end with *** End Patch. Each file section must use *** Add File: <path>, *** Update File: <path>, or *** Delete File: <path>; updates may include *** Move to: <path>. Add File content lines must start with +. Update hunks use @@ markers with space context lines, - removals, and + additions.",
+		description: [
+			"Apply a structured patch to add, update, delete, or move files.",
+			"Use for multi-location or multi-file edits instead of batching edit calls.",
+		].join(" "),
 		promptSnippet: "Apply a structured multi-file patch",
 		parameters: schema,
 		renderCall: renderPatchCall,

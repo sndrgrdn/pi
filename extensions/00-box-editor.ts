@@ -61,7 +61,6 @@ class BoxEditor extends CustomEditor {
     const parentLines = this.wrapped ? this.wrapped.render(width) : super.render(width);
     const result: string[] = [];
 
-    // Replace borders with bg blanks, apply bg to content lines.
     for (const line of parentLines) {
       const raw = stripAnsi(line).trim();
       if (/^─+$/.test(raw)) {
@@ -71,7 +70,6 @@ class BoxEditor extends CustomEditor {
       }
     }
 
-    // Autocomplete spacer.
     if (source.isShowingAutocomplete?.()) {
       result.push(BG_ANSI + " ".repeat(width));
     }

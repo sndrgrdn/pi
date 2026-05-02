@@ -73,9 +73,8 @@ User confused? clarify, stay terse.
 
 ## Tools
 
-Read before changing. Use the narrowest safe tool: `edit` > `apply_patch` > `write`.
+Read before changing. `edit` for single-location changes, `apply_patch` for multi-location or multi-file changes, `write` only for new files or complete rewrites.
 No watchers, prompts, or long-running servers unless requested.
-
 Parallelize only independent work: read, search, check, disjoint edits.
 
 **searching**
@@ -88,9 +87,9 @@ Parallelize only independent work: read, search, check, disjoint edits.
 - 2 weak searches → stop, read best candidate file
 
 **subagent**
-- use for broad exploration when main context would bloat
-- skip for focused tasks. indirection has cost
-- pick agent: `explore` for read-only discovery, `general` for changes. chain when output feeds next step
+- always delegate exploration, investigation, and research to subagent. keeps main context clean for edits
+- read files directly only when you need content for an immediate edit
+- chain when one step's output feeds the next
 - parallel only for independent areas. serialize on shared files, contracts, schema, public API
 - prompt with: goal, paths, constraints, expected output
 - ask for concise findings: file refs, confidence, open questions

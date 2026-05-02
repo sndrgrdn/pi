@@ -19,7 +19,6 @@ const THINKING_LEVELS: ReadonlySet<string> = new Set<ThinkingLevel>([
   "off", "minimal", "low", "medium", "high", "xhigh"
 ])
 
-/** Model must be provider-keyed map */
 export type ModelConfig = Record<string, string>
 
 export interface AgentConfig {
@@ -28,19 +27,12 @@ export interface AgentConfig {
   tools?: string[]
   model?: ModelConfig
   thinking?: ThinkingLevel
-  /** undefined/false = --no-extensions (default), true = all, string[] = specific extensions */
   extensions?: boolean | string[]
   systemPrompt: string
   source: "user" | "project"
   filePath: string
 }
 
-/**
- * Resolve provider-keyed model config for caller provider only.
- * @param config - Model config from agent (provider map or undefined)
- * @param callerProvider - Caller provider ID (e.g. "anthropic")
- * @returns Resolved model ID or undefined (inherit from caller)
- */
 export function resolveModel(config: ModelConfig | undefined, callerProvider?: string): string | undefined {
   if (!config || !callerProvider) return undefined
 
@@ -55,9 +47,6 @@ export interface AgentDiscoveryResult {
   projectAgentsDir: string | null
 }
 
-// ── Extension resolution ────────────────────────────────────────────
-
-/** Cached package manager, keyed by cwd. */
 let _packageManager: { cwd: string; instance: InstanceType<typeof DefaultPackageManager> } | null =
   null
 
@@ -90,7 +79,6 @@ function resolveLocalExtensionPath(entry: string, agentDir: string, cwd: string)
     return fs.existsSync(resolved) ? resolved : null
   }
 
-  // Bare name — search extension directories (global, then project-local)
   const extensionDirs = [
     path.join(getAgentDir(), "extensions"),
     path.join(cwd, ".pi", "extensions"),
@@ -146,8 +134,6 @@ function resolveExtensions(entries: string[], agentDir: string, cwd: string): st
   return resolved
 }
 
-// ── Frontmatter parsing ─────────────────────────────────────────────
-
 function parseExtensions(value: unknown): AgentConfig["extensions"] {
   if (value === undefined) return undefined
   if (typeof value === "boolean") return value
@@ -177,8 +163,6 @@ function parseModel(value: unknown): ModelConfig | undefined {
 
   return Object.keys(parsed).length > 0 ? parsed : undefined
 }
-
-// ── Agent loading ───────────────────────────────────────────────────
 
 export function loadAgentsFromDir(
   dir: string,

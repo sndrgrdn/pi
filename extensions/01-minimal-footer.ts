@@ -10,30 +10,22 @@ export default function (pi: ExtensionAPI) {
     ctx.ui.setFooter((tui, theme, footerData) => {
       const unsub = footerData.onBranchChange(() => tui.requestRender());
 
-      // Match editor's default horizontal padding for visual alignment
       const paddingX = 1;
 
       return {
         dispose: unsub,
         invalidate() {},
         render(width: number): string[] {
-          // cwd (shortened)
           const cwd = process.cwd().replace(process.env.HOME || "", "~");
-
-          // branch
           const branch = footerData.getGitBranch() || "";
 
-          // context usage (null after compaction until next response)
-          // ctx goes stale on session replacement/shutdown; guard render
           let tokens: number | undefined;
           let pct: number | undefined;
           try {
             const usage = ctx.getContextUsage();
             tokens = usage?.tokens ?? undefined;
             pct = usage?.percent != null ? Math.round(usage.percent) : undefined;
-          } catch {
-            // stale ctx after session replacement/shutdown; render blanks
-          }
+          } catch {}
 
           const tokensK = tokens ? (tokens / 1000).toFixed(1) + "K" : "?";
           const left = theme.fg("dim", `${tokensK} (${pct ?? "?"}%)`);

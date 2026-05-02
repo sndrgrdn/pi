@@ -8,9 +8,9 @@ import { Type } from "typebox";
 const SAMPLE_BYTES = 4096;
 
 const schema = Type.Object({
-	path: Type.String({ description: "Path to the file or directory to read (relative or absolute)" }),
-	offset: Type.Optional(Type.Number({ description: "Line number or directory entry number to start reading from (1-indexed)" })),
-	limit: Type.Optional(Type.Number({ description: "Maximum number of lines or directory entries to read" })),
+	path: Type.String({ description: "Path to a file or directory (relative or absolute). Directories list entries with trailing / for subdirectories." }),
+	offset: Type.Optional(Type.Number({ description: "Start from this line/entry number (1-indexed). Use to continue after truncation." })),
+	limit: Type.Optional(Type.Number({ description: "Maximum lines or entries to return. Prefer larger windows over tiny repeated chunks." })),
 });
 
 const resolvePath = (cwd: string, path: string) => resolve(cwd, path.replace(/^@/, ""));
@@ -51,7 +51,11 @@ export default function (pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "read",
 		label: "read",
-		description: `Read a text file or list a directory from the local filesystem. Relative paths resolve from the current working directory. Directory entries are returned one per line with a trailing / for subdirectories. Binary files are rejected. Text output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB. Use offset/limit to read later sections; avoid tiny repeated chunks when a larger window is useful. Use search tools to locate specific content before reading large files.`,
+		description: [
+			"Read a text file or list a directory.",
+			"Binary files rejected. Relative paths resolve from cwd.",
+			`Output truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB.`,
+		].join(" "),
 		promptSnippet: "Read file or directory contents",
 		parameters: schema,
 		async execute(_id, { path, offset, limit }, signal, _onUpdate, ctx) {

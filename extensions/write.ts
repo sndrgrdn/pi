@@ -6,7 +6,7 @@ import { Type } from "typebox";
 
 const schema = Type.Object({
 	path: Type.String({ description: "Path to the file to write (relative or absolute)" }),
-	content: Type.String({ description: "Complete file content to write" }),
+	content: Type.String({ description: "Complete file content to write. Overwrites any existing content." }),
 });
 
 const resolvePath = (cwd: string, path: string) => resolve(cwd, path.replace(/^@/, ""));
@@ -26,7 +26,10 @@ export default function (pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "write",
 		label: "write",
-		description: "Write complete content to a file, creating parent directories automatically. This overwrites any existing file and preserves an existing UTF-8 BOM when present. Prefer edit for one targeted replacement and apply_patch for multi-location or multi-file changes. Do not create new files unless required, and do not proactively create documentation/README files unless explicitly requested.",
+		description: [
+			"Write a complete file. Creates parent directories automatically. Preserves UTF-8 BOM when present.",
+			"Do not proactively create documentation/README files unless explicitly requested.",
+		].join(" "),
 		promptSnippet: "Create or overwrite a complete file",
 		parameters: schema,
 		async execute(_id, { path, content }, signal, _onUpdate, ctx) {
