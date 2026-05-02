@@ -25,15 +25,19 @@ Each `.ts` file under `extensions/` is loaded by pi. Numbered files load first.
 |------|---------|
 | `00-box-editor.ts` | Custom bordered editor rendering |
 | `01-minimal-footer.ts` | Replace the default footer with a compact token/cwd/branch footer |
+| `apply_patch.ts` | Structured multi-file patch tool with add/update/delete/move support |
+| `bash.ts` | Local non-interactive shell command tool with truncation and timeout support |
 | `cc-patch.ts` | Patch Anthropic provider behavior for Claude subscription usage |
 | `context.ts` | `/context` command showing loaded extensions, skills, context files, token usage |
 | `disable-invocation.ts` | Removes rendered skill invocation instructions from the final system prompt |
+| `edit.ts` | Exact string replacement tool preserving BOM and line endings |
+| `read.ts` | Local text file/directory reader with binary detection and truncation |
 | `todos.ts` | File-backed todo system under `.pi/todos` |
 | `update.ts` | `/update` command that runs `pi update` then shuts down |
 | `whimsical.ts` | Whimsical thinking/working status messages |
+| `write.ts` | Complete file writer that creates parent directories and preserves BOM |
 | `fff/` | FFF-powered `@` mention autocomplete |
 | `subagent/` | Subagent dispatch tool backing `agents/` |
-| `web-tools/` | WebFetch + WebSearch with authenticated browser profile support |
 
 ## Agents
 
