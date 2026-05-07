@@ -25,7 +25,6 @@ Each `.ts` file under `extensions/` is loaded by pi. Numbered files load first.
 |------|---------|
 | `00-box-editor.ts` | Custom bordered editor rendering |
 | `01-minimal-footer.ts` | Replace the default footer with a compact token/cwd/branch footer |
-| `apply_patch.ts` | Structured multi-file patch tool with add/update/delete/move support |
 | `bash.ts` | Local non-interactive shell command tool with truncation and timeout support |
 | `cc-patch.ts` | Patch Anthropic provider behavior for Claude subscription usage |
 | `context.ts` | `/context` command showing loaded extensions, skills, context files, token usage |

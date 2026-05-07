@@ -72,7 +72,7 @@ User confused? clarify, stay terse.
 
 ## Tools
 
-`edit` for single-location, `apply_patch` for multi-location/multi-file, `write` for new files or full rewrites.
+`edit` for surgical changes in existing files (supports multiple edits per call), `write` for new files or full rewrites.
 no watchers or long-running servers unless requested.
 parallelize independent work only: reads, searches, checks, disjoint edits.
 
