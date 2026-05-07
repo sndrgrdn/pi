@@ -1,5 +1,5 @@
-import type { ExtensionAPI, ToolDefinition } from "@mariozechner/pi-coding-agent";
-import { createBashToolDefinition, DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { createBashToolDefinition, DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "@earendil-works/pi-coding-agent";
 import { tmpdir } from "os";
 import { isAbsolute, resolve } from "path";
 import { Type } from "typebox";
@@ -13,10 +13,10 @@ const schema = Type.Object({
 });
 
 const description = [
-	"Execute a deterministic, non-interactive shell command.",
+	"Execute a non-interactive shell command.",
 	`Use ${tmpdir()} for temporary work outside the workspace.`,
-	"rg, fd, sg, git, test runners, and build tools run through bash. Do not use bash to replace dedicated file tools (read, edit, apply_patch, write).",
-	"Avoid cat/head/tail, sed/awk, echo/printf/heredoc writes, find, and grep unless explicitly requested.",
+	"rg, fd, git, test runners, and build tools run through bash.",
+	"Avoid cat/head/tail, sed/awk, echo/printf/heredoc writes — use dedicated file tools (read, edit, apply_patch, write). Prefer rg over grep, fd over find.",
 	`Non-zero exit codes fail the tool. Output truncated to last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB.`,
 ].join(" ");
 
@@ -28,7 +28,7 @@ export default function (pi: ExtensionAPI) {
 		...base,
 		description,
 		parameters: schema,
-		async execute(toolCallId, params, signal, onUpdate, ctx) {
+		async execute(toolCallId, params: { command: string; timeout?: number; workdir?: string }, signal, onUpdate, ctx) {
 			const { command, timeout = DEFAULT_TIMEOUT_SECONDS, workdir } = params;
 			const tool = createBashToolDefinition(resolveWorkdir(ctx.cwd, workdir));
 			return tool.execute(toolCallId, { command, timeout }, signal, onUpdate, ctx);

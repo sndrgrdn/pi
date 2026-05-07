@@ -3,8 +3,8 @@ import {
   type ExtensionAPI,
   type ExtensionContext,
   type Theme,
-} from "@mariozechner/pi-coding-agent";
-import { visibleWidth, type EditorComponent } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import { visibleWidth, type EditorComponent } from "@earendil-works/pi-tui";
 
 const ANSI_SGR_REGEX = /\x1b\[[^m]*m/g;
 const BG_ANSI = "\x1b[48;2;24;25;38m";

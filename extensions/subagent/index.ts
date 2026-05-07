@@ -16,11 +16,11 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentToolResult } from "@mariozechner/pi-agent-core";
-import type { Message } from "@mariozechner/pi-ai";
-import { StringEnum } from "@mariozechner/pi-ai";
-import { type ExtensionAPI, getAgentDir, getMarkdownTheme, withFileMutationQueue } from "@mariozechner/pi-coding-agent";
-import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
+import type { AgentToolResult } from "@earendil-works/pi-agent-core";
+import type { Message } from "@earendil-works/pi-ai";
+import { StringEnum } from "@earendil-works/pi-ai";
+import { type ExtensionAPI, getAgentDir, getMarkdownTheme, withFileMutationQueue } from "@earendil-works/pi-coding-agent";
+import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { type AgentConfig, type AgentScope, type ThinkingLevel, discoverAgents, loadAgentsFromDir, resolveModel } from "./agents.js";
 
@@ -523,7 +523,6 @@ export default function (pi: ExtensionAPI) {
 			"Delegate tasks to specialized subagents, each with an isolated context window.",
 			"Three modes: single (one agent + task), parallel (independent tasks), chain (sequential with {previous} output forwarding).",
 			`Agents: ${agentListStr}.`,
-			"Set agentScope to \"both\" to also discover project-local agents.",
 		].join(" "),
 		parameters: SubagentParams,
 

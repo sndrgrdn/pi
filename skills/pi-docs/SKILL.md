@@ -13,7 +13,7 @@ Reference pi's official docs when working on pi-related topics.
 Run to get the pi package root:
 
 ```bash
-pnpm root -g | xargs -I{} echo "{}/@mariozechner/pi-coding-agent"
+pnpm root -g | xargs -I{} echo "{}/@earendil-works/pi-coding-agent"
 ```
 
 This returns `PI_ROOT`. All doc paths below are relative to this.
@@ -33,13 +33,16 @@ This returns `PI_ROOT`. All doc paths below are relative to this.
 | Custom providers | `docs/custom-provider.md` |
 | Adding models | `docs/models.md` |
 | Pi packages | `docs/packages.md` |
-| Sessions | `docs/session.md` |
+| Sessions | `docs/sessions.md`, `docs/session-format.md` |
 | Settings | `docs/settings.md` |
 | Compaction | `docs/compaction.md` |
 | JSON / print mode | `docs/json.md` |
 | RPC | `docs/rpc.md` |
 | Providers | `docs/providers.md` |
-| Tree view | `docs/tree.md` |
+| Usage | `docs/usage.md` |
+| Shell aliases | `docs/shell-aliases.md` |
+| Terminal setup | `docs/terminal-setup.md` |
+| Quickstart | `docs/quickstart.md` |
 
 ## Step 3: Follow Cross-References
 

@@ -10,7 +10,7 @@ import {
   SettingsManager,
   getAgentDir,
   parseFrontmatter,
-} from "@mariozechner/pi-coding-agent"
+} from "@earendil-works/pi-coding-agent"
 
 export type AgentScope = "user" | "project" | "both"
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh"

@@ -1,4 +1,4 @@
-import { formatSkillsForPrompt, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { formatSkillsForPrompt, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export default function disableInvocation(pi: ExtensionAPI) {
 	pi.on("before_agent_start", async (event) => {

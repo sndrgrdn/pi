@@ -1,5 +1,5 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { createWriteToolDefinition } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { createWriteToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
 const schema = Type.Object({
@@ -7,10 +7,7 @@ const schema = Type.Object({
 	content: Type.String({ description: "Complete file content to write. Overwrites any existing content." }),
 });
 
-const description = [
-	"Write a complete file. Creates parent directories automatically. Preserves UTF-8 BOM when present.",
-	"Do not proactively create documentation/README files unless explicitly requested.",
-].join(" ");
+const description = "Write a complete file. Creates parent directories automatically. Preserves UTF-8 BOM when present.";
 
 export default function (pi: ExtensionAPI) {
 	const base = createWriteToolDefinition(process.cwd());

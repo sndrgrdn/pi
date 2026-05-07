@@ -1,5 +1,5 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { withFileMutationQueue, type EditToolDetails } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { withFileMutationQueue, type EditToolDetails } from "@earendil-works/pi-coding-agent";
 import { constants } from "fs";
 import { access, readFile, writeFile } from "fs/promises";
 import { resolve } from "path";
