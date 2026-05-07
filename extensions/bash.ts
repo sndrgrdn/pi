@@ -15,7 +15,6 @@ const schema = Type.Object({
 const description = [
 	"Execute a non-interactive shell command.",
 	`Use ${tmpdir()} for temporary work outside the workspace.`,
-	"rg, fd, git, test runners, and build tools run through bash.",
 	"Avoid cat/head/tail, sed/awk, echo/printf/heredoc writes — use dedicated file tools (read, edit, write). Prefer rg over grep, fd over find.",
 	`Non-zero exit codes fail the tool. Output truncated to last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB.`,
 ].join(" ");

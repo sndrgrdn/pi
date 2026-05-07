@@ -11,7 +11,6 @@ const schema = Type.Object({
 const description = [
 	"Read the contents of a file.",
 	"Supports text files and images (jpg, png, gif, webp). Images are sent as attachments.",
-	"Relative paths resolve from cwd.",
 	`Output truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB.`,
 	"Does not support reading directories. Use bash with ls or fd instead.",
 ].join(" ");

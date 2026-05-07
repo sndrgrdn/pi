@@ -1,8 +1,8 @@
 # ~/.pi/agent
 
-Personal configuration for [pi](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) — Mario Zechner's terminal coding agent.
+Personal config for [pi](https://github.com/earendil-works/pi-mono/tree/main/packages/coding-agent), a terminal coding agent by Mario Zechner.
 
-This README describes the stable committed repository shape only. It intentionally omits ignored local state, uncommitted files, and volatile runtime/model settings.
+Covers the committed repo shape. Ignores local state, uncommitted files, and runtime/model settings.
 
 ## Layout
 
@@ -29,34 +29,32 @@ Each `.ts` file under `extensions/` is loaded by pi. Numbered files load first.
 | `cc-patch.ts` | Patch Anthropic provider behavior for Claude subscription usage |
 | `context.ts` | `/context` command showing loaded extensions, skills, context files, token usage |
 | `disable-invocation.ts` | Removes rendered skill invocation instructions from the final system prompt |
-| `edit.ts` | Exact string replacement tool preserving BOM and line endings |
+| `edit.ts` | Multi-edit exact text replacement tool with atomic writes and unified diff output |
 | `read.ts` | Local text file/directory reader with binary detection and truncation |
 | `todos.ts` | File-backed todo system under `.pi/todos` |
-| `update.ts` | `/update` command that runs `pi update` then shuts down |
 | `whimsical.ts` | Whimsical thinking/working status messages |
 | `write.ts` | Complete file writer that creates parent directories and preserves BOM |
-| `fff/` | FFF-powered `@` mention autocomplete |
 | `subagent/` | Subagent dispatch tool backing `agents/` |
 
 ## Agents
 
-Defined in `agents/` and invoked via the subagent extension:
+In `agents/`, invoked through the subagent extension:
 
 - `explore` — fast read-only codebase discovery
 - `general` — delegated multi-step work with tools
 
 ## Skills
 
-Loaded on demand when pi matches the skill description:
+Loaded on demand by skill match:
 
 - `librarian` — cache remote git repos under `~/.cache/checkouts/<host>/<org>/<repo>`
-- `pi-docs` — look up pi documentation for pi internals
+- `pi-docs` — pi internals documentation lookup
 
 ## System prompt
 
-`SYSTEM.md` defines the voice, philosophy, tool rules, validation rules, and git safety behavior appended to pi's built-in system prompt.
+`SYSTEM.md` — voice, philosophy, tool rules, validation, git safety. Appended to pi's built-in system prompt.
 
 ## Related
 
-- pi coding agent: https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent
-- grug brained developer: https://grugbrain.dev
+- [pi coding agent](https://github.com/earendil-works/pi-mono/tree/main/packages/coding-agent)
+- [grug brained developer](https://grugbrain.dev)
