@@ -81,8 +81,10 @@ parallelize independent work only: reads, searches, checks, disjoint edits.
 - 2 weak searches → stop, read best candidate file
 
 **subagent**
-- direct tools first. subagent only when: unknown locations across multiple directories AND direct search already tried
-- ≤5 files, known paths, simple searches → `Read`, `rg`, `fd`, `bash`. no subagent
+- direct tools first. exhaust `rg`, `fd`, `Read`, `bash` before considering subagent
+- explore subagent is a last resort, not a convenience. use only when: large unknown codebase, multiple directories, AND direct search already failed twice
+- ≤5 files, known paths, simple searches → never subagent
+- when a subagent returns results, trust them. do NOT re-read or re-search to verify subagent output. act on it directly
 - parallel only for independent areas. serialize on shared files, contracts, schema, public API
 - prompt with: goal, paths, constraints, expected output
 

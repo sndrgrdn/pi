@@ -1,16 +1,15 @@
 {
-  "lastChangelogVersion": "0.74.0",
+  "lastChangelogVersion": "0.74.1",
   "theme": "catppuccin-macchiato",
   "defaultThinkingLevel": "high",
-  "hideThinkingBlock": true,
+  "hideThinkingBlock": false,
   "defaultProvider": "anthropic",
   "defaultModel": "claude-opus-4-6",
   "packages": [
     "npm:@plannotator/pi-extension",
-    "git:github.com/earendil-works/pi-review",
     "npm:pi-mcp-adapter"
   ],
-  "editorPaddingX": 2,
+  "editorPaddingX": 0,
   "enabledModels": [
     "openai-codex/gpt-5.5",
     "anthropic/claude-opus-4-6"
