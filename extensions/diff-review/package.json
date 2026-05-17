@@ -1,0 +1,21 @@
+{
+  "name": "diff-review",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pierre/diffs": "^1.1.22",
+    "@vitejs/plugin-react": "^6.0.2",
+    "vite": "^8.0.13",
+    "typescript": "^6.0.3",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3"
+  },
+  "devDependencies": {}
+}
