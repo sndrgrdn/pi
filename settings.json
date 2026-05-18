@@ -1,18 +1,18 @@
 {
-  "lastChangelogVersion": "0.74.1",
+  "lastChangelogVersion": "0.75.3",
   "theme": "catppuccin-macchiato",
   "defaultThinkingLevel": "high",
   "hideThinkingBlock": false,
   "defaultProvider": "anthropic",
   "defaultModel": "claude-opus-4-6",
   "packages": [
-    "npm:@plannotator/pi-extension",
     "npm:pi-mcp-adapter"
   ],
   "editorPaddingX": 0,
   "enabledModels": [
     "openai-codex/gpt-5.5",
-    "anthropic/claude-opus-4-6"
+    "anthropic/claude-opus-4-6",
+    "anthropic/claude-opus-4-7"
   ],
   "steeringMode": "all",
   "doubleEscapeAction": "tree",
