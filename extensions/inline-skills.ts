@@ -167,7 +167,13 @@ export default function (pi: ExtensionAPI): void {
 		const matches = [...event.text.matchAll(HASH_PATTERN)];
 		if (matches.length === 0) return { action: "continue" as const };
 
-		// Collect unique referenced skills
+		// Check if any match is a known skill
+		const hasSkillRef = matches.some(
+			(m) => m[1] && skillsByName.has(m[1]),
+		);
+		if (!hasSkillRef) return { action: "continue" as const };
+
+		// Collect skills not yet activated this session
 		const expanded: { info: SkillInfo; body: string }[] = [];
 		const seen = new Set<string>();
 		for (const m of matches) {
@@ -181,12 +187,17 @@ export default function (pi: ExtensionAPI): void {
 			if (body) expanded.push({ info: skill, body });
 		}
 
-		if (expanded.length === 0) return { action: "continue" as const };
+		// Wrap #skill tokens in backticks for markdown highlighting
+		const userMessage = event.text
+			.replace(HASH_PATTERN, (full, name: string) =>
+				skillsByName.has(name) ? full.replace(`#${name}`, `\`#${name}\``) : full,
+			)
+			.trim();
 
-		const userMessage = event.text.trim();
+		if (expanded.length === 0) {
+			return { action: "transform" as const, text: userMessage };
+		}
 
-		// Build the exact format parseSkillBlock() expects:
-		// <skill ...>content</skill>\n\n<user message>
 		for (const s of expanded) activatedSkills.add(s.info.name);
 
 		const block = buildSkillBlock(expanded);
