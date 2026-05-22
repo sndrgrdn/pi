@@ -123,8 +123,21 @@ async function getCurrentWorkingTreeDiff(cwd: string): Promise<string> {
     maxBuffer: 50 * 1024 * 1024,
   });
   const untrackedFiles = untrackedOutput.toString("utf8").split("\0").filter(Boolean);
-  const untrackedDiffs = await Promise.all(untrackedFiles.map((file) => diffUntrackedFile(cwd, file)));
+  const untrackedDiffs = await mapLimit(untrackedFiles, 4, (file) => diffUntrackedFile(cwd, file));
   return [trackedDiff, ...untrackedDiffs].filter(Boolean).join("\n");
+}
+
+async function mapLimit<T, R>(items: T[], limit: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      results[index] = await mapper(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 async function diffUntrackedFile(cwd: string, file: string): Promise<string> {
