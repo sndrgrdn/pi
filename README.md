@@ -19,21 +19,24 @@ Covers the committed repo shape. Ignores local state, uncommitted files, and run
 
 ## Extensions
 
-Each `.ts` file under `extensions/` is loaded by pi. Numbered files load first.
+Each `.ts` file under `extensions/` is loaded by pi. Subdirectories with an `index.ts` load as package extensions.
 
 | File | Purpose |
 |------|---------|
-| `00-box-editor.ts` | Custom bordered editor rendering |
-| `01-minimal-footer.ts` | Replace the default footer with a compact token/cwd/branch footer |
+| `prompt-box.ts` | Bordered prompt editor with model/thinking header and token/cwd/branch footer |
 | `bash.ts` | Local non-interactive shell command tool with truncation and timeout support |
 | `cc-patch.ts` | Patch Anthropic provider behavior for Claude subscription usage |
 | `context.ts` | `/context` command showing loaded extensions, skills, context files, token usage |
 | `disable-invocation.ts` | Removes rendered skill invocation instructions from the final system prompt |
 | `edit.ts` | Multi-edit exact text replacement tool with atomic writes and unified diff output |
+| `ghostty.ts` | Ghostty terminal control tool — list tabs, send text, focus |
+| `inline-skills.ts` | `#` autocomplete for skills; expands to collapsible skill blocks on submit |
 | `read.ts` | Local text file/directory reader with binary detection and truncation |
+| `session-name.ts` | `set_session_name` tool for naming sessions for later retrieval |
 | `todos.ts` | File-backed todo system under `.pi/todos` |
 | `whimsical.ts` | Whimsical thinking/working status messages |
 | `write.ts` | Complete file writer that creates parent directories and preserves BOM |
+| `diff-review/` | `/diffs` command — browser UI to review working-tree diff and send line comments to pi |
 | `subagent/` | Subagent dispatch tool backing `agents/` |
 
 ## Agents
