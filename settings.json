@@ -1,10 +1,10 @@
 {
-  "lastChangelogVersion": "0.75.5",
+  "lastChangelogVersion": "0.76.0",
   "theme": "catppuccin-macchiato",
   "defaultThinkingLevel": "high",
   "hideThinkingBlock": true,
-  "defaultProvider": "cursor",
-  "defaultModel": "composer-2.5",
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-opus-4-6",
   "packages": [
     "npm:pi-mcp-adapter",
     "npm:pi-cursor-sdk"
@@ -17,5 +17,7 @@
   ],
   "steeringMode": "all",
   "doubleEscapeAction": "tree",
-  "treeFilterMode": "default"
+  "treeFilterMode": "default",
+  "transport": "auto",
+  "httpIdleTimeoutMs": 300000
 }
