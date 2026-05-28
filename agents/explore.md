@@ -1,7 +1,7 @@
 ---
 name: explore
 description: |
-  Fast agent for exploring codebases. Use for finding files, searching code, or answering questions about structure. Specify thoroughness: quick, medium, or thorough.
+  Fast agent for navigating unfamiliar codebases when file locations and structure are unknown. Specify thoroughness: quick, medium, or thorough.
 extensions: true
 model:
   anthropic: claude-haiku-4-5
