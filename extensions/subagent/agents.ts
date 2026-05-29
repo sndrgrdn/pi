@@ -42,6 +42,10 @@ export function resolveModel(config: ModelConfig | undefined, callerProvider?: s
   return `${callerProvider}/${model}`
 }
 
+export function getEnabledModels(cwd: string): string[] {
+  return SettingsManager.create(cwd, getAgentDir()).getEnabledModels() ?? []
+}
+
 export interface AgentDiscoveryResult {
   agents: AgentConfig[]
   projectAgentsDir: string | null
