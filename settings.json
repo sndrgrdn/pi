@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "0.77.0",
+  "lastChangelogVersion": "0.78.0",
   "theme": "catppuccin-macchiato",
   "defaultThinkingLevel": "high",
   "hideThinkingBlock": true,
@@ -12,9 +12,10 @@
   "editorPaddingX": 0,
   "enabledModels": [
     "openai-codex/gpt-5.5",
-    "anthropic/claude-opus-4-6",
     "cursor/composer-2.5",
-    "anthropic/claude-opus-4-8"
+    "anthropic/claude-opus-4-6",
+    "anthropic/claude-sonnet-4-6",
+    "anthropic/claude-haiku-4-5-20251001"
   ],
   "steeringMode": "all",
   "doubleEscapeAction": "tree",

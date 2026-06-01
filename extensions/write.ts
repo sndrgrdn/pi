@@ -7,7 +7,7 @@ const schema = Type.Object({
 	content: Type.String({ description: "Complete file content to write. Overwrites any existing content." }),
 });
 
-const description = "Write a complete file. Creates parent directories automatically. Preserves UTF-8 BOM when present.";
+const description = "Write a complete file. Creates parent directories automatically. Overwrites any existing content.";
 
 export default function (pi: ExtensionAPI) {
 	const base = createWriteToolDefinition(process.cwd());
