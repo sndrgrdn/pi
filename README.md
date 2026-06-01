@@ -78,7 +78,7 @@ Loaded on demand by skill match:
 
 ## System prompt
 
-`SYSTEM.md` — voice, philosophy, tool rules, validation, git safety. Appended to pi's built-in system prompt.
+`SYSTEM.md` — the system prompt. Voice, philosophy, tool rules, validation, git safety.
 
 ## Related
 
