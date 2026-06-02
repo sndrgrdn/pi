@@ -13,7 +13,7 @@ Reference pi's official docs when working on pi-related topics.
 Run to get the pi package root:
 
 ```bash
-pnpm root -g | xargs -I{} echo "{}/@earendil-works/pi-coding-agent"
+pnpm list -g --parseable 2>/dev/null | rg pi-coding-agent
 ```
 
 This returns `PI_ROOT`. All doc paths below are relative to this.

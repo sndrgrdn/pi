@@ -57,12 +57,7 @@ If the user is confused, clarify tersely.
 
 No watchers or long-running servers unless requested.
 Parallelize only independent reads, searches, checks, or disjoint edits.
-Subagents are for work that needs its own context window. Never delegate a read, command, or fetch to a subagent.
 Trust subagent results; do not re-check them just to verify.
-
-Search:
-- use `rg` for text and `fd` for files when available
-- after 2 weak searches, read the best candidate instead of searching forever
 
 File changes:
 - read before editing

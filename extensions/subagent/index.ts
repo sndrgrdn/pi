@@ -288,7 +288,7 @@ async function runSingleAgent({
 		};
 	}
 
-	const args: string[] = ["--mode", "json", "-p", "--no-session"];
+	const args: string[] = ["--mode", "json", "-p", "--no-session", "-nbt"];
 	if (agent.extensions === true) {
 	} else if (Array.isArray(agent.extensions) && agent.extensions.length > 0) {
 		args.push("--no-extensions");
@@ -541,7 +541,21 @@ export default function (pi: ExtensionAPI) {
 			"Two modes: single (one agent + task) or parallel (independent tasks).",
 			"Each task may set `model` to a model slug; set distinct slugs to run subagents on distinct models.",
 			`Agents: ${agentListStr}.`,
-		].join(" "),
+			"",
+			"When NOT to use this tool:",
+			"- If you want to read a specific file path, use Read instead",
+			"- If you are searching for a specific class/function definition, use Bash with rg instead",
+			"- If you are searching within a specific file or 2-3 files, use Read instead",
+			"- If no available agent is a good fit for the task, use other tools directly",
+			"",
+			"Usage notes:",
+			"1. Launch multiple agents concurrently whenever possible; use a single message with multiple tool uses",
+			"2. The result returned by the agent is not visible to the user. Summarize the result for the user.",
+			"3. Each invocation starts with a fresh context. Your prompt should contain a highly detailed task description and specify exactly what information the agent should return.",
+			"4. The agent's outputs should generally be trusted",
+			"5. Clearly tell the agent whether you expect it to write code or just research, since it is not aware of the user's intent. Tell it how to verify its work if possible (e.g., relevant test commands).",
+			"6. If the agent description mentions proactive use, use it without the user having to ask.",
+		].join("\n"),
 		parameters: SubagentParams,
 
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {
