@@ -9,7 +9,7 @@ const DEFAULT_TIMEOUT_SECONDS = 120;
 const CD_PATTERN = /^\s*cd\b/;
 
 const schema = Type.Object({
-	command: Type.String({ description: "The command to execute" }),
+	command: Type.String({ description: "The command to execute. Do not use cd — use the workdir parameter instead." }),
 	timeout: Type.Optional(Type.Number({ description: `Timeout in seconds (default: ${DEFAULT_TIMEOUT_SECONDS}). Set for long or potentially hanging commands.` })),
 	workdir: Type.Optional(Type.String({ description: "The working directory to run the command in. Defaults to the current directory. Use this instead of 'cd' commands." })),
 });
