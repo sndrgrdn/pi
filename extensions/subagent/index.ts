@@ -499,8 +499,8 @@ const ModelSchema = Type.Optional(
 
 const TaskItem = Type.Object({
 	agent: Type.String({ description: "Agent name to invoke." }),
-	task: Type.String({ description: "Task to delegate to the agent" }),
-	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
+	task: Type.String({ description: "Task to delegate. The agent has no prior context — include all detail needed to complete the work." }),
+	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process. Defaults to the caller's working directory." })),
 	model: ModelSchema,
 });
 
@@ -511,13 +511,13 @@ const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
 
 const SubagentParams = Type.Object({
 	agent: Type.Optional(Type.String({ description: "Agent name (single mode)." })),
-	task: Type.Optional(Type.String({ description: "Task to delegate (single mode)." })),
+	task: Type.Optional(Type.String({ description: "Task to delegate (single mode). The agent has no prior context — include all detail needed to complete the work." })),
 	tasks: Type.Optional(Type.Array(TaskItem, { description: "Array of {agent, task} for independent parallel execution." })),
 	agentScope: Type.Optional(AgentScopeSchema),
 	confirmProjectAgents: Type.Optional(
 		Type.Boolean({ description: "Prompt before running project-local agents. Default: true.", default: true }),
 	),
-	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process (single mode)" })),
+	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process (single mode). Defaults to the caller's working directory." })),
 	model: ModelSchema,
 });
 
@@ -530,7 +530,7 @@ export default function (pi: ExtensionAPI) {
 	const earlyAgents = loadAgentsFromDir(userAgentsDir, "user")
 		.filter((a) => a.name !== parentAgentName);
 	const agentListStr = earlyAgents.length > 0
-		? earlyAgents.map((a) => `${a.name}: ${a.description.trim().split("\n")[0]}`).join("; ")
+		? earlyAgents.map((a) => `- ${a.name}: ${a.description.trim().split("\n")[0]}`).join("\n")
 		: "none discovered";
 
 	pi.registerTool({
@@ -538,23 +538,20 @@ export default function (pi: ExtensionAPI) {
 		label: "Subagent",
 		description: [
 			"Delegate tasks to specialized subagents, each with an isolated context window.",
-			"Two modes: single (one agent + task) or parallel (independent tasks).",
-			"Each task may set `model` to a model slug; set distinct slugs to run subagents on distinct models.",
-			`Agents: ${agentListStr}.`,
+			`Agents:\n${agentListStr}`,
 			"",
-			"When NOT to use this tool:",
-			"- If you want to read a specific file path, use Read instead",
-			"- If you are searching for a specific class/function definition, use Bash with rg instead",
-			"- If you are searching within a specific file or 2-3 files, use Read instead",
-			"- If no available agent is a good fit for the task, use other tools directly",
+			"Do not use when:",
+			"- Reading a specific file → use Read",
+			"- Searching for a definition → use Bash with rg",
+			"- Searching within 2-3 files → use Read",
+			"- Reading or searching skill references, docs, or context files → use Read/Bash directly",
+			"- No agent fits the task → use other tools directly",
 			"",
-			"Usage notes:",
-			"1. Launch multiple agents concurrently whenever possible; use a single message with multiple tool uses",
-			"2. The result returned by the agent is not visible to the user. Summarize the result for the user.",
-			"3. Each invocation starts with a fresh context. Your prompt should contain a highly detailed task description and specify exactly what information the agent should return.",
-			"4. The agent's outputs should generally be trusted",
-			"5. Clearly tell the agent whether you expect it to write code or just research, since it is not aware of the user's intent. Tell it how to verify its work if possible (e.g., relevant test commands).",
-			"6. If the agent description mentions proactive use, use it without the user having to ask.",
+			"Each invocation starts with a fresh context. The task must be self-contained: include what to do, what to return, whether to write code or research only, and how to verify.",
+			"",
+			"Results are not visible to the user. Always summarize.",
+			"Launch multiple agents concurrently when tasks are independent.",
+			"If an agent description mentions proactive use, invoke without user request.",
 		].join("\n"),
 		parameters: SubagentParams,
 
