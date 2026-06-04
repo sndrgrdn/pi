@@ -7,13 +7,7 @@ description: Test-driven development with red-green-refactor loop. Use when user
 
 ## Philosophy
 
-**Core principle**: Tests should verify behavior through public interfaces, not implementation details. Code can change entirely; tests shouldn't.
-
-**Good tests** are integration-style: they exercise real code paths through public APIs. They describe _what_ the system does, not _how_ it does it. A good test reads like a specification - "user can checkout with valid cart" tells you exactly what capability exists. These tests survive refactors because they don't care about internal structure.
-
-**Bad tests** are coupled to implementation. They mock internal collaborators, test private methods, or verify through external means (like querying a database directly instead of using the interface). The warning sign: your test breaks when you refactor, but behavior hasn't changed. If you rename an internal function and tests fail, those tests were testing implementation, not behavior.
-
-See [tests.md](tests.md) for examples and [mocking.md](mocking.md) for mocking guidelines.
+Tests are executable specifications. Each test answers: "In scenario X, what should happen?" Write tests that verify behavior through public interfaces — not implementation details. Code can change entirely; tests shouldn't.
 
 ## Anti-Pattern: Horizontal Slices
 
@@ -50,9 +44,10 @@ Before writing any code:
 
 - [ ] Confirm with user what interface changes are needed
 - [ ] Confirm with user which behaviors to test (prioritize)
+- [ ] Write specifications in scenario form: "under scenario A, X happens; under scenario B, Y happens"
+- [ ] Repeat the specifications back to the user and confirm before proceeding
 - [ ] Identify opportunities for [deep modules](deep-modules.md) (small interface, deep implementation)
 - [ ] Design interfaces for [testability](interface-design.md)
-- [ ] List the behaviors to test (not implementation steps)
 - [ ] Get user approval on the plan
 
 Ask: "What should the public interface look like? Which behaviors are most important to test?"
@@ -85,6 +80,13 @@ Rules:
 - Only enough code to pass current test
 - Don't anticipate future tests
 - Keep tests focused on observable behavior
+- If you discover a pre-existing failure, **stop**. Fix it first, then resume. Don't make dinner in a dirty kitchen.
+
+### 3.5. Clean the Kitchen
+
+Before writing the next test, picture where it will go. Does the new behavior fit cleanly into the existing code's conceptual framework? If not, pause and consider whether a refactoring of existing code would make the result more coherent.
+
+If a refactoring is warranted: suggest it to the user, abandon the current change, get to a clean state, perform the refactoring on its own, then resume. "Clean the kitchen before you make dinner."
 
 ### 4. Refactor
 
