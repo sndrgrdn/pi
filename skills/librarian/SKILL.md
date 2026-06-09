@@ -1,66 +1,81 @@
 ---
 name: librarian
-description: "Cache and refresh remote git repositories under ~/.cache/checkouts/<host>/<org>/<repo> so future references can reuse a local copy. Use this skill when the user points you to a remote git repository as reference or you encountered a remote git repo through other means."
+description: "Cache and refresh remote git repositories under ~/.cache/checkouts/<host>/<org>/<repo>. Use when the user references a remote git repo (URL, owner/repo, or a bare repo name like 'opencode' or 'minijinja' that may already be cached locally)."
 disable-model-invocation: true
 ---
 
-Use this skill when the user points you to a remote git repository (GitHub/GitLab/Bitbucket URLs, `git@...`, or `owner/repo` shorthand).
+Use this skill when the user references a remote git repository — URLs, `git@...`, `owner/repo` shorthand, or a bare repo name that may already exist in the local cache.
 
-The goal is to keep a reusable local checkout that is:
-- **stable** (predictable path)
-- **up to date** (periodic fetch + fast-forward when safe)
-- **efficient** (partial clone with `--filter=blob:none`, no repeated full clones)
+Goals: **stable** paths, **up-to-date** checkouts, **efficient** partial clones.
 
 ## Cache location
 
-Repositories are stored at:
-
 `~/.cache/checkouts/<host>/<org>/<repo>`
 
-Example:
+## Resolution flow — always start here
 
-`github.com/mitsuhiko/minijinja` → `~/.cache/checkouts/github.com/mitsuhiko/minijinja`
+Determine input type first, then follow the matching path:
 
-## Command
+| Input shape | Examples | Action |
+|-------------|----------|--------|
+| URL / `git@` / `owner/repo` | `https://github.com/foo/bar`, `foo/bar` | → [Checkout command](#checkout-command) |
+| **Bare repo name** (no `/`) | `opencode`, `minijinja` | → [Cache lookup](#cache-lookup) **first** |
+
+### Cache lookup
+
+**Never call `checkout.sh` with a bare name.** The script requires `owner/repo` at minimum.
+
+Step 1 — search:
+```bash
+find ~/.cache/checkouts -type d -name '<repo>' -prune
+```
+
+Step 2 — filter to actual repo roots:
+```bash
+# For each match, verify it is a repository root, not a nested directory:
+git -C <path> rev-parse --show-toplevel 2>/dev/null
+# Keep only paths where the output equals <path> itself.
+```
+
+Step 3 — decide:
+
+| Result | Action |
+|--------|--------|
+| Exactly one repo root | Derive `<host>/<org>/<repo>` from the path and call `checkout.sh <host>/<org>/<repo> --path-only` to refresh |
+| Multiple repo roots | Show candidate paths and ask the user which one |
+| No matches | Ask for `owner/repo` or full URL — do **not** guess the org |
+
+### Checkout command
+
+For fully-qualified repo identities only:
 
 ```bash
 bash checkout.sh <repo> --path-only
 ```
 
-Examples:
-
-```bash
-bash checkout.sh mitsuhiko/minijinja --path-only
-bash checkout.sh github.com/mitsuhiko/minijinja --path-only
-bash checkout.sh https://github.com/mitsuhiko/minijinja --path-only
-```
-
 The script will:
-1. Parse the repo reference into host/org/repo.
-2. Clone if missing.
+1. Parse the reference into host/org/repo.
+2. Clone with `--filter=blob:none` if missing.
 3. Reuse existing checkout if present.
-4. Fetch from `origin` when stale (default interval: 300s).
-5. Attempt a fast-forward merge if the checkout is clean and has an upstream.
+4. Fetch from `origin` when stale (default: 300s).
+5. Fast-forward merge if checkout is clean and has upstream.
 
 ## Update strategy
 
-- Default behavior is **throttled refresh** (every 5 minutes) to avoid unnecessary network calls.
-- Force immediate refresh with:
-
-```bash
-bash checkout.sh <repo> --force-update --path-only
-```
+- **Throttled refresh** every 5 minutes by default.
+- Force immediate: `bash checkout.sh <repo> --force-update --path-only`
 
 ## Recommended workflow
 
-1. Resolve repository path via `checkout.sh --path-only`.
-2. Use that path for searching, reading, and analysis.
-3. On later references to the same repo, call `checkout.sh` again; it will find and update the cached checkout.
+1. Resolve path via the [resolution flow](#resolution-flow--always-start-here) above.
+2. Use the resolved local path for searching, reading, and analysis.
+3. On later references, re-run `checkout.sh` with `host/org/repo` — it refreshes the cached checkout.
 
 ## If edits are needed
 
-Prefer not to edit directly in the shared cache. Create a separate worktree or copy from the cached checkout for task-specific modifications.
+Do not edit the shared cache directly. Create a worktree or copy for task-specific modifications.
 
 ## Notes
 
 - `owner/repo` defaults to `github.com`.
+- `checkout.sh` does not accept bare names — always resolve via cache lookup first.
