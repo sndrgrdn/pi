@@ -18,7 +18,6 @@ const description = [
 	"Execute a non-interactive shell command.",
 	`Use ${tmpdir()} for temporary work outside the workspace.`,
 	"Avoid cat/head/tail, sed/awk, echo/printf/heredoc writes — use dedicated file tools (read, edit, write).",
-	"Prefer rg over grep, fd over find.",
 	"Always quote file paths that contain spaces with double quotes.",
 	`Non-zero exit codes fail the tool. Output truncated to last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB.`,
 	"If output is truncated, the full output is saved to a file — use read with offset/limit or grep to search it. Do not use head/tail to limit output.",
@@ -34,12 +33,13 @@ export default function (pi: ExtensionAPI) {
 		parameters: schema,
 		async execute(toolCallId, params: { command: string; timeout?: number; workdir?: string }, signal, onUpdate, ctx) {
 			const { command, timeout = DEFAULT_TIMEOUT_SECONDS, workdir } = params;
+
 			if (CD_PATTERN.test(command)) {
 				return {
-					content: [{ type: "text" as const, text: "Do not use cd in commands. Set the workdir parameter instead." }],
-					isError: true,
+					content: [{ type: "text" as const, text: "[note: use the workdir parameter instead of cd]" }],
 				};
 			}
+
 			const tool = createBashToolDefinition(resolveWorkdir(ctx.cwd, workdir));
 			return tool.execute(toolCallId, { command, timeout }, signal, onUpdate, ctx);
 		},
