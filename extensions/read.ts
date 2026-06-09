@@ -13,7 +13,7 @@ const description = [
 	"Supports text files and images (jpg, png, gif, webp). Images are sent as attachments.",
 	`Output truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB.`,
 	"Use offset/limit for large files; continue with offset until complete when needed.",
-	"Does not support reading directories. Use bash with ls or fd instead.",
+	"Does not support reading directories. Use bash to list directories instead.",
 ].join(" ");
 
 export default function (pi: ExtensionAPI) {
