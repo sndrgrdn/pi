@@ -296,7 +296,7 @@ async function runSingleAgent({
 	} else {
 		args.push("--no-extensions");
 	}
-	const explicitModel = model?.trim();
+	const explicitModel = agent.allowModelOverride ? model?.trim() : undefined;
 	const effectiveModel = explicitModel || resolveModel(agent.model, callerDefaults.provider) || callerDefaults.model;
 	if (effectiveModel) args.push("--model", effectiveModel);
 	const effectiveThinking = agent.thinking ?? callerDefaults.thinking;
@@ -486,7 +486,7 @@ async function runSingleAgent({
 
 function buildModelDescription(enabled: string[]): string {
 	const base =
-		"Model slug to run this subagent on. Overrides the agent's configured model. Set distinct slugs per task to run subagents on distinct models. Defaults to the agent's model or the caller's model.";
+		"Model slug to run this subagent on. Overrides the agent's configured model unless that agent disables model overrides. Set distinct slugs per task to run subagents on distinct models. Defaults to the agent's model or the caller's model.";
 	if (enabled.length > 0) {
 		return `${base} Enabled models: ${enabled.join(", ")}. Other slugs/patterns (e.g. "sonnet", "name:high") also accepted.`;
 	}
@@ -542,7 +542,7 @@ export default function (pi: ExtensionAPI) {
 			"",
 			"Do not use when:",
 			"- Reading a specific file → use Read",
-			"- Searching for a definition → use Bash with rg",
+			"- Searching for a definition → use Bash directly",
 			"- Searching within 2-3 files → use Read",
 			"- Reading or searching skill references, docs, or context files → use Read/Bash directly",
 			"- No agent fits the task → use other tools directly",

@@ -26,6 +26,7 @@ export interface AgentConfig {
   description: string
   tools?: string[]
   model?: ModelConfig
+  allowModelOverride: boolean
   thinking?: ThinkingLevel
   extensions?: boolean | string[]
   systemPrompt: string
@@ -204,6 +205,7 @@ export function loadAgentsFromDir(
       extensions?: unknown
       thinking?: unknown
       model?: unknown
+      allowModelOverride?: unknown
     }>(content)
     if (!frontmatter.name || !frontmatter.description) continue
 
@@ -223,6 +225,7 @@ export function loadAgentsFromDir(
       description: frontmatter.description,
       tools: tools && tools.length > 0 ? tools : undefined,
       model: parseModel(frontmatter.model),
+      allowModelOverride: frontmatter.allowModelOverride !== false,
       thinking,
       extensions: resolvedExtensions,
       systemPrompt: body,
