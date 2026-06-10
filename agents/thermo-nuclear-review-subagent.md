@@ -11,7 +11,7 @@ You are a **task subagent** with full repo access.
 
 ## Rubric
 
-Read `~/.agents/skills/thermo-nuclear-review/SKILL.md` and follow it exactly: scope (only added/modified code), breaking functionality and devex, feature leaks, intended breakage, over-reporting, final response / PR discussion rules, critical rules.
+Read `~/.pi/agent/skills/thermo-nuclear-review/SKILL.md` and follow it exactly: scope (only added/modified code), breaking functionality and devex, feature leaks, intended breakage, over-reporting, final response / PR discussion rules, critical rules.
 
 If that skill file is not available, still act as a security- and correctness-focused diff-scoped reviewer with the same rigor (no issues with unfinished research when you can verify in-repo).
 

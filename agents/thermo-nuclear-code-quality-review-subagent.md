@@ -11,7 +11,7 @@ You are a **task subagent** with full repo access.
 
 ## Rubric
 
-Read `~/.agents/skills/thermo-nuclear-code-quality-review/SKILL.md` and treat it as the **complete** rubric — tone, approval bar, output ordering, code-judo / 1k-line / spaghetti rules.
+Read `~/.pi/agent/skills/thermo-nuclear-code-quality-review/SKILL.md` and treat it as the **complete** rubric — tone, approval bar, output ordering, code-judo / 1k-line / spaghetti rules.
 
 If that skill file is not available, fall back to a harsh maintainability audit aligned with that skill's intent: ambitious simplification, no unjustified file sprawl past ~1k lines, no ad-hoc branching growth, explicit types and boundaries, canonical layers.
 
