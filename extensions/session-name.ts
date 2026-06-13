@@ -2,6 +2,9 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
 export default function (pi: ExtensionAPI) {
+	// Don't register for subagents — they use pre-set session names
+	if (process.env.PI_SUBAGENT) return;
+
 	pi.registerTool({
 		name: "set_session_name",
 		label: "Set Session Name",

@@ -288,7 +288,9 @@ async function runSingleAgent({
 		};
 	}
 
-	const args: string[] = ["--mode", "json", "-p", "--no-session", "-nbt"];
+	const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+	const sessionName = `subagent-${agentName}-${timestamp}`;
+	const args: string[] = ["--mode", "json", "-p", "--name", sessionName, "-nbt"];
 	if (agent.extensions === true) {
 	} else if (Array.isArray(agent.extensions) && agent.extensions.length > 0) {
 		args.push("--no-extensions");
@@ -343,7 +345,7 @@ async function runSingleAgent({
 				cwd: cwd ?? defaultCwd,
 				shell: false,
 				stdio: ["ignore", "pipe", "pipe"],
-				env: { ...process.env, PI_SUBAGENT_NAME: agent.name },
+				env: { ...process.env, PI_SUBAGENT: "1", PI_SUBAGENT_NAME: agent.name },
 			});
 			let buffer = "";
 			let resolved = false;
