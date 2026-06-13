@@ -13,10 +13,10 @@
 
 ### Adopted in `skills/tdd/` (process)
 
-- **Specification-first framing**: Tests as executable specifications. "When X, Y happens" format.
-- **Spec clarification loop**: Confirm understanding in scenario form before coding.
 - **"Clean the kitchen"**: Assess existing code before adding new behavior. Refactor first when needed.
 - **Pre-existing failure hygiene**: Fix failures immediately, don't continue on a dirty baseline.
+
+Dropped 2026-06-10 (upstream sync): spec clarification loop / "repeat specs back to user" — too much ceremony in the generative loop; upstream's looser "list the behaviors to test" adopted instead.
 
 ### Adopted in `skills/tdd-review/` (enforcement)
 
@@ -40,4 +40,4 @@ Preserved Swett's core test design principles. Rewrote all examples from RSpec/R
 
 ### Split rationale
 
-Swett uses separate skills: `tdd` (process) and `test-design-review` (enforcement via separate agent). We adopted this split: `tdd` owns the creative loop, `tdd-review` owns the quality rubric. Skills are independent — no cross-references.
+Swett uses separate skills: `tdd` (process) and `test-design-review` (enforcement via separate agent). We adopted this split: `tdd` owns the creative loop, `tdd-review` owns the quality rubric. Upstream later added `tests.md`/`mocking.md` rubric files to `tdd`; we deliberately omit them (see `sync-pocock-skills/patches/sync-excludes.txt`) — the rubric lives in `tdd-review` only. `tdd/SKILL.md` points to `tdd-review` for post-loop review.

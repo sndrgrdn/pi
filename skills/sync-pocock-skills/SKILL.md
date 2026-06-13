@@ -119,6 +119,8 @@ Report to the user:
 
 ## Local overrides
 
+`patches/sync-excludes.txt` lists per-skill file exclusions (`<skill>/<rel_path>`, one per line). Excluded files are neither copied from upstream nor deleted locally, and `sync.sh` does not flag them as "new file upstream" or "removed upstream". Use it for local-only files (e.g. `tdd/SOURCES.md`) and upstream files we deliberately decline (e.g. `tdd/tests.md`).
+
 `patches/local-overrides.yml` stores pi-specific metadata that should be applied after upstream files and text patches, without requiring one-line patch files. Currently it preserves selected skill frontmatter such as:
 
 ```yaml
@@ -159,8 +161,8 @@ sync-pocock-skills/
 │   └── make-patch.sh                           # Generate a patch file with stable labels
 └── patches/
     ├── ignored.txt                             # Skills explicitly declined
+    ├── sync-excludes.txt                       # Per-skill file exclusions (keep local-only / omit upstream)
     ├── local-overrides.yml                     # Pi-specific metadata overrides
-    ├── improve-codebase-architecture__SKILL.md.patch
-    ├── improve-codebase-architecture__INTERFACE-DESIGN.md.patch
-    └── setup-matt-pocock-skills__SKILL.md.patch
+    ├── setup-matt-pocock-skills__SKILL.md.patch
+    └── tdd__SKILL.md.patch
 ```

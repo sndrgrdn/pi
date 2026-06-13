@@ -1,0 +1,26 @@
+--- upstream/tdd/SKILL.md
++++ ours/tdd/SKILL.md
+@@ -13,7 +13,7 @@
+ 
+ **Bad tests** are coupled to implementation. They mock internal collaborators, test private methods, or verify through external means (like querying a database directly instead of using the interface). The warning sign: your test breaks when you refactor, but behavior hasn't changed. If you rename an internal function and tests fail, those tests were testing implementation, not behavior.
+ 
+-See [tests.md](tests.md) for examples and [mocking.md](mocking.md) for mocking guidelines.
++For the full test-quality rubric (examples, mocking discipline), use the `tdd-review` skill after the loop.
+ 
+ ## Anti-Pattern: Horizontal Slices
+ 
+@@ -85,7 +85,14 @@
+ - Only enough code to pass current test
+ - Don't anticipate future tests
+ - Keep tests focused on observable behavior
++- If you discover a pre-existing failure, **stop**. Fix it first, then resume. Don't make dinner in a dirty kitchen.
+ 
++### 3.5. Clean the Kitchen
++
++Before writing the next test, picture where it will go. Does the new behavior fit cleanly into the existing code's conceptual framework? If not, pause and consider whether a refactoring of existing code would make the result more coherent.
++
++If a refactoring is warranted: suggest it to the user, abandon the current change, get to a clean state, perform the refactoring on its own, then resume. "Clean the kitchen before you make dinner."
++
+ ### 4. Refactor
+ 
+ After all tests pass, look for [refactor candidates](refactoring.md):

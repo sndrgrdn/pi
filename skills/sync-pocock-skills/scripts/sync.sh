@@ -74,6 +74,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# --- Excluded files: neither copied from upstream nor flagged ---
+EXCLUDES_FILE="$PATCHES_DIR/sync-excludes.txt"
+
+is_excluded() {
+  local skill="$1" rel_path="$2"
+  [[ -f "$EXCLUDES_FILE" ]] || return 1
+  grep -qxF "$skill/$rel_path" <(grep -v '^#' "$EXCLUDES_FILE") 2>/dev/null
+}
+
 # --- Ignored skills: explicitly declined ---
 IGNORED_FILE="$PATCHES_DIR/ignored.txt"
 
@@ -163,6 +172,10 @@ while IFS=$'\t' read -r name our_path; do
     rel_path="${upstream_file#"$upstream_path"/}"
     our_file="$our_path/$rel_path"
 
+    if is_excluded "$name" "$rel_path"; then
+      continue
+    fi
+
     if [[ ! -f "$our_file" ]]; then
       changed_files+=("$rel_path (new file upstream)")
       continue
@@ -198,6 +211,7 @@ while IFS=$'\t' read -r name our_path; do
   while IFS= read -r our_file; do
     rel_path="${our_file#"$our_path"/}"
     upstream_file="$upstream_path/$rel_path"
+    is_excluded "$name" "$rel_path" && continue
     [[ -f "$upstream_file" ]] || changed_files+=("$rel_path (removed upstream)")
   done < <(find "$our_path" -type f | sort)
 

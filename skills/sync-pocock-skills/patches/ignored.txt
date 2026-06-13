@@ -7,3 +7,6 @@ migrate-to-shoehorn
 scaffold-exercises
 setup-pre-commit
 write-a-skill
+improve-codebase-architecture
+triage
+zoom-out

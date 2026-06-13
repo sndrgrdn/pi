@@ -24,10 +24,23 @@ if [[ ! -d "$UPSTREAM_SKILL_DIR" ]]; then
   exit 1
 fi
 
+# Build rsync excludes from patches/sync-excludes.txt (lines: <skill>/<rel_path>).
+# Excluded files are neither copied from upstream nor deleted locally.
+EXCLUDES_FILE="$PATCHES_DIR/sync-excludes.txt"
+rsync_excludes=()
+if [[ -f "$EXCLUDES_FILE" ]]; then
+  while IFS= read -r line; do
+    [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+    if [[ "$line" == "$SKILL_NAME"/* ]]; then
+      rsync_excludes+=("--exclude=/${line#"$SKILL_NAME"/}")
+    fi
+  done < "$EXCLUDES_FILE"
+fi
+
 # Copy upstream files
 echo "Copying upstream $SKILL_NAME..."
 mkdir -p "$TARGET_DIR"
-rsync -a --delete "$UPSTREAM_SKILL_DIR/" "$TARGET_DIR/"
+rsync -a --delete "${rsync_excludes[@]+"${rsync_excludes[@]}"}" "$UPSTREAM_SKILL_DIR/" "$TARGET_DIR/"
 
 # Apply patches
 applied=0
