@@ -107,7 +107,6 @@ function renderSkillContent(skill: SkillEntry): string {
 export default function (pi: ExtensionAPI): void {
 	// ── State ──
 	const skillsByName = new Map<string, SkillEntry>();
-	let pendingSkillRefs: string[] = [];
 	let toolRegistered = false;
 
 	// ── Helpers ──
@@ -247,11 +246,18 @@ export default function (pi: ExtensionAPI): void {
 	// Keep the skill map in sync with pi's authoritative skill data, and
 	// inject the pending $-reference directive as a hidden message (in LLM
 	// context, invisible in the TUI — the tool call is the visible signal).
+	// Scans the expanded prompt (post-template-expansion) so $-refs from
+	// prompt templates are caught too.
 	pi.on("before_agent_start", (event) => {
 		refreshSkillsFromOptions(event.systemPromptOptions.skills);
-		if (pendingSkillRefs.length === 0) return undefined;
-		const directive = buildDirective(pendingSkillRefs);
-		pendingSkillRefs = [];
+
+		const pattern = skillRefPattern();
+		const refs = pattern
+			? [...new Set([...event.prompt.matchAll(pattern)].map((m) => m[1]!))]
+			: [];
+
+		if (refs.length === 0) return undefined;
+		const directive = buildDirective(refs);
 		return {
 			message: {
 				customType: "skill-ref-directive",
@@ -262,7 +268,6 @@ export default function (pi: ExtensionAPI): void {
 	});
 
 	pi.on("session_start", (_event, ctx) => {
-		pendingSkillRefs = [];
 		refreshSkillsFromCommands();
 		ctx.ui.addAutocompleteProvider((current) =>
 			createDollarProvider(current, () => [...skillsByName.values()]),
@@ -273,16 +278,11 @@ export default function (pi: ExtensionAPI): void {
 		refreshSkillsFromCommands();
 	});
 
-	// Route $skill-name references through the skill tool: stash the names,
-	// inject a hidden directive in before_agent_start so the model loads them
-	// via tool call (content arrives as a tool result).
+	// Steered/queued messages skip before_agent_start, so detect $-refs
+	// in the input handler and inline the directive for that path only.
 	pi.on("input", (event) => {
 		if (event.source === "extension") return { action: "continue" as const };
-
-		// Any new user input supersedes refs from a prompt whose agent run
-		// never started (handled input, expansion error) — prevents a stale
-		// directive from leaking into an unrelated turn.
-		pendingSkillRefs = [];
+		if (!event.streamingBehavior) return { action: "continue" as const };
 
 		const pattern = skillRefPattern();
 		if (!pattern) return { action: "continue" as const };
@@ -290,20 +290,10 @@ export default function (pi: ExtensionAPI): void {
 		const referenced = [...new Set([...event.text.matchAll(pattern)].map((m) => m[1]!))];
 		if (referenced.length === 0) return { action: "continue" as const };
 
-		// Backtick-wrap $skill tokens for markdown rendering
-		const userMessage = event.text.replace(pattern, "`$$$1`").trim();
-
-		// Steered/queued messages don't pass through before_agent_start, so
-		// keep the directive inline (visible) in that rare case.
-		if (event.streamingBehavior) {
-			return {
-				action: "transform" as const,
-				text: `${userMessage}\n\n${buildDirective(referenced)}`,
-			};
-		}
-
-		pendingSkillRefs = referenced;
-		return { action: "transform" as const, text: userMessage };
+		return {
+			action: "transform" as const,
+			text: `${event.text}\n\n${buildDirective(referenced)}`,
+		};
 	});
 }
 
