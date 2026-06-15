@@ -1,37 +1,45 @@
 {
   "providers": {
-    "llama-cpp": {
-      "baseUrl": "http://localhost:9876/v1",
+    "anthropic": {
+      "modelOverrides": {
+        "claude-opus-4-6": {
+          "contextWindow": 300000
+        },
+        "claude-sonnet-4-6": {
+          "contextWindow": 300000
+        }
+      }
+    },
+    "mlx": {
+      "baseUrl": "http://127.0.0.1:8080/v1",
       "api": "openai-completions",
-      "apiKey": "none",
+      "apiKey": "sk-optiq-local",
       "compat": {
         "supportsDeveloperRole": false,
         "supportsReasoningEffort": false,
+        "supportsUsageInStreaming": false,
+        "supportsStrictMode": false,
         "maxTokensField": "max_tokens"
       },
       "models": [
         {
-          "id": "qwen-3.6-35b",
-          "name": "Qwen 3.6 35B-A3B (Local)",
+          "id": "mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit",
+          "name": "Qwen3.6 (MLX local)",
           "reasoning": true,
           "input": ["text", "image"],
-          "contextWindow": 262144,
-          "maxTokens": 32768
+          "contextWindow": 131072,
+          "maxTokens": 8192,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          },
+          "compat": {
+            "thinkingFormat": "qwen-chat-template"
+          }
         }
       ]
-    },
-    "anthropic": {
-      "modelOverrides": {
-        "claude-opus-4-6": {
-          "contextWindow": 200000
-        },
-        "claude-opus-4-7": {
-          "contextWindow": 200000
-        },
-        "claude-sonnet-4-6": {
-          "contextWindow": 200000
-        }
-      }
     }
   }
 }

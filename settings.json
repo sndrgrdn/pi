@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "0.79.0",
+  "lastChangelogVersion": "0.79.4",
   "theme": "catppuccin-macchiato",
   "defaultThinkingLevel": "high",
   "hideThinkingBlock": true,
@@ -11,15 +11,19 @@
   ],
   "editorPaddingX": 0,
   "enabledModels": [
+    "mlx/mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit",
     "openai-codex/gpt-5.5",
     "anthropic/claude-opus-4-6",
     "anthropic/claude-sonnet-4-6",
-    "anthropic/claude-haiku-4-5-20251001",
-    "cursor/composer-2.5",
+    "anthropic/claude-haiku-4-5",
+    "cursor/composer-2.5"
   ],
   "steeringMode": "all",
   "doubleEscapeAction": "tree",
   "treeFilterMode": "default",
   "transport": "auto",
-  "httpIdleTimeoutMs": 300000
+  "httpIdleTimeoutMs": 300000,
+  "warnings": {
+    "anthropicExtraUsage": false
+  }
 }
