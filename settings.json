@@ -1,14 +1,10 @@
 {
-  "lastChangelogVersion": "0.79.6",
+  "lastChangelogVersion": "0.79.7",
   "theme": "catppuccin-macchiato",
-  "defaultThinkingLevel": "medium",
+  "defaultThinkingLevel": "high",
   "hideThinkingBlock": true,
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.5",
-  "packages": [
-    "npm:pi-mcp-adapter",
-    "npm:pi-cursor-sdk"
-  ],
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-opus-4-6",
   "editorPaddingX": 0,
   "enabledModels": [
     "mlx/mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit",
