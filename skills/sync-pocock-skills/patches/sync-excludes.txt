@@ -2,6 +2,3 @@
 # Effect: the file is neither copied from upstream nor deleted locally, and
 # sync.sh does not flag it as "new file upstream" or "removed upstream".
 # Use for local-only files (keep ours) and upstream files we decline (omit theirs).
-tdd/SOURCES.md
-tdd/tests.md
-tdd/mocking.md

@@ -83,7 +83,7 @@ upstream_skill_dir=$(find "$upstream_root" -mindepth 2 -maxdepth 2 -type d -name
 bash "$SKILL_ROOT/scripts/apply-upstream.sh" "$skill" "$upstream_skill_dir" "$HOME/.pi/agent/skills" "$SKILL_ROOT/patches"
 ```
 
-After each apply, inspect the actual working-tree diff for that skill before summarising. Local overrides can add frontmatter, but any existing local frontmatter that is not configured in `patches/local-overrides.yml` may be removed when upstream is copied. Call out metadata-only changes explicitly, and if a removed frontmatter field should be preserved, add it to `local-overrides.yml` rather than relying on manual edits.
+After each apply, inspect the actual working-tree diff for that skill before summarising. Call out metadata-only changes explicitly.
 
 ### 4. Handle unpatched patterns
 
@@ -99,7 +99,7 @@ bash scripts/make-patch.sh <skill_name> <rel_path> <upstream_file> <our_file> <p
 
 4. This skill is now self-updated — the new patch is stored for future syncs.
 
-`make-patch.sh` writes stable patch headers (`upstream/<skill>/<path>` and `ours/<skill>/<path>`) so patches do not churn when temp clone paths change. For `SKILL.md`, it strips configured `local-overrides.yml` frontmatter from the comparison copy so metadata policy does not become a one-line text patch.
+`make-patch.sh` writes stable patch headers (`upstream/<skill>/<path>` and `ours/<skill>/<path>`) so patches do not churn when temp clone paths change.
 
 ### 5. Verify and summarise
 
@@ -121,13 +121,7 @@ Report to the user:
 
 `patches/sync-excludes.txt` lists per-skill file exclusions (`<skill>/<rel_path>`, one per line). Excluded files are neither copied from upstream nor deleted locally, and `sync.sh` does not flag them as "new file upstream" or "removed upstream". Use it for local-only files (e.g. `tdd/SOURCES.md`) and upstream files we deliberately decline (e.g. `tdd/tests.md`).
 
-`patches/local-overrides.yml` stores pi-specific metadata that should be applied after upstream files and text patches, without requiring one-line patch files. Currently it preserves selected skill frontmatter such as:
 
-```yaml
-disable-model-invocation: true
-```
-
-`scripts/apply-upstream.sh`, `scripts/install-new.sh`, and `scripts/sync.sh` all account for these overrides.
 
 ## Patch conventions
 
@@ -157,12 +151,10 @@ sync-pocock-skills/
 │   ├── sync.sh                                 # Analyse upstream vs ours
 │   ├── apply-upstream.sh                       # Copy upstream + re-apply patches/overrides
 │   ├── install-new.sh                          # Install a new upstream skill + add to tracked.txt
-│   ├── apply-frontmatter-overrides.rb          # Apply local-overrides.yml frontmatter
 │   └── make-patch.sh                           # Generate a patch file with stable labels
 └── patches/
     ├── ignored.txt                             # Skills explicitly declined
     ├── sync-excludes.txt                       # Per-skill file exclusions (keep local-only / omit upstream)
-    ├── local-overrides.yml                     # Pi-specific metadata overrides
     ├── setup-matt-pocock-skills__SKILL.md.patch
     └── tdd__SKILL.md.patch
 ```

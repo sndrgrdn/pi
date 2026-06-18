@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# apply-upstream.sh — Copy upstream skill files then re-apply patches and local overrides.
+# apply-upstream.sh — Copy upstream skill files then re-apply patches.
 #
 # Usage:
 #   bash apply-upstream.sh <skill_name> <upstream_skill_dir> <skills_dir> <patches_dir>
 #
 # Copies all files from the upstream skill dir into our installed skill dir,
-# applies any patches we have for this skill, then applies configured local
-# frontmatter overrides from patches/local-overrides.yml.
+# then applies any patches we have for this skill.
 
 set -euo pipefail
 
@@ -14,9 +13,6 @@ SKILL_NAME="${1:?Usage: apply-upstream.sh <skill_name> <upstream_dir> <skills_di
 UPSTREAM_SKILL_DIR="${2:?}"
 SKILLS_DIR="${3:?}"
 PATCHES_DIR="${4:?}"
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-OVERRIDES_SCRIPT="$SCRIPT_DIR/apply-frontmatter-overrides.rb"
-
 TARGET_DIR="$SKILLS_DIR/$SKILL_NAME"
 
 if [[ ! -d "$UPSTREAM_SKILL_DIR" ]]; then
@@ -68,12 +64,6 @@ for patch_file in "$PATCHES_DIR"/"${SKILL_NAME}"__*.patch; do
     failed=$((failed + 1))
   fi
 done
-
-# Apply local frontmatter overrides after patches so they are independent of
-# upstream text changes and do not need one-line patch files.
-if [[ -f "$TARGET_DIR/SKILL.md" && -f "$OVERRIDES_SCRIPT" ]]; then
-  ruby "$OVERRIDES_SCRIPT" "$SKILL_NAME" "$TARGET_DIR/SKILL.md" "$PATCHES_DIR"
-fi
 
 echo "Result: $applied patched, $failed conflicts"
 exit $failed

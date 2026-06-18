@@ -2,7 +2,7 @@
 # sync.sh — Deterministic portion of the pocock skills sync.
 #
 # Clones upstream, compares installed skills that exist upstream,
-# applies configured local overrides, and scans for Claude Code patterns.
+# and scans for Claude Code patterns.
 #
 # Usage:
 #   bash sync.sh <skills_dir> <patches_dir> [--keep-upstream] [--upstream-dir <dir>]
@@ -50,8 +50,6 @@ done
 
 UPSTREAM_REPO="https://github.com/mattpocock/skills.git"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-OVERRIDES_SCRIPT="$SCRIPT_DIR/apply-frontmatter-overrides.rb"
-
 if [[ -n "$REQUESTED_UPSTREAM_DIR" ]]; then
   WORK_DIR=$(mktemp -d)
   UPSTREAM_DIR="$REQUESTED_UPSTREAM_DIR"
@@ -90,16 +88,6 @@ is_ignored() {
   local name=$1
   [[ -f "$IGNORED_FILE" ]] || return 1
   grep -qxF "$name" "$IGNORED_FILE" 2>/dev/null
-}
-
-apply_local_overrides_quiet() {
-  local skill_name=$1
-  local rel_path=$2
-  local file=$3
-
-  [[ "$rel_path" == "SKILL.md" ]] || return 0
-  [[ -f "$OVERRIDES_SCRIPT" ]] || return 0
-  ruby "$OVERRIDES_SCRIPT" "$skill_name" "$file" "$PATCHES_DIR" --quiet
 }
 
 # --- Clone upstream ---
@@ -195,8 +183,6 @@ while IFS=$'\t' read -r name our_path; do
       fi
     fi
 
-    apply_local_overrides_quiet "$name" "$rel_path" "$expected_tmp"
-
     if ! diff -q "$expected_tmp" "$our_file" >/dev/null 2>&1; then
       if [[ "$patch_status" == "has patch" ]]; then
         changed_files+=("$rel_path (upstream changed, has patch)")
@@ -228,7 +214,7 @@ echo ""
 echo "=== UNPATCHED_PATTERNS ==="
 # Only flag Claude Code-specific syntax, not generic "subagent" references
 # (pi has native subagent support)
-PATTERNS='Agent tool|subagent_type|CLAUDE\.md'
+PATTERNS='Agent tool|subagent_type|CLAUDE\.md|`/[a-z][a-z0-9-]+`'
 while IFS=$'\t' read -r name our_path; do
   while IFS= read -r file; do
     rel_path="${file#"$our_path"/}"
