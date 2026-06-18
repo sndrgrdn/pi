@@ -6,7 +6,7 @@ How the engineering skills should consume a repo's domain documentation when exp
 
 1. Check for **`CONTEXT-MAP.md`** at the repo root. If it exists, this is a multi-context repo — it points at one `CONTEXT.md` per context. Read each one relevant to the topic.
 2. If no `CONTEXT-MAP.md`, check for **`CONTEXT.md`** at the repo root. If it exists, this is a single-context repo — read it.
-3. Check **`docs/adr/`** for system-wide architectural decisions. In multi-context repos, also check `src/<context>/docs/adr/` for context-scoped decisions.
+3. Check **`docs/adr/`** for system-wide architectural decisions. In multi-context repos, also check for context-scoped `docs/adr/` directories next to each context's `CONTEXT.md` (derive paths from `CONTEXT-MAP.md` links).
 
 If none of these files exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The producer skill (`/grill-with-docs`) creates them lazily when terms or decisions actually get resolved.
 
@@ -37,6 +37,8 @@ Multi-context repo (presence of `CONTEXT-MAP.md` at the root):
         ├── CONTEXT.md
         └── docs/adr/
 ```
+
+Contexts can live anywhere — `src/`, `app/`, or even the repo root. Derive paths from `CONTEXT-MAP.md` links: each context's `docs/adr/` directory sits next to its `CONTEXT.md`.
 
 ## Use the glossary's vocabulary
 
