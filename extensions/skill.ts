@@ -120,7 +120,7 @@ export default function (pi: ExtensionAPI): void {
 			.sort((a, b) => b.length - a.length)
 			.map((name) => name.replace(/[\\^$.*+?()[\]{}|-]/g, "\\$&"))
 			.join("|");
-		return new RegExp(`(?<=^|[\\s([{"'])\\$(${alternatives})(?![\\w-])`, "gm");
+		return new RegExp(`(?<=^|[\\s([{"'\`])\\$(${alternatives})(?![\\w-])`, "gm");
 	}
 	function setSkills(entries: SkillEntry[]): void {
 		skillsByName.clear();
@@ -166,14 +166,32 @@ export default function (pi: ExtensionAPI): void {
 		return lines.join("\n");
 	}
 
-	function activateSkill(name: string): { title: string; text: string } {
+	function activateSkill(
+		name: string,
+		visited: Set<string> = new Set(),
+	): { title: string; text: string } {
 		const skill = skillsByName.get(name);
 		if (!skill) {
 			// Only on a miss does the catalog enter context, as recovery.
 			throw new Error(`Unknown skill "${name}".\n${availableSkillsBlock()}`);
 		}
 		try {
-			return { title: `Loaded skill: ${name}`, text: renderSkillContent(skill) };
+			let text = renderSkillContent(skill);
+
+			// Detect $-refs inside the skill body and append a directive so the
+			// model loads them too — same mechanism as user-input $-refs.
+			// Guard against circular references with a visited set.
+			visited.add(name);
+			const pattern = skillRefPattern();
+			if (pattern) {
+				const refs = [...new Set([...text.matchAll(pattern)].map((m) => m[1]!))]
+					.filter((ref) => !visited.has(ref));
+				if (refs.length > 0) {
+					text += `\n\n${buildDirective(refs)}`;
+				}
+			}
+
+			return { title: `Loaded skill: ${name}`, text };
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			throw new Error(
