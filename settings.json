@@ -7,12 +7,10 @@
   "defaultModel": "claude-opus-4-6",
   "editorPaddingX": 0,
   "enabledModels": [
-    "mlx/mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit",
     "openai-codex/gpt-5.5",
     "anthropic/claude-opus-4-6",
     "anthropic/claude-sonnet-4-6",
-    "anthropic/claude-haiku-4-5",
-    "cursor/composer-2.5"
+    "anthropic/claude-haiku-4-5"
   ],
   "steeringMode": "all",
   "doubleEscapeAction": "tree",
