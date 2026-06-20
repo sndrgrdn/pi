@@ -147,7 +147,6 @@ export default async function executor(pi: ExtensionAPI) {
     const result = (await c.callTool(
       { name, arguments: args },
       undefined,
-      // TODO: SDK doesn't type the signal option yet
       { signal } as never,
     )) as McpCallResult;
 
@@ -160,24 +159,31 @@ export default async function executor(pi: ExtensionAPI) {
     };
   }
 
-  // --- Discover and register tools from the MCP server ---
+  // --- Register MCP tools verbatim as exe / exe_resume ---
+  // Passes through the server's descriptions (progressive disclosure built in).
+
+  const TOOL_NAME_MAP: Record<string, string> = {
+    execute: "exe",
+    resume: "exe_resume",
+  };
 
   try {
     const c = await connect();
     const { tools } = await c.listTools();
 
     for (const tool of tools) {
-      const toolName = `executor_${tool.name}`;
+      const mappedName = TOOL_NAME_MAP[tool.name];
+      if (!mappedName) continue;
 
       pi.registerTool({
-        name: toolName,
-        label: `Executor ${tool.name}`,
+        name: mappedName,
+        label: mappedName === "exe" ? "Executor" : "Executor resume",
         description: tool.description ?? tool.name,
         promptSnippet: tool.description?.split("\n")[0] ?? tool.name,
         parameters: Type.Unsafe(tool.inputSchema),
 
         async execute(_id, params, signal) {
-          return callTool(tool.name, params, signal);
+          return callTool(tool.name, params as Record<string, unknown>, signal);
         },
 
         renderCall(args, theme, context) {
@@ -185,16 +191,17 @@ export default async function executor(pi: ExtensionAPI) {
             (context.lastComponent as Text | undefined) ??
             new Text("", 0, 0);
 
+          const params = args as Record<string, unknown> | undefined;
           let preview = "";
-          if (args && typeof args === "object") {
-            const raw = args.code ?? args.executionId ?? Object.values(args)[0];
+          if (params) {
+            const raw = params.code ?? params.executionId ?? Object.values(params)[0];
             if (raw != null) {
               preview = String(raw).split("\n")[0].slice(0, 80);
             }
           }
 
           text.setText(
-            theme.fg("toolTitle", theme.bold("executor ")) +
+            theme.fg("toolTitle", theme.bold("exe ")) +
               theme.fg("accent", `${tool.name} `) +
               (preview
                 ? highlightCode(preview, "typescript").join("\n") +
@@ -208,22 +215,18 @@ export default async function executor(pi: ExtensionAPI) {
       });
     }
   } catch {
-    // Server unreachable at load time — tools will be registered on reconnect via /executor-restart
+    // Server unreachable — will reconnect on first call or via /executor-restart
   }
 
   // --- Commands ---
 
   pi.registerCommand("executor-restart", {
-    description: "Reconnect to Executor and re-discover tools",
+    description: "Reconnect to Executor",
     handler: async (_args, ctx) => {
       await disconnect();
       try {
-        const c = await connect();
-        const { tools } = await c.listTools();
-        ctx.ui.notify(
-          `Executor reconnected — ${tools.length} tool(s) available.`,
-          "info",
-        );
+        await connect();
+        ctx.ui.notify("Executor reconnected.", "info");
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         ctx.ui.notify(`Executor reconnect failed: ${msg}`, "error");

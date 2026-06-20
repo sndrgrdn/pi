@@ -341,7 +341,6 @@ function createDollarProvider(
 
 			const query = match[1] ?? "";
 			const items: AutocompleteItem[] = fuzzyFilter(getSkills(), query, (s) => s.name)
-				.slice(0, 20)
 				.map((s) => ({
 					value: `$${s.name}`,
 					label: `$${s.name}`,
