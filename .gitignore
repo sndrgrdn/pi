@@ -5,6 +5,7 @@ sessions
 /fff
 auth.json
 APPEND_SYSTEM.md
+mcp-oauth/
 mcp.json
 mcp-cache.json
 mcp-npx-cache.json

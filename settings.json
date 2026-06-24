@@ -1,10 +1,10 @@
 {
-  "lastChangelogVersion": "0.79.8",
+  "lastChangelogVersion": "0.80.2",
   "theme": "catppuccin-macchiato",
   "defaultThinkingLevel": "high",
   "hideThinkingBlock": true,
-  "defaultProvider": "anthropic",
-  "defaultModel": "claude-opus-4-6",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.5",
   "editorPaddingX": 0,
   "enabledModels": [
     "openai-codex/gpt-5.5",
@@ -19,5 +19,8 @@
   "httpIdleTimeoutMs": 300000,
   "warnings": {
     "anthropicExtraUsage": false
-  }
+  },
+  "packages": [
+    "npm:pi-mcp-adapter"
+  ]
 }
