@@ -5,6 +5,7 @@ import { isAbsolute, resolve } from "path";
 import { Type } from "typebox";
 
 const DEFAULT_TIMEOUT_SECONDS = 120;
+const NON_INTERACTIVE_GIT_ENV = "export GIT_EDITOR=true GIT_SEQUENCE_EDITOR=true GIT_MERGE_AUTOEDIT=no GIT_TERMINAL_PROMPT=0";
 
 const CD_PATTERN = /^\s*cd\b/;
 
@@ -24,6 +25,7 @@ const description = [
 ].join(" ");
 
 const resolveWorkdir = (cwd: string, workdir?: string) => workdir ? (isAbsolute(workdir) ? workdir : resolve(cwd, workdir)) : cwd;
+const forceNonInteractiveGit = (command: string) => `${NON_INTERACTIVE_GIT_ENV}\n${command}`;
 
 export default function (pi: ExtensionAPI) {
 	const base = createBashToolDefinition(process.cwd());
@@ -41,7 +43,7 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			const tool = createBashToolDefinition(resolveWorkdir(ctx.cwd, workdir));
-			return tool.execute(toolCallId, { command, timeout }, signal, onUpdate, ctx);
+			return tool.execute(toolCallId, { command: forceNonInteractiveGit(command), timeout }, signal, onUpdate, ctx);
 		},
 	} as ToolDefinition<any, any, any>);
 }
