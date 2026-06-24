@@ -68,6 +68,24 @@ Apply the baseline prompt above, plus these explicit review rules:
    - If related updates can leave state half-applied, push for a more atomic structure.
    - Do not over-index on micro-optimizations, but do flag avoidable orchestration complexity that makes the implementation more brittle.
 
+8. **Make bad states unrepresentable instead of handling them at runtime.**
+   - Design types, models, schemas, and constructors so that invalid combinations cannot be expressed in the first place.
+   - A runtime check for something the type system or data model already prevents is noise that obscures the real contract.
+   - Be especially strict for persisted data formats and core infrastructure: fallbacks here mask corruption rather than preventing it.
+   - If the design allows a bad state to exist, fix the design — do not add a guard that papers over the gap.
+
+9. **Fix the producer, not the consumer.**
+   - When a function receives bad input, the default fix should be at the call site or data source, not a defensive guard in the receiver.
+   - If a value "should never be nil here", make it structurally impossible to be nil rather than adding a nil check.
+   - Accumulated consumer-side guards are a sign that the boundary contract is unclear. Push for an explicit contract instead of scattering defenses.
+   - Be highly suspicious of changes that add error handling at a symptom site when the root cause is an unclear or unenforced invariant upstream.
+
+10. **Guard against accumulating apparent robustness.**
+    - Each individual "just in case" check may seem harmless, but collectively they obscure invariants, hide design intent, and make the system harder to reason about.
+    - If a guard handles a state that is structurally impossible, it is not robustness — it is misinformation about what the system's actual contracts are.
+    - Strongly prefer deleting impossible-state handling over keeping it "for safety."
+    - Be especially suspicious when a diff adds multiple small defensive checks across unrelated call sites — that pattern signals a missing invariant, not missing guards.
+
 ## Primary Review Questions
 
 For every meaningful change, ask:
@@ -85,6 +103,11 @@ For every meaningful change, ask:
 - Did the diff introduce casts, optionality, or ad-hoc object shapes that obscure the real invariant?
 - Is this logic living in the canonical layer, or did the diff leak details across a boundary?
 - Is this orchestration more sequential or less atomic than it needs to be?
+- Does this guard handle a state that the design already makes impossible? If so, why is it here?
+- Is this fix at the right level — does it fix the producer or defend the consumer?
+- Would a stronger type, schema, or constructor eliminate the need for this check entirely?
+- Are these scattered defensive checks collectively hiding what the real contract is?
+- For persisted data: does this fallback mask potential corruption instead of preventing it?
 
 ## What to Flag Aggressively
 
@@ -107,6 +130,11 @@ Escalate findings when you see:
 - Logic added in the wrong layer/package when it should live somewhere more central.
 - Sequential async flow where obviously independent work could stay simpler and clearer with parallel execution.
 - Partial-update logic that leaves state less atomic than necessary.
+- Runtime guards or fallbacks for states that the type system or data model already prevents.
+- Consumer-side nil/error checks that compensate for an unclear or unenforced producer contract.
+- Multiple small defensive checks scattered across unrelated call sites that signal a missing invariant.
+- Fallbacks in code that touches persisted data formats, where silent recovery masks corruption.
+- Error handling for structurally impossible states presented as "robustness."
 
 ## Preferred Remedies
 
@@ -128,6 +156,11 @@ When you identify a code-quality problem, prefer suggestions like:
 - Move the logic to the package/module/layer that already owns the concept.
 - Parallelize independent work when that also simplifies the orchestration.
 - Restructure related updates into a more atomic flow when partial state would be harder to reason about.
+- Tighten the type, schema, or constructor so the invalid state becomes unrepresentable.
+- Move the fix from the consumer to the producer — enforce the contract at the source.
+- Delete impossible-state handling rather than keeping it "for safety."
+- Replace scattered defensive checks with a single explicit invariant or boundary contract.
+- For persisted data, fail loudly on invariant violations rather than silently falling back.
 
 Do not be satisfied with "maybe rename this" feedback when the real issue is structural.
 Do not be satisfied with a merely cleaner version of the same messy idea if there is a plausible path to a much simpler idea.
@@ -150,6 +183,10 @@ Good phrases:
 - `this looks like a bespoke helper for something we already have elsewhere. can we reuse the canonical one?`
 - `i think there's a code-judo move here that makes this much simpler. can we reframe this so these branches disappear?`
 - `this refactor moves complexity around, but doesn't really delete it. is there a way to make the model itself simpler?`
+- `this guard handles a state the design already makes impossible. can we delete it instead of keeping it "for safety"?`
+- `this adds a nil check in the consumer, but the real problem is that the producer can emit nil. can we fix it at the source?`
+- `these scattered defensive checks are hiding the real contract. can we enforce the invariant in one place instead?`
+- `this fallback silently recovers from corrupt data. can we fail loudly instead so the corruption gets caught?`
 
 ## Output Expectations
 
@@ -161,7 +198,8 @@ Prioritize findings in this order:
 4. Boundary / abstraction / type-contract problems that make the code harder to reason about
 5. File-size and decomposition concerns
 6. Modularity and abstraction issues
-7. Legibility and maintainability concerns
+7. Invariant erosion — defensive checks that obscure or contradict the design's actual contracts
+8. Legibility and maintainability concerns
 
 Do not flood the review with low-value nits if there are larger structural issues.
 Prefer a smaller number of high-conviction comments over a long list of cosmetic notes.
@@ -179,6 +217,9 @@ The bar for approval is:
 - no unnecessary wrapper/cast/optionality churn obscuring the real design
 - no clear architecture-boundary leak or avoidable canonical-helper duplication
 - no missed opportunity for an obvious decomposition that would materially improve maintainability
+- no defensive handling of states the design already makes impossible
+- no consumer-side guards compensating for an unenforced producer contract
+- no accumulation of "just in case" checks that collectively obscure the real invariants
 
 Treat these as presumptive blockers unless the author can justify them clearly:
 
@@ -188,5 +229,8 @@ Treat these as presumptive blockers unless the author can justify them clearly:
 - the PR solves a local problem by scattering feature checks across shared code
 - the PR adds an unnecessary abstraction, wrapper, or cast-heavy contract that makes the design more indirect
 - the PR duplicates an existing helper or puts logic in the wrong layer when there is a clear canonical home
+- the PR adds runtime guards for states that a stronger type, schema, or constructor would make unrepresentable
+- the PR fixes a problem at the consumer when the root cause is an unenforced contract at the producer
+- the PR scatters multiple small defensive checks that collectively erode clarity about the system's actual invariants
 
 If those conditions are not met, leave explicit, actionable feedback and push for a cleaner decomposition.
