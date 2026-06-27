@@ -25,10 +25,10 @@ export default function (pi: ExtensionAPI) {
 		async execute(_toolCallId, params) {
 			const trimmed = params.name.trim();
 			if (!trimmed) {
-				return { content: [{ type: "text", text: "Name cannot be empty." }], isError: true };
+				return { content: [{ type: "text", text: "Name cannot be empty." }], details: {}, isError: true };
 			}
 			pi.setSessionName(trimmed);
-			return { content: [{ type: "text", text: `Session named: ${trimmed}` }] };
+			return { content: [{ type: "text", text: `Session named: ${trimmed}` }], details: {} };
 		},
 	});
 }

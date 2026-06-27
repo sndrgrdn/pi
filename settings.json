@@ -3,8 +3,8 @@
   "theme": "catppuccin-macchiato",
   "defaultThinkingLevel": "high",
   "hideThinkingBlock": true,
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.5",
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-opus-4-6",
   "editorPaddingX": 0,
   "enabledModels": [
     "openai-codex/gpt-5.5",
@@ -21,6 +21,6 @@
     "anthropicExtraUsage": false
   },
   "packages": [
-    "npm:pi-mcp-adapter"
+    "npm:pi-mcp-adapter@2.10.0"
   ]
 }
