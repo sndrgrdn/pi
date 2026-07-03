@@ -9,15 +9,6 @@
  - `CONTEXT.md` and `CONTEXT-MAP.md` at the repo root
  - `docs/adr/` and any `src/*/docs/adr/` directories
  - `docs/agents/` — does this skill's prior output already exist?
-@@ -46,7 +46,7 @@
- 
- If — and only if — the user picked **GitHub** or **GitLab**, ask one follow-up:
- 
--> Explainer: Open-source repos often receive feature requests as pull requests, not just issues — a PR is an issue with attached code. If you turn this on, `/triage` pulls *external* PRs into the same queue and runs them through the same labels and states as issues (collaborators' in-flight PRs are left alone). Leave it off if PRs aren't a request surface for you.
-+> Explainer: Open-source repos often receive feature requests as pull requests, not just issues — a PR is an issue with attached code. If you turn this on, `$triage` pulls *external* PRs into the same queue and runs them through the same labels and states as issues (collaborators' in-flight PRs are left alone). Leave it off if PRs aren't a request surface for you.
- 
- - **PRs as a request surface** — yes / no (default: no). Record the answer in `docs/agents/issue-tracker.md`. For local-markdown and other trackers, skip this question — there are no PRs.
- 
 @@ -77,7 +77,7 @@
  
  Show the user a draft of:

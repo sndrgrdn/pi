@@ -134,6 +134,11 @@ When replacing Claude Code-specific patterns, use these Pi equivalents:
 | `sub-agent` / `subagent` (generic, Claude Code context) | Translate to Pi `subagent()` tool syntax |
 | `CLAUDE.md` checked first | `AGENTS.md` checked first, `CLAUDE.md` as fallback |
 
+**No longer patched:**
+
+- **Slash skill refs (`/skill-name`)** — the pi skill extension (`extensions/skill.ts`) accepts `/name` and `$name` inline refs natively, including inside skill bodies. Upstream files keep their slashes; do not translate to `$name`.
+- **`disable-model-invocation` frontmatter** — ignored by the pi skill stack (`skill.ts` + `disable-invocation.ts` make all skills invisible until user-invoked). Keep upstream frontmatter as-is.
+
 **Note:** Pi has native subagent support. Unlike setups without subagents, we translate the syntax rather than removing the concept. Generic uses of "subagent" that aren't Claude Code-specific do not need patching.
 
 ## Tracking

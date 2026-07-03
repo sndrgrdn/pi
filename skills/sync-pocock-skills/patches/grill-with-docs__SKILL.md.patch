@@ -1,8 +1,0 @@
---- upstream/grill-with-docs/SKILL.md
-+++ ours/grill-with-docs/SKILL.md
-@@ -4,4 +4,4 @@
- disable-model-invocation: true
- ---
- 
--Run a `/grilling` session, using the `/domain-modeling` skill.
-+Run a `$grilling` session, using the `$domain-modeling` skill.

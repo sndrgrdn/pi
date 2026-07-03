@@ -1,8 +1,0 @@
---- upstream/grill-me/SKILL.md
-+++ ours/grill-me/SKILL.md
-@@ -4,4 +4,4 @@
- disable-model-invocation: true
- ---
- 
--Run a `/grilling` session.
-+Run a `$grilling` session.

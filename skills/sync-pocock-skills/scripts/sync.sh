@@ -213,8 +213,9 @@ done < "$OUR_LIST"
 echo ""
 echo "=== UNPATCHED_PATTERNS ==="
 # Only flag Claude Code-specific syntax, not generic "subagent" references
-# (pi has native subagent support)
-PATTERNS='Agent tool|subagent_type|CLAUDE\.md|`/[a-z][a-z0-9-]+`'
+# (pi has native subagent support). Slash skill refs (`/skill-name`) are NOT
+# flagged: the pi skill extension accepts them natively, no translation needed.
+PATTERNS='Agent tool|subagent_type|CLAUDE\.md'
 while IFS=$'\t' read -r name our_path; do
   while IFS= read -r file; do
     rel_path="${file#"$our_path"/}"
