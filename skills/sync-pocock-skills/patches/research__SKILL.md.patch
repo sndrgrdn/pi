@@ -1,0 +1,14 @@
+--- upstream/research/SKILL.md
++++ ours/research/SKILL.md
+@@ -1,9 +1,9 @@
+ ---
+ name: research
+-description: Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent.
++description: Research a question against primary sources and capture the findings as a cited Markdown file in the repo. Use when the user wants a topic researched or docs/API facts gathered.
+ ---
+ 
+-Spin up a **background agent** to do the research, so you keep working while it reads.
++Delegate the research to a subagent — `subagent({ agent: "general", task: "..." })` — so the reading happens in an isolated context instead of polluting yours. It starts blank: give it the full question and the instructions below.
+ 
+ Its job:
+ 

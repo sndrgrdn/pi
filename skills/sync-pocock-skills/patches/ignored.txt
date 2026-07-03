@@ -1,2 +1,9 @@
 # Upstream skills we've explicitly declined.
 # One skill name per line. Comments start with #.
+resolving-merge-conflicts
+teach
+git-guardrails-claude-code
+migrate-to-shoehorn
+scaffold-exercises
+setup-pre-commit
+ask-matt
