@@ -125,7 +125,6 @@ export default function (pi: ExtensionAPI): void {
 	function setSkills(entries: SkillEntry[]): void {
 		skillsByName.clear();
 		for (const entry of entries) skillsByName.set(entry.name, entry);
-		registerSkillTool();
 	}
 
 	// Fallback discovery via /skill:name commands (available at session_start).
@@ -210,8 +209,12 @@ export default function (pi: ExtensionAPI): void {
 	}
 
 	// ── Tool ──
+	// Registered eagerly at load time: on /resume pi renders the restored chat
+	// BEFORE emitting session_start (renderBeforeBind), and ToolExecution
+	// captures the tool definition at construction. Lazy registration meant
+	// resumed skill results lost their custom renderer and dumped raw content.
 	function registerSkillTool(): void {
-		if (toolRegistered || skillsByName.size === 0) return;
+		if (toolRegistered) return;
 		toolRegistered = true;
 
 		pi.registerTool({
@@ -258,6 +261,8 @@ export default function (pi: ExtensionAPI): void {
 			},
 		});
 	}
+
+	registerSkillTool();
 
 	// ── Events ──
 
