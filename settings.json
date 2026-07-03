@@ -1,16 +1,16 @@
 {
-  "lastChangelogVersion": "0.80.2",
-  "theme": "catppuccin-macchiato",
+  "lastChangelogVersion": "0.80.3",
   "defaultThinkingLevel": "high",
   "hideThinkingBlock": true,
   "defaultProvider": "anthropic",
-  "defaultModel": "claude-opus-4-6",
+  "defaultModel": "claude-fable-5",
   "editorPaddingX": 0,
   "enabledModels": [
     "openai-codex/gpt-5.5",
     "anthropic/claude-opus-4-6",
     "anthropic/claude-sonnet-4-6",
-    "anthropic/claude-haiku-4-5"
+    "anthropic/claude-haiku-4-5",
+    "anthropic/claude-fable-5"
   ],
   "steeringMode": "all",
   "doubleEscapeAction": "tree",
@@ -22,5 +22,7 @@
   },
   "packages": [
     "npm:pi-mcp-adapter@2.10.0"
-  ]
+  ],
+  "theme": "github-light/github-dark",
+  "quietStartup": false
 }
