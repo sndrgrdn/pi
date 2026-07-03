@@ -10,9 +10,12 @@
  * CONTEXT-PURIST DESIGN: skills are fully invisible to the model. No catalog
  * in the system prompt (disable-invocation.ts strips it), no catalog or name
  * enum in the tool schema. Activation is user-driven only:
- * - `$skill-name` (with `$` autocomplete) → hidden directive injected via
- *   before_agent_start → model calls the skill tool → content arrives as a
- *   tool result (much stronger adherence than injected file content)
+ * - `$skill-name` or `/skill-name` (with `$` autocomplete; `/` completes on
+ *   Tab — the editor blacklists `/` as an auto-trigger char) → hidden
+ *   directive injected via before_agent_start → model calls the skill tool →
+ *   content arrives as a tool result (much stronger adherence than injected
+ *   file content). `/name` at prompt start also works: unknown slash
+ *   commands fall through as plain prompt text.
  * - prose ("use the tdd skill") → model calls the tool; on a bad name the
  *   error response lists valid names as recovery
  * - no dedupe: repeated activations re-inject content on purpose, so skills
@@ -33,6 +36,11 @@ import { dirname, join, relative } from "node:path";
 
 const MAX_LISTED_FILES = 20;
 const SKIP_DIRS = new Set(["node_modules", "__pycache__"]);
+
+// The sigils that mark a skill reference. Feeds both the prompt-scanning
+// pattern (skillRefPattern) and the autocomplete provider's token matcher.
+const SKILL_TRIGGERS = ["$", "/"] as const;
+const TRIGGER_CLASS = `[${SKILL_TRIGGERS.join("")}]`;
 
 // ── Skill content ─────────────────────────────────────────────────
 
@@ -114,13 +122,21 @@ export default function (pi: ExtensionAPI): void {
 	// The skill map is the token grammar: build the matcher from the loaded
 	// names so every match is a valid skill by construction. Longest-first
 	// alternation + lookahead keep `$tdd` from matching inside `$tdd-review`.
+	// Accepts both `$name` (legacy) and `/name` (what most harnesses use).
+	// The trailing lookahead excludes `/` and extension-like `.xx` so path
+	// fragments (`/tdd/refs.md`, `/tdd.md`) don't false-positive, while
+	// sentence-end punctuation (`use /tdd.`) still matches; the lookbehind
+	// already blocks `skills/tdd`.
 	function skillRefPattern(): RegExp | null {
 		if (skillsByName.size === 0) return null;
 		const alternatives = [...skillsByName.keys()]
 			.sort((a, b) => b.length - a.length)
 			.map((name) => name.replace(/[\\^$.*+?()[\]{}|-]/g, "\\$&"))
 			.join("|");
-		return new RegExp(`(?<=^|[\\s([{"'\`])\\$(${alternatives})(?![\\w-])`, "gm");
+		return new RegExp(
+			`(?<=^|[\\s([{"'\`])${TRIGGER_CLASS}(${alternatives})(?![\\w/-]|\\.\\w)`,
+			"gm",
+		);
 	}
 	function setSkills(entries: SkillEntry[]): void {
 		skillsByName.clear();
@@ -177,8 +193,8 @@ export default function (pi: ExtensionAPI): void {
 		try {
 			let text = renderSkillContent(skill);
 
-			// Detect $-refs inside the skill body and append a directive so the
-			// model loads them too — same mechanism as user-input $-refs.
+			// Detect $/-refs inside the skill body and append a directive so the
+			// model loads them too — same mechanism as user-input refs.
 			// Guard against circular references with a visited set.
 			visited.add(name);
 			const pattern = skillRefPattern();
@@ -202,7 +218,7 @@ export default function (pi: ExtensionAPI): void {
 	function buildDirective(names: string[]): string {
 		return [
 			"<skill_directive>",
-			"The user referenced skills with $. Call the skill tool once per skill named below, before planning, answering, editing files, or running commands, then follow the returned instructions.",
+			"The user referenced skills by name. Call the skill tool once per skill named below, before planning, answering, editing files, or running commands, then follow the returned instructions.",
 			...names.map((name) => `<skill>${name}</skill>`),
 			"</skill_directive>",
 		].join("\n");
@@ -267,9 +283,9 @@ export default function (pi: ExtensionAPI): void {
 	// ── Events ──
 
 	// Keep the skill map in sync with pi's authoritative skill data, and
-	// inject the pending $-reference directive as a hidden message (in LLM
+	// inject the pending skill-reference directive as a hidden message (in LLM
 	// context, invisible in the TUI — the tool call is the visible signal).
-	// Scans the expanded prompt (post-template-expansion) so $-refs from
+	// Scans the expanded prompt (post-template-expansion) so refs from
 	// prompt templates are caught too.
 	pi.on("before_agent_start", (event) => {
 		refreshSkillsFromOptions(event.systemPromptOptions.skills);
@@ -293,7 +309,7 @@ export default function (pi: ExtensionAPI): void {
 	pi.on("session_start", (_event, ctx) => {
 		refreshSkillsFromCommands();
 		ctx.ui.addAutocompleteProvider((current) =>
-			createDollarProvider(current, () => [...skillsByName.values()]),
+			createSkillRefProvider(current, () => [...skillsByName.values()]),
 		);
 	});
 
@@ -301,7 +317,7 @@ export default function (pi: ExtensionAPI): void {
 		refreshSkillsFromCommands();
 	});
 
-	// Steered/queued messages skip before_agent_start, so detect $-refs
+	// Steered/queued messages skip before_agent_start, so detect skill refs
 	// in the input handler and inline the directive for that path only.
 	pi.on("input", (event) => {
 		if (event.source === "extension") return { action: "continue" as const };
@@ -322,11 +338,15 @@ export default function (pi: ExtensionAPI): void {
 
 // ── Autocomplete ──────────────────────────────────────────────────
 
-function createDollarProvider(
+function createSkillRefProvider(
 	current: AutocompleteProvider,
 	getSkills: () => SkillEntry[],
 ): AutocompleteProvider {
+	const tokenPattern = new RegExp(`(?:^|\\s)(${TRIGGER_CLASS})([\\w-]*)$`);
 	return {
+		// The editor blacklists "/" as a custom trigger char, so only "$"
+		// auto-pops. Inline "/name" completion still works via explicit Tab
+		// (the editor calls the provider regardless of trigger chars then).
 		triggerCharacters: ["$"],
 
 		async getSuggestions(
@@ -339,23 +359,31 @@ function createDollarProvider(
 			const beforeCursor = line.slice(0, cursorCol);
 			// The editor only triggers after whitespace/line-start (its own
 			// pattern from triggerCharacters), so the boundary here mirrors that.
-			const match = beforeCursor.match(/(?:^|\s)\$([\w-]*)$/);
+			const match = beforeCursor.match(tokenPattern);
 			if (!match) {
 				return current.getSuggestions(lines, cursorLine, cursorCol, options);
 			}
 
-			const query = match[1] ?? "";
+			const trigger = match[1]!;
+			const query = match[2]!;
+			// "/" at column 0 of line 0 is the built-in command menu — keep it.
+			// Only that exact position: the built-in provider requires the line
+			// to start with "/", so inline or indented "/" tokens are ours.
+			const tokenStart = cursorCol - trigger.length - query.length;
+			if (trigger === "/" && cursorLine === 0 && tokenStart === 0) {
+				return current.getSuggestions(lines, cursorLine, cursorCol, options);
+			}
 			const items: AutocompleteItem[] = fuzzyFilter(getSkills(), query, (s) => s.name)
 				.map((s) => ({
-					value: `$${s.name}`,
-					label: `$${s.name}`,
+					value: `${trigger}${s.name}`,
+					label: `${trigger}${s.name}`,
 					description: s.description,
 				}));
 
 			if (items.length === 0) {
 				return current.getSuggestions(lines, cursorLine, cursorCol, options);
 			}
-			return { items, prefix: `$${match[1] ?? ""}` };
+			return { items, prefix: `${trigger}${query}` };
 		},
 
 		applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
