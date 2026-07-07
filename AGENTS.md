@@ -10,4 +10,4 @@ Default vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, 
 
 ### Domain docs
 
-Adaptive — check for `CONTEXT-MAP.md` (multi-context) first, then `CONTEXT.md` (single-context). See `docs/agents/domain.md` (project-local) or `~/.pi/agent/docs/agents/domain.md` (global default).
+Single-context — read `CONTEXT.md` at the repo root. See `docs/agents/domain.md` (project-local) or `~/.pi/agent/docs/agents/domain.md` (global default).

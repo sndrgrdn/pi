@@ -115,7 +115,7 @@ export function register(pi: ExtensionAPI): void {
     if (firstTokenMs != null) return;
     const ame = event.assistantMessageEvent;
     if (!ame) return;
-    if (ame.type === "text_delta" || ame.type === "thinking_delta") {
+    if (ame.type === "text_delta" || ame.type === "thinking_delta" || ame.type === "toolcall_delta") {
       firstTokenMs = performance.now();
       notify();
     }
@@ -140,10 +140,10 @@ export function register(pi: ExtensionAPI): void {
       const ttftMs = firstTokenMs - reqStartMs;
       const generationMs = endMs - firstTokenMs;
 
-      latestTtft = ttftMs / 1000;
-      latestTokSec = generationMs > 0 ? outputTokens / (generationMs / 1000) : undefined;
-
-      addSample(ttftMs, outputTokens, generationMs);
+      if (addSample(ttftMs, outputTokens, generationMs)) {
+        latestTtft = ttftMs / 1000;
+        latestTokSec = outputTokens / (generationMs / 1000);
+      }
     }
 
     resetInFlight();

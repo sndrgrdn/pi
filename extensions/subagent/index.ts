@@ -29,8 +29,8 @@ export interface CallerDefaults {
 	thinking?: ThinkingLevel;
 }
 
-const MAX_PARALLEL_TASKS = 8;
-const MAX_CONCURRENCY = 4;
+const MAX_PARALLEL_TASKS = 32;
+const MAX_CONCURRENCY = 32;
 const COLLAPSED_ITEM_COUNT = 10;
 const TERMINAL_MESSAGE_GRACE_MS = 1500;
 const FORCE_KILL_AFTER_GRACE_MS = 5000;
@@ -290,7 +290,8 @@ async function runSingleAgent({
 
 	const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 	const sessionName = `subagent-${agentName}-${timestamp}`;
-	const args: string[] = ["--mode", "json", "-p", "--name", sessionName, "-nbt"];
+	const subagentSessionDir = path.join(getAgentDir(), "sessions", "subagent");
+	const args: string[] = ["--mode", "json", "-p", "--session-dir", subagentSessionDir, "--name", sessionName, "-nbt"];
 	if (agent.extensions === true) {
 	} else if (Array.isArray(agent.extensions) && agent.extensions.length > 0) {
 		args.push("--no-extensions");

@@ -7,8 +7,6 @@ import { Type } from "typebox";
 const DEFAULT_TIMEOUT_SECONDS = 120;
 const NON_INTERACTIVE_GIT_ENV = "export GIT_EDITOR=true GIT_SEQUENCE_EDITOR=true GIT_MERGE_AUTOEDIT=no GIT_TERMINAL_PROMPT=0";
 
-const CD_PATTERN = /^\s*cd\b/;
-
 const schema = Type.Object({
 	command: Type.String({ description: "The command to execute. Do not use cd — use the workdir parameter instead." }),
 	timeout: Type.Optional(Type.Number({ description: `Timeout in seconds (default: ${DEFAULT_TIMEOUT_SECONDS}). Set for long or potentially hanging commands.` })),
@@ -35,13 +33,6 @@ export default function (pi: ExtensionAPI) {
 		parameters: schema,
 		async execute(toolCallId, params: { command: string; timeout?: number; workdir?: string }, signal, onUpdate, ctx) {
 			const { command, timeout = DEFAULT_TIMEOUT_SECONDS, workdir } = params;
-
-			if (CD_PATTERN.test(command)) {
-				return {
-					content: [{ type: "text" as const, text: "[note: use the workdir parameter instead of cd]" }],
-				};
-			}
-
 			const tool = createBashToolDefinition(resolveWorkdir(ctx.cwd, workdir));
 			return tool.execute(toolCallId, { command: forceNonInteractiveGit(command), timeout }, signal, onUpdate, ctx);
 		},
