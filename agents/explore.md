@@ -5,7 +5,7 @@ description: |
 extensions: true
 model:
   anthropic: claude-haiku-4-5
-  openai-codex: gpt-5.5
+  openai-codex: gpt-5.6-terra
 allowModelOverride: false
 thinking: off
 ---

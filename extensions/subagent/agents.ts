@@ -13,10 +13,10 @@ import {
 } from "@earendil-works/pi-coding-agent"
 
 export type AgentScope = "user" | "project" | "both"
-export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh"
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
 
 const THINKING_LEVELS: ReadonlySet<string> = new Set<ThinkingLevel>([
-  "off", "minimal", "low", "medium", "high", "xhigh"
+  "off", "minimal", "low", "medium", "high", "xhigh", "max"
 ])
 
 export type ModelConfig = Record<string, string>

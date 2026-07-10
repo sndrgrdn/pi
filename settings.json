@@ -1,16 +1,16 @@
 {
-  "lastChangelogVersion": "0.80.3",
+  "lastChangelogVersion": "0.80.6",
   "defaultThinkingLevel": "high",
   "hideThinkingBlock": true,
-  "defaultProvider": "anthropic",
-  "defaultModel": "claude-fable-5",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.6-sol",
   "editorPaddingX": 0,
   "enabledModels": [
-    "openai-codex/gpt-5.5",
     "anthropic/claude-opus-4-6",
+    "anthropic/claude-fable-5",
     "anthropic/claude-sonnet-4-6",
-    "anthropic/claude-haiku-4-5",
-    "anthropic/claude-fable-5"
+    "openai-codex/gpt-5.6-sol",
+    "openai-codex/gpt-5.6-terra"
   ],
   "steeringMode": "all",
   "doubleEscapeAction": "tree",

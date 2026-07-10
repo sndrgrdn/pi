@@ -19,7 +19,7 @@ import { register as registerMetrics, getMetrics, onUpdate } from "./metrics.js"
 // ── Thinking glyphs ──────────────────────────
 
 const THINK_LABEL: Record<string, string> = {
-  off: "off", minimal: "min", low: "low", medium: "med", high: "high", xhigh: "max",
+  off: "off", minimal: "min", low: "low", medium: "med", high: "high", xhigh: "xhi", max: "max",
 };
 
 // ── Extension ────────────────────────────────
