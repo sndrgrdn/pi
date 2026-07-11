@@ -18,6 +18,8 @@
  *   commands fall through as plain prompt text.
  * - prose ("use the tdd skill") → model calls the tool; on a bad name the
  *   error response lists valid names as recovery
+ * - references inside loaded skill content are lazy handoffs: the model calls
+ *   them only when the surrounding instruction is reached and its condition holds
  * - no dedupe: repeated activations re-inject content on purpose, so skills
  *   survive compaction/summarization in long sessions
  * - `disable-model-invocation` frontmatter is ignored: every skill is
@@ -181,31 +183,14 @@ export default function (pi: ExtensionAPI): void {
 		return lines.join("\n");
 	}
 
-	function activateSkill(
-		name: string,
-		visited: Set<string> = new Set(),
-	): { title: string; text: string } {
+	function activateSkill(name: string): { title: string; text: string } {
 		const skill = skillsByName.get(name);
 		if (!skill) {
 			// Only on a miss does the catalog enter context, as recovery.
 			throw new Error(`Unknown skill "${name}".\n${availableSkillsBlock()}`);
 		}
 		try {
-			let text = renderSkillContent(skill);
-
-			// Detect $/-refs inside the skill body and append a directive so the
-			// model loads them too — same mechanism as user-input refs.
-			// Guard against circular references with a visited set.
-			visited.add(name);
-			const pattern = skillRefPattern();
-			if (pattern) {
-				const refs = [...new Set([...text.matchAll(pattern)].map((m) => m[1]!))]
-					.filter((ref) => !visited.has(ref));
-				if (refs.length > 0) {
-					text += `\n\n${buildDirective(refs)}`;
-				}
-			}
-
+			const text = renderSkillContent(skill);
 			return { title: `Loaded skill: ${name}`, text };
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -238,7 +223,8 @@ export default function (pi: ExtensionAPI): void {
 			label: "Skill",
 			description: [
 				"Load a skill by exact name and return its full instructions: specialized guidance for specific tasks.",
-				"Call it only when explicitly asked to load or use a skill — never on your own initiative.",
+				"Call it when the user explicitly requests a skill or an active skill explicitly directs invoking one.",
+				"For active-skill handoffs, wait until the surrounding instruction is reached and its condition holds; mentions and examples are inert.",
 				"Pass the name exactly as given — never an invented name or a filesystem path.",
 			].join("\n"),
 			parameters: Type.Object({

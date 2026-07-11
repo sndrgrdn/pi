@@ -13,7 +13,34 @@
  * https://github.com/picassio/pi-cc-patch
  */
 
+import { createHash } from "crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+const CLAUDE_CODE_VERSION = "2.1.160";
+const FINGERPRINT_SALT = "59cf53e54c78";
+
+function getFirstUserText(payload: Record<string, any>): string {
+	const firstUserMessage = payload.messages.find((message: any) => message?.role === "user");
+	const content = firstUserMessage?.content;
+
+	if (typeof content === "string") return content;
+	if (Array.isArray(content)) {
+		const textBlock = content.find((block: any) => block?.type === "text" && typeof block.text === "string");
+		return textBlock?.text ?? "";
+	}
+
+	return "";
+}
+
+function computeFingerprint(messageText: string): string {
+	const chars = [4, 7, 20].map((index) => messageText[index] || "0").join("");
+	return createHash("sha256").update(`${FINGERPRINT_SALT}${chars}${CLAUDE_CODE_VERSION}`).digest("hex").slice(0, 3);
+}
+
+function getClaudeCodeBillingHeader(payload: Record<string, any>): string {
+	const fingerprint = computeFingerprint(getFirstUserText(payload));
+	return `x-anthropic-billing-header: cc_version=${CLAUDE_CODE_VERSION}.${fingerprint}; cc_entrypoint=cli;`;
+}
 
 function isAnthropicTarget(
 	payload: Record<string, any>,
@@ -38,12 +65,14 @@ export default function (pi: ExtensionAPI) {
 		if (!Array.isArray(payload.messages)) return;
 		if (!isAnthropicTarget(payload, ctx.model as { provider?: string; id?: string } | undefined)) return;
 
+		const billingHeader = getClaudeCodeBillingHeader(payload);
+
 		if (Array.isArray(payload.system)) {
 			const newBlocks: unknown[] = [];
 
 			newBlocks.push({
 				type: "text",
-				text: "x-anthropic-billing-header: cc_version=2.1.96.000; cc_entrypoint=cli;",
+				text: billingHeader,
 			});
 
 			for (const block of payload.system) {
@@ -57,7 +86,7 @@ export default function (pi: ExtensionAPI) {
 			payload.system = newBlocks;
 		} else if (typeof payload.system === "string") {
 			payload.system = [
-				{ type: "text", text: "x-anthropic-billing-header: cc_version=2.1.96.000; cc_entrypoint=cli;" },
+				{ type: "text", text: billingHeader },
 				{ type: "text", text: payload.system },
 			];
 		}

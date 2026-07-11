@@ -488,12 +488,8 @@ async function runSingleAgent({
 }
 
 function buildModelDescription(enabled: string[]): string {
-	const base =
-		"Model slug to run this subagent on. Overrides the agent's configured model unless that agent disables model overrides. Set distinct slugs per task to run subagents on distinct models. Defaults to the agent's model or the caller's model.";
-	if (enabled.length > 0) {
-		return `${base} Enabled models: ${enabled.join(", ")}. Other slugs/patterns (e.g. "sonnet", "name:high") also accepted.`;
-	}
-	return `${base} Accepts any \`--model\` pattern (e.g. "openai/gpt-5", "sonnet", "sonnet:high").`;
+	const models = enabled.length > 0 ? ` Enabled: ${enabled.join(", ")}.` : "";
+	return `Model override when permitted by the agent. Defaults to the agent or caller model.${models}`;
 }
 
 const ModelSchema = Type.Optional(
@@ -501,26 +497,26 @@ const ModelSchema = Type.Optional(
 );
 
 const TaskItem = Type.Object({
-	agent: Type.String({ description: "Agent name to invoke." }),
-	task: Type.String({ description: "Task to delegate. The agent has no prior context — include all detail needed to complete the work." }),
-	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process. Defaults to the caller's working directory." })),
+	agent: Type.String({ description: "Agent name." }),
+	task: Type.String({ description: "Task with context, deliverable, mutation scope, and verification." }),
+	cwd: Type.Optional(Type.String({ description: "Agent working directory. Defaults to the caller's." })),
 	model: ModelSchema,
 });
 
 const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
-	description: 'Which agent directories to use. Default: "user". Use "both" to include project-local agents.',
+	description: 'Agent source. Default: "user".',
 	default: "user",
 });
 
 const SubagentParams = Type.Object({
-	agent: Type.Optional(Type.String({ description: "Agent name (single mode)." })),
-	task: Type.Optional(Type.String({ description: "Task to delegate (single mode). The agent has no prior context — include all detail needed to complete the work." })),
-	tasks: Type.Optional(Type.Array(TaskItem, { description: "Array of {agent, task} for independent parallel execution." })),
+	agent: Type.Optional(Type.String({ description: "Agent name for single mode." })),
+	task: Type.Optional(Type.String({ description: "Single task with context, deliverable, mutation scope, and verification." })),
+	tasks: Type.Optional(Type.Array(TaskItem, { description: "Independent tasks to run in parallel." })),
 	agentScope: Type.Optional(AgentScopeSchema),
 	confirmProjectAgents: Type.Optional(
-		Type.Boolean({ description: "Prompt before running project-local agents. Default: true.", default: true }),
+		Type.Boolean({ description: "Confirm project agents. Default: true.", default: true }),
 	),
-	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process (single mode). Defaults to the caller's working directory." })),
+	cwd: Type.Optional(Type.String({ description: "Agent working directory. Defaults to the caller's." })),
 	model: ModelSchema,
 });
 
@@ -540,21 +536,10 @@ export default function (pi: ExtensionAPI) {
 		name: "subagent",
 		label: "Subagent",
 		description: [
-			"Delegate tasks to specialized subagents, each with an isolated context window.",
+			"Delegate substantial work to specialized agents with isolated contexts.",
 			`Agents:\n${agentListStr}`,
-			"",
-			"Do not use when:",
-			"- Reading a specific file → use Read",
-			"- Searching for a definition → use Bash directly",
-			"- Searching within 2-3 files → use Read",
-			"- Reading or searching skill references, docs, or context files → use Read/Bash directly",
-			"- No agent fits the task → use other tools directly",
-			"",
-			"Each invocation starts with a fresh context. The task must be self-contained: include what to do, what to return, whether to write code or research only, and how to verify.",
-			"",
-			"Results are not visible to the user. Always summarize.",
-			"Launch multiple agents concurrently when tasks are independent.",
-			"If an agent description mentions proactive use, invoke without user request.",
+			"Direct tools fit known-file reads and small searches.",
+			"Use tasks for independent parallel work. Summarize returned results.",
 		].join("\n"),
 		parameters: SubagentParams,
 
