@@ -100,7 +100,12 @@ export const MODE_REQUEST_EVENT = "harness:mode:request";
 
 // ── Wiring ────────────────────────────────────────────────────────
 
-export function registerModes(pi: ExtensionAPI, onModeChange?: (mode: Mode | null) => void): ResolvedProfiles {
+export interface RegisteredModes {
+	profiles: ResolvedProfiles;
+	activeMode(): Mode | null;
+}
+
+export function registerModes(pi: ExtensionAPI): RegisteredModes {
 	// Load at startup so an invalid profiles.json fails loudly here — no
 	// fallback, no recovery (§2.3).
 	const profiles: ResolvedProfiles = loadProfiles(join(getAgentDir(), "profiles.json"));
@@ -111,10 +116,6 @@ export function registerModes(pi: ExtensionAPI, onModeChange?: (mode: Mode | nul
 	// Mode indicator (§2.5): state lives here; rendering lives in the
 	// prompt-box extension, which subscribes to MODE_EVENT.
 	const announceMode = () => pi.events.emit(MODE_EVENT, mode);
-	const publishMode = () => {
-		onModeChange?.(mode);
-		announceMode();
-	};
 	pi.events.on(MODE_REQUEST_EVENT, announceMode);
 
 	/**
@@ -144,7 +145,7 @@ export function registerModes(pi: ExtensionAPI, onModeChange?: (mode: Mode | nul
 		mode = next;
 		writeGlobalMode(next);
 		pi.appendEntry(MODE_ENTRY_TYPE, { mode: next });
-		publishMode();
+		announceMode();
 		if (applied) {
 			const route = resolveMainRoute(profiles, next);
 			ctx.ui.notify(`Mode: ${next} (${route.model} · ${route.reasoning})`, "info");
@@ -161,7 +162,7 @@ export function registerModes(pi: ExtensionAPI, onModeChange?: (mode: Mode | nul
 		mode = null;
 		writeGlobalMode(null);
 		pi.appendEntry(MODE_ENTRY_TYPE, { mode: null });
-		publishMode();
+		announceMode();
 	}
 
 	pi.registerCommand("mode", {
@@ -208,10 +209,10 @@ export function registerModes(pi: ExtensionAPI, onModeChange?: (mode: Mode | nul
 		// route: pi owns model/provider/thinking restoration.
 		const recorded = event.reason === "resume" ? recordedSessionMode(ctx) : undefined;
 		mode = pickInitialMode(recorded, readGlobalMode());
-		publishMode();
+		announceMode();
 		pi.appendEntry(MODE_ENTRY_TYPE, { mode });
 		sessionStarted = true;
 	});
 
-	return profiles;
+	return { profiles, activeMode: () => mode };
 }

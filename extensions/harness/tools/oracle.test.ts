@@ -38,6 +38,7 @@ describe("oracle tool", () => {
 			key: "oracle", model, reasoningEffort: "high", allowMcp: false,
 			tools: ["shell_command", "shell_command_status", "shell_command_cancel", "finder", "librarian"],
 		});
+		expect(run.mock.calls[0]?.[0].customTools?.map((tool) => tool.name)).toEqual(["finder", "librarian"]);
 		expect(result.content[0]).toEqual({
 			type: "text",
 			text: '<oracle_result sessionID="oracle-1">\nUse the smaller change.\n</oracle_result>',

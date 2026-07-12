@@ -19,7 +19,6 @@ import { registerFinder } from "./tools/finder.ts";
 import { registerLibrarian } from "./tools/librarian.ts";
 import { registerOracle } from "./tools/oracle.ts";
 import registerRead from "./tools/read.ts";
-import { DEFAULT_MODE, type Mode } from "./profiles.ts";
 
 export default function harness(pi: ExtensionAPI) {
 	// Per-session background-process registry (spec §3.3), shared by the
@@ -39,10 +38,10 @@ export default function harness(pi: ExtensionAPI) {
 
 	// Phase 4 (§2): Modes + Profiles. Loads (and strictly validates)
 	// ~/.pi/agent/profiles.json — an invalid file fails startup loudly.
-	let activeMode: Mode | null = DEFAULT_MODE;
-	const profiles = registerModes(pi, (mode) => { activeMode = mode; });
+	const modes = registerModes(pi);
+	const { profiles } = modes;
 
 	registerFinder(pi, profiles); // Phase 6 (§6.2)
 	registerLibrarian(pi, profiles); // Phase 7 (§6.4)
-	registerOracle(pi, profiles, () => activeMode); // Phase 8 (§6.3)
+	registerOracle(pi, profiles, modes.activeMode); // Phase 8 (§6.3)
 }

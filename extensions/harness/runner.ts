@@ -6,6 +6,7 @@ import {
 	ModelRegistry,
 	SessionManager,
 	type CreateAgentSessionOptions,
+	type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { join } from "node:path";
 import type { AgentDefinition } from "./registry.ts";
@@ -29,6 +30,7 @@ export interface ChildSession {
 export interface ChildSessionConfig {
 	definition: AgentDefinition;
 	cwd: string;
+	customTools?: ToolDefinition[];
 }
 
 export type ChildSessionFactory = (config: ChildSessionConfig) => Promise<ChildSession>;
@@ -40,6 +42,7 @@ export interface RunOptions<T> {
 	mapInput(input: T): string;
 	wrapResult(sessionID: string, content: string): string;
 	onAction?(toolName: string): void;
+	customTools?: ToolDefinition[];
 	signal?: AbortSignal;
 }
 
@@ -65,7 +68,11 @@ export class SubagentRunner {
 		options.signal?.addEventListener("abort", onAbort, { once: true });
 
 		try {
-			child = await this.createChild({ definition: options.definition, cwd: options.cwd });
+			child = await this.createChild({
+				definition: options.definition,
+				cwd: options.cwd,
+				...(options.customTools ? { customTools: options.customTools } : {}),
+			});
 			if (options.onAction && child.onAction) unsubscribe = child.onAction(options.onAction);
 			if (parentAborted) {
 				abortPromise ??= child.abort();
@@ -106,6 +113,11 @@ export function resolveConfiguredModel(registry: Pick<ModelRegistry, "find">, mo
 /** Production adapter: a fresh in-memory pi SDK session, never a fork/resume. */
 export async function createSdkChildSession(config: ChildSessionConfig): Promise<ChildSession> {
 	const processes = new BackgroundShellRegistry();
+	const shellTools = [
+		createShellCommandTool(processes),
+		createShellStatusTool(processes),
+		createShellCancelTool(processes),
+	];
 	const agentDir = getAgentDir();
 	const authStorage = AuthStorage.create(join(agentDir, "auth.json"));
 	const modelRegistry = ModelRegistry.create(authStorage, join(agentDir, "models.json"));
@@ -116,12 +128,11 @@ export async function createSdkChildSession(config: ChildSessionConfig): Promise
 		model: resolveConfiguredModel(modelRegistry, config.definition.model),
 		thinkingLevel: config.definition.reasoningEffort,
 		tools: [...config.definition.tools, ...(config.definition.allowMcp ? ["mcp"] : [])],
-		customTools: config.definition.key === "librarian" ? [
-			createCheckoutTool(),
-			createShellCommandTool(processes),
-			createShellStatusTool(processes),
-			createShellCancelTool(processes),
-		] : undefined,
+		customTools: [
+			...(config.customTools ?? []),
+			...(config.definition.key === "librarian" ? [createCheckoutTool(), ...shellTools] : []),
+			...(config.definition.key === "oracle" ? shellTools : []),
+		],
 		sessionManager: SessionManager.inMemory(config.cwd),
 	};
 	let session: Awaited<ReturnType<typeof createAgentSession>>["session"];

@@ -8,6 +8,8 @@ import { DEFAULT_MODE, type Mode, type ResolvedProfiles, resolveAgentRoute } fro
 import { resolveAgentDefinition } from "../registry.ts";
 import { SubagentRunner } from "../runner.ts";
 import { createSubagentRenderer } from "../ui/subagent.ts";
+import { createFinderTool } from "./finder.ts";
+import { createLibrarianTool } from "./librarian.ts";
 
 const prompt = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "agents", "prompts", "oracle.md"), "utf8").trim();
 const renderer = createSubagentRenderer({ running: "Oracle exploring", complete: "Oracle has spoken" });
@@ -62,6 +64,10 @@ export function createOracleTool(
 			}, resolveAgentRoute(profiles, "oracle", activeMode() ?? DEFAULT_MODE));
 			const envelope = await runner.run({
 				definition, cwd: ctx.cwd, input: params, signal,
+				customTools: [
+					createFinderTool(new SubagentRunner(), profiles),
+					createLibrarianTool(new SubagentRunner(), profiles),
+				],
 				mapInput: (input) => oracleMessage(input, ctx.cwd),
 				wrapResult: (sessionID, content) => {
 					if (!content.trim()) throw new Error("Oracle child returned an empty final message");
