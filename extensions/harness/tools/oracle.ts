@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { buildEnvelope } from "../envelopes.ts";
 import { DEFAULT_MODE, type Mode, type ResolvedProfiles, resolveAgentRoute } from "../profiles.ts";
@@ -10,18 +10,18 @@ import { SubagentRunner } from "../runner.ts";
 import { createSubagentRenderer } from "../ui/subagent.ts";
 import { createFinderTool } from "./finder.ts";
 import { createLibrarianTool } from "./librarian.ts";
+import { createShellCommandTool } from "../shell/command.ts";
+import { createShellStatusTool } from "../shell/status.ts";
+import { createShellCancelTool } from "../shell/cancel.ts";
 
 const prompt = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "agents", "prompts", "oracle.md"), "utf8").trim();
 const renderer = createSubagentRenderer({ running: "Oracle exploring", complete: "Oracle has spoken" });
+const ORACLE_TOOL_NAMES = ["shell_command", "shell_command_status", "shell_command_cancel", "finder", "librarian"] as const;
 
 export interface OracleInput {
 	task: string;
 	context?: string;
 	files?: string[];
-}
-
-function languageFor(path: string): string {
-	return extname(path).slice(1);
 }
 
 export function oracleMessage(input: OracleInput, cwd: string): string {
@@ -30,7 +30,10 @@ export function oracleMessage(input: OracleInput, cwd: string): string {
 	for (const path of input.files ?? []) {
 		try {
 			const content = readFileSync(resolve(cwd, path), "utf8").replace(/\n$/, "");
-			sections.push(`File: ${path}\n\`\`\`${languageFor(path)}\n${content}\n\`\`\``);
+			let longestRun = 0;
+			for (const match of content.matchAll(/`+/g)) longestRun = Math.max(longestRun, match[0].length);
+			const fence = "`".repeat(Math.max(3, longestRun + 1));
+			sections.push(`File: ${path}\n${fence}${extname(path).slice(1)}\n${content}\n${fence}`);
 		} catch {
 			// Oracle can recover unreadable paths through its inspection tools.
 		}
@@ -59,12 +62,15 @@ export function createOracleTool(
 			const definition = resolveAgentDefinition({
 				key: "oracle",
 				systemPrompt: `${prompt}\n\nWorking directory: ${ctx.cwd}\nCurrent date: ${new Date().toISOString().slice(0, 10)}`,
-				tools: ["shell_command", "shell_command_status", "shell_command_cancel", "finder", "librarian"],
+				tools: ORACLE_TOOL_NAMES,
 				allowMcp: false,
 			}, resolveAgentRoute(profiles, "oracle", activeMode() ?? DEFAULT_MODE));
 			const envelope = await runner.run({
 				definition, cwd: ctx.cwd, input: params, signal,
-				customTools: [
+				toolbox: (processes) => [
+					createShellCommandTool(processes),
+					createShellStatusTool(processes),
+					createShellCancelTool(processes),
 					createFinderTool(new SubagentRunner(), profiles),
 					createLibrarianTool(new SubagentRunner(), profiles),
 				],
@@ -83,8 +89,4 @@ export function createOracleTool(
 			return renderer.renderResult(result, options, theme, context);
 		},
 	} as ToolDefinition<any, any, any>;
-}
-
-export function registerOracle(pi: ExtensionAPI, profiles: ResolvedProfiles, activeMode: ActiveMode): void {
-	pi.registerTool(createOracleTool(new SubagentRunner(), profiles, activeMode));
 }

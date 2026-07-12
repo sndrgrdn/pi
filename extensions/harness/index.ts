@@ -17,7 +17,8 @@ import skillTool from "./skill/index.ts";
 import { registerModes } from "./modes.ts";
 import { registerFinder } from "./tools/finder.ts";
 import { registerLibrarian } from "./tools/librarian.ts";
-import { registerOracle } from "./tools/oracle.ts";
+import { createOracleTool } from "./tools/oracle.ts";
+import { SubagentRunner } from "./runner.ts";
 import registerRead from "./tools/read.ts";
 
 export default function harness(pi: ExtensionAPI) {
@@ -43,5 +44,5 @@ export default function harness(pi: ExtensionAPI) {
 
 	registerFinder(pi, profiles); // Phase 6 (§6.2)
 	registerLibrarian(pi, profiles); // Phase 7 (§6.4)
-	registerOracle(pi, profiles, modes.activeMode); // Phase 8 (§6.3)
+	pi.registerTool(createOracleTool(new SubagentRunner(), profiles, modes.activeMode)); // Phase 8 (§6.3)
 }

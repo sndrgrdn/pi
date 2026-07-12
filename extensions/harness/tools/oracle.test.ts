@@ -5,6 +5,7 @@ import { Text } from "@earendil-works/pi-tui";
 import { describe, expect, it, vi } from "vitest";
 import { BUILTIN_PROFILES, type Mode } from "../profiles.ts";
 import type { RunOptions } from "../runner.ts";
+import { BackgroundShellRegistry } from "../shell/registry.ts";
 import { createOracleTool, oracleMessage } from "./oracle.ts";
 
 describe("oracle tool", () => {
@@ -24,6 +25,24 @@ describe("oracle tool", () => {
 		expect(message).not.toContain("missing.ts");
 	});
 
+	it("uses a fence longer than backtick runs in embedded content", () => {
+		const cwd = mkdtempSync(join(tmpdir(), "oracle-"));
+		writeFileSync(join(cwd, "example.md"), "```ts\nunsafe()\n```\n");
+
+		const message = oracleMessage({ task: "Review", files: ["example.md"] }, cwd);
+
+		expect(message).toContain("File: example.md\n````md\n```ts\nunsafe()\n```\n````");
+	});
+
+	it("embeds files containing many separate backtick runs", () => {
+		const cwd = mkdtempSync(join(tmpdir(), "oracle-"));
+		writeFileSync(join(cwd, "many.txt"), "` x ".repeat(150_000));
+
+		const message = oracleMessage({ task: "Review", files: ["many.txt"] }, cwd);
+
+		expect(message).toContain("File: many.txt\n```txt\n");
+	});
+
 	it.each([
 		["low", "openai-codex/gpt-5.6-sol"],
 		["medium", "openai-codex/gpt-5.6-sol"],
@@ -38,7 +57,11 @@ describe("oracle tool", () => {
 			key: "oracle", model, reasoningEffort: "high", allowMcp: false,
 			tools: ["shell_command", "shell_command_status", "shell_command_cancel", "finder", "librarian"],
 		});
-		expect(run.mock.calls[0]?.[0].customTools?.map((tool) => tool.name)).toEqual(["finder", "librarian"]);
+		const toolbox = run.mock.calls[0]?.[0].toolbox;
+		expect(toolbox).toEqual(expect.any(Function));
+		expect(toolbox?.(new BackgroundShellRegistry()).map((tool) => tool.name)).toEqual([
+			"shell_command", "shell_command_status", "shell_command_cancel", "finder", "librarian",
+		]);
 		expect(result.content[0]).toEqual({
 			type: "text",
 			text: '<oracle_result sessionID="oracle-1">\nUse the smaller change.\n</oracle_result>',

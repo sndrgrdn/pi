@@ -30,10 +30,11 @@ export interface ChildSession {
 export interface ChildSessionConfig {
 	definition: AgentDefinition;
 	cwd: string;
-	customTools?: ToolDefinition[];
+	toolbox?: ChildToolboxFactory;
 }
 
 export type ChildSessionFactory = (config: ChildSessionConfig) => Promise<ChildSession>;
+export type ChildToolboxFactory = (processes: BackgroundShellRegistry) => ToolDefinition[];
 
 export interface RunOptions<T> {
 	definition: AgentDefinition;
@@ -42,7 +43,7 @@ export interface RunOptions<T> {
 	mapInput(input: T): string;
 	wrapResult(sessionID: string, content: string): string;
 	onAction?(toolName: string): void;
-	customTools?: ToolDefinition[];
+	toolbox?: ChildToolboxFactory;
 	signal?: AbortSignal;
 }
 
@@ -71,7 +72,7 @@ export class SubagentRunner {
 			child = await this.createChild({
 				definition: options.definition,
 				cwd: options.cwd,
-				...(options.customTools ? { customTools: options.customTools } : {}),
+				...(options.toolbox ? { toolbox: options.toolbox } : {}),
 			});
 			if (options.onAction && child.onAction) unsubscribe = child.onAction(options.onAction);
 			if (parentAborted) {
@@ -129,9 +130,8 @@ export async function createSdkChildSession(config: ChildSessionConfig): Promise
 		thinkingLevel: config.definition.reasoningEffort,
 		tools: [...config.definition.tools, ...(config.definition.allowMcp ? ["mcp"] : [])],
 		customTools: [
-			...(config.customTools ?? []),
+			...(config.toolbox?.(processes) ?? []),
 			...(config.definition.key === "librarian" ? [createCheckoutTool(), ...shellTools] : []),
-			...(config.definition.key === "oracle" ? shellTools : []),
 		],
 		sessionManager: SessionManager.inMemory(config.cwd),
 	};
