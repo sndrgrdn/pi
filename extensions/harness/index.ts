@@ -9,6 +9,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerShellCancel } from "./shell/cancel.ts";
 import { registerShellCommand } from "./shell/command.ts";
+import { registerApplyPatch } from "./patch/tool.ts";
 import { BackgroundShellRegistry } from "./shell/registry.ts";
 import { registerShellStatus } from "./shell/status.ts";
 import skillTool from "./skill/index.ts";
@@ -22,7 +23,11 @@ export default function harness(pi: ExtensionAPI) {
 	registerShellCancel(pi, shellRegistry);
 	pi.on("session_shutdown", () => shellRegistry.killAll());
 
+	// Phase 2 (§4.4): apply_patch, the sole editor. Builtin edit/write stay
+	// enabled until the Phase 10 surface lock.
+	registerApplyPatch(pi);
+
 	skillTool(pi); // Phase 3 (§4.5)
 
-	// Later phases: apply_patch, modes, subagent runtime.
+	// Later phases: modes, subagent runtime.
 }
