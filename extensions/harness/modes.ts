@@ -16,6 +16,7 @@ import {
 	MODES,
 	type Mode,
 	type ResolvedProfiles,
+	isMode,
 	loadProfiles,
 	resolveMainRoute,
 	selectPosture,
@@ -34,8 +35,7 @@ export function decorateTopBorder(
 	label: string,
 	style: (s: string) => string = (s) => s,
 ): string {
-	const cornerIdx = line.lastIndexOf("╮");
-	if (cornerIdx === -1) return line;
+	if (!line.includes("╮")) return line;
 
 	const insertWidth = label.length + 3; // " label ─"
 	let bestStart = -1;
@@ -62,9 +62,9 @@ export function decorateTopBorder(
  * ignored — Modes are exactly three.
  */
 export function pickInitialMode(recorded: unknown, global: unknown): Mode {
-	const asMode = (v: unknown): Mode | undefined =>
-		typeof v === "string" && (MODES as readonly string[]).includes(v) ? (v as Mode) : undefined;
-	return asMode(recorded) ?? asMode(global) ?? DEFAULT_MODE;
+	if (isMode(recorded)) return recorded;
+	if (isMode(global)) return global;
+	return DEFAULT_MODE;
 }
 
 // ── Persistence ───────────────────────────────────────────────────
@@ -167,15 +167,18 @@ export function registerModes(pi: ExtensionAPI): void {
 	}
 
 	pi.registerCommand("mode", {
-		description: "Switch Mode — low: Terra/low · medium: Sol/medium · high: Sol/xhigh",
+		description:
+			"Switch Mode (low/medium/high). Routes — Main: Terra/low · Sol/medium · Sol/xhigh; " +
+			"Oracle: Sol/high (low+medium) · Fable/high (high); Task (per-call mode): Sol/low · Sol/high · Fable/high; " +
+			"Finder: Haiku/minimal; Librarian: Sol/off",
 		handler: async (args, ctx) => {
 			const arg = args?.trim();
 			if (arg) {
-				if (!(MODES as readonly string[]).includes(arg)) {
+				if (!isMode(arg)) {
 					ctx.ui.notify(`Unknown Mode "${arg}" (expected ${MODES.join(", ")})`, "error");
 					return;
 				}
-				if (arg !== mode) await switchMode(arg as Mode, ctx);
+				if (arg !== mode) await switchMode(arg, ctx);
 				return;
 			}
 			await selectAndSwitch(ctx);

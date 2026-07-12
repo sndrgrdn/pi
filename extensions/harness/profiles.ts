@@ -16,6 +16,11 @@ export type Mode = "low" | "medium" | "high";
 export const MODES = ["low", "medium", "high"] as const satisfies readonly Mode[];
 export const DEFAULT_MODE: Mode = "medium";
 
+/** Type guard: is `value` one of the three fixed Modes? */
+export function isMode(value: unknown): value is Mode {
+	return typeof value === "string" && (MODES as readonly string[]).includes(value);
+}
+
 export type ReasoningLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 const REASONING_LEVELS: readonly string[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
 
@@ -194,7 +199,7 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 			fail("modes", "expected an object");
 		} else {
 			for (const [mode, value] of Object.entries(raw.modes)) {
-				if (!(MODES as readonly string[]).includes(mode)) {
+				if (!isMode(mode)) {
 					fail("modes", `unknown Mode "${mode}" (expected ${MODES.join(", ")})`);
 				} else {
 					checkRouteFields(`modes.${mode}`, value, ["model", "reasoning", "posture"]);
@@ -215,7 +220,7 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 						fail(`agents.${agent}`, "expected an object");
 					} else {
 						for (const [route, routeValue] of Object.entries(value)) {
-							if (!(MODES as readonly string[]).includes(route)) {
+							if (!isMode(route)) {
 								fail(`agents.${agent}`, `unknown route "${route}" (expected ${MODES.join(", ")})`);
 							} else {
 								checkRouteFields(`agents.${agent}.${route}`, routeValue, ["model", "reasoning"]);
