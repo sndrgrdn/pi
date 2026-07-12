@@ -69,8 +69,8 @@ Small prompt blocks tuning **reasoning depth, initiative, and verification inten
 
 ### 2.5 Persistence & UI
 
-- Selected Mode (including `null`) persists globally for future sessions. Resumed sessions restore their recorded Mode state. Startup, new-session, reload, and resume never apply a Mode route: pi's restored/settings model, provider, and reasoning remain authoritative. Only explicit `/mode` or `ctrl+shift+m` selection applies a route.
-- `/mode` command and `ctrl+shift+m` both open a `low`/`medium`/`high` selector.
+- Selected Mode (including `null`) persists globally for future sessions. Resumed sessions restore their recorded Mode state. Startup, new-session, reload, and resume never apply a Mode route: pi's restored/settings model, provider, and reasoning remain authoritative. Only explicit `/mode` or `alt+s` selection applies a route.
+- `/mode` command and `alt+s` (Option+S on macOS) both open a `low`/`medium`/`high` selector.
 - Prompt-box's editor top border shows only the named Mode (`╭──── medium ─╮`). For `null`, prompt-box shows its existing model/reasoning display (`╭──── GPT-5.6 Sol · med ─╮`). Mode *state* is harness-owned (`modes.ts`), published on the shared extension event bus (`harness:mode`, with a `harness:mode:request` reply); *rendering* belongs to prompt-box, which owns all border styling.
 - Manual model or reasoning changes persist `null` and inject no Mode posture. Explicit Mode selection persists the named Mode and injects its posture.
 - No per-agent lines in the Mode selector; agent route tables are documented in `/mode` docs.

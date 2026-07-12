@@ -25,7 +25,7 @@ Dispositions for existing V1 material:
   ```
   extensions/harness/
     index.ts            # extension entry: wires everything
-    modes.ts            # Mode state, /mode, ctrl+shift+m, mode events, persistence
+    modes.ts            # Mode state, /mode, alt+s, mode events, persistence
     profiles.ts         # built-in Profiles + profiles.json load/validate/merge
     registry.ts         # flat agent-definition registry (§3.1)
     runner.ts           # shared subagent runner (createAgentSession)
@@ -83,7 +83,7 @@ Foundation: every later agent toolbox embeds these three tools.
 
 - [ ] `profiles.ts`: built-in Profile defaults (route tables §8); `~/.pi/agent/profiles.json` two-section partial-override schema, strict validation with precise errors (§2.3)
 - [ ] Posture blocks (low/medium/high + Task posture text) as prompt assets; uniform injection — append active posture to system prompt at session build (§2.4, §9.4)
-- [ ] `modes.ts`: `low | medium | high | null` Mode state; `/mode` command + `ctrl+shift+m` selector; Mode published on the event bus for prompt-box to render in the editor top border; global persistence; resume restores recorded Mode state (§2.5)
+- [ ] `modes.ts`: `low | medium | high | null` Mode state; `/mode` command + `alt+s` selector; Mode published on the event bus for prompt-box to render in the editor top border; global persistence; resume restores recorded Mode state (§2.5)
 - [ ] Main route switching only on explicit Mode selection (Terra/low, Sol/medium, Sol/xhigh); startup/new/reload/resume preserve pi's model/provider/reasoning; manual model/reasoning changes persist `null`
 - [ ] Unit tests: profiles.json validation matrix (unknown Mode key, unknown agent key, unknown field, bad model id, bad reasoning level → each a precise error), merge semantics (partial override over defaults), route resolution per agent per Mode, posture selection
 
