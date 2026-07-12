@@ -1,6 +1,7 @@
 /**
  * Modes — session Mode state, `/mode` + ctrl+s entry points, editor-border
- * indicator, persistence, and posture injection (spec §2.1, §2.4–§2.5).
+ * indicator (published for prompt-box to render), persistence, and posture
+ * injection (spec §2.1, §2.4–§2.5).
  *
  * Three fixed Modes (low/medium/high, default medium). Switching a Mode
  * re-routes Main's model/reasoning through the Profile layer. Manual model
@@ -24,38 +25,6 @@ import {
 } from "./profiles.ts";
 
 // ── Pure helpers (unit-tested) ────────────────────────────────────
-
-/**
- * Right-align a Mode label into a rendered top-border line (§2.5:
- * `╭──── medium ─╮`), keeping the visible width constant by shrinking the
- * longest `─` fill run. Lines without a corner or without room pass through
- * unchanged. ANSI styling in the line is preserved.
- */
-export function decorateTopBorder(
-	line: string,
-	label: string,
-	style: (s: string) => string = (s) => s,
-): string {
-	if (!line.includes("╮")) return line;
-
-	const insertWidth = label.length + 3; // " label ─"
-	let bestStart = -1;
-	let bestLen = 0;
-	const runs = /─+/g;
-	for (let m = runs.exec(line); m !== null; m = runs.exec(line)) {
-		if (m[0].length > bestLen) {
-			bestStart = m.index;
-			bestLen = m[0].length;
-		}
-	}
-	// Keep at least one fill dash so the border stays a border.
-	if (bestStart === -1 || bestLen < insertWidth + 1) return line;
-
-	const shrunk =
-		line.slice(0, bestStart) + "─".repeat(bestLen - insertWidth) + line.slice(bestStart + bestLen);
-	const corner = shrunk.lastIndexOf("╮");
-	return `${shrunk.slice(0, corner)} ${style(label)} ─${shrunk.slice(corner)}`;
-}
 
 /**
  * Initial Mode precedence (§2.5): the session's recorded Mode (resume) wins
@@ -120,16 +89,25 @@ function recordedSessionMode(ctx: ExtensionContext): unknown {
 	return (last?.data as { mode?: unknown } | undefined)?.mode;
 }
 
-// ── Wiring ────────────────────────────────────────────────────────
+// ── Cross-extension Mode indicator (events bus) ───────────────────
 
-/** Instance marker preventing double decoration of a wrapped editor. */
-const WRAPPED = Symbol.for("pi-harness.mode-border");
+/** Emitted with the active Mode whenever it changes (payload: `Mode`). */
+export const MODE_EVENT = "harness:mode";
+/** Emit this to ask the harness to re-announce the current Mode. */
+export const MODE_REQUEST_EVENT = "harness:mode:request";
+
+// ── Wiring ────────────────────────────────────────────────────────
 
 export function registerModes(pi: ExtensionAPI): void {
 	// Load at startup so an invalid profiles.json fails loudly here — no
 	// fallback, no recovery (§2.3).
 	const profiles: ResolvedProfiles = loadProfiles(join(getAgentDir(), "profiles.json"));
 	let mode: Mode = DEFAULT_MODE;
+
+	// Mode indicator (§2.5): state lives here; rendering lives in the
+	// prompt-box extension, which subscribes to MODE_EVENT.
+	const announceMode = () => pi.events.emit(MODE_EVENT, mode);
+	pi.events.on(MODE_REQUEST_EVENT, announceMode);
 
 	/**
 	 * Point Main's model/reasoning at the route for `next` (§2.1). Returns
@@ -153,6 +131,7 @@ export function registerModes(pi: ExtensionAPI): void {
 
 	async function switchMode(next: Mode, ctx: ExtensionContext): Promise<void> {
 		mode = next;
+		announceMode();
 		const applied = await applyRoute(next, ctx);
 		writeGlobalMode(next);
 		pi.appendEntry(MODE_ENTRY_TYPE, { mode: next });
@@ -165,32 +144,6 @@ export function registerModes(pi: ExtensionAPI): void {
 	async function selectAndSwitch(ctx: ExtensionContext): Promise<void> {
 		const choice = await ctx.ui.select(`Mode (active: ${mode})`, [...MODES]);
 		if (choice && choice !== mode) await switchMode(choice as Mode, ctx);
-	}
-
-	// Mode indicator, right-aligned in the editor top border (§2.5). Runs on
-	// resources_discover — after every session_start, so it wraps whatever
-	// editor component other extensions (e.g. prompt-box) installed.
-	function wrapEditor(ctx: ExtensionContext): void {
-		const previous = ctx.ui.getEditorComponent();
-		if (!previous) return; // default editor: no border line to decorate
-		ctx.ui.setEditorComponent((tui, theme, keybindings) => {
-			const base = previous(tui, theme, keybindings);
-			const marked = base as unknown as Record<symbol, boolean>;
-			if (marked[WRAPPED]) return base;
-			marked[WRAPPED] = true;
-			const render = base.render.bind(base);
-			base.render = (width: number) => {
-				const lines = render(width);
-				const top = lines.findIndex((l) => l.includes("╭"));
-				if (top !== -1) {
-					lines[top] = decorateTopBorder(lines[top] as string, mode, (s) =>
-						ctx.ui.theme.fg("accent", s),
-					);
-				}
-				return lines;
-			};
-			return base;
-		});
 	}
 
 	pi.registerCommand("mode", {
@@ -226,11 +179,8 @@ export function registerModes(pi: ExtensionAPI): void {
 		// Resume restores the session's recorded Mode, re-resolved against
 		// current Profiles; otherwise the globally persisted Mode (§2.5).
 		mode = pickInitialMode(recordedSessionMode(ctx), readGlobalMode());
+		announceMode();
 		await applyRoute(mode, ctx);
 		pi.appendEntry(MODE_ENTRY_TYPE, { mode });
-	});
-
-	pi.on("resources_discover", async (_event, ctx) => {
-		wrapEditor(ctx);
 	});
 }

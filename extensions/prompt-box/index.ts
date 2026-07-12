@@ -28,11 +28,18 @@ export default function promptBox(pi: ExtensionAPI) {
   let editor: PromptBoxEditor | undefined;
   let branch: string | null = null;
   let unsubMetrics: (() => void) | undefined;
+  let harnessMode: string | null = null;
 
   // Wire up the metrics module
   registerMetrics(pi);
 
-  // ── tr: model · thinking ─────────
+  // Active harness Mode (published by extensions/harness modes.ts).
+  pi.events.on("harness:mode", (mode: unknown) => {
+    harnessMode = typeof mode === "string" ? mode : null;
+    editor?.refresh();
+  });
+
+  // ── tr: model · thinking · mode ──
 
   const tr = (ctx: ExtensionContext) => {
     const theme = ctx.ui.theme;
@@ -48,6 +55,10 @@ export default function promptBox(pi: ExtensionAPI) {
       const label = THINK_LABEL[level] ?? level.slice(0, 3);
       const colorFn = theme.getThinkingBorderColor(level);
       parts.push(colorFn(label));
+    }
+
+    if (harnessMode) {
+      parts.push(theme.fg("accent", harnessMode));
     }
 
     return parts.join(dot);
@@ -96,6 +107,10 @@ export default function promptBox(pi: ExtensionAPI) {
 
   pi.on("session_start", (_event, ctx) => {
     branch = null;
+
+    // Harness announces on its own session_start; request covers reloads
+    // and any ordering where we missed the announcement.
+    pi.events.emit("harness:mode:request", undefined);
 
     // Subscribe to metrics changes for UI refresh
     unsubMetrics = onUpdate(() => editor?.refresh());
