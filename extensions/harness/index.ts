@@ -17,6 +17,7 @@ import skillTool from "./skill/index.ts";
 import { registerModes } from "./modes.ts";
 import { registerFinder } from "./tools/finder.ts";
 import { registerLibrarian } from "./tools/librarian.ts";
+import registerRead from "./tools/read.ts";
 
 export default function harness(pi: ExtensionAPI) {
 	// Per-session background-process registry (spec §3.3), shared by the
@@ -30,6 +31,7 @@ export default function harness(pi: ExtensionAPI) {
 	// Phase 2 (§4.4): apply_patch, the sole editor. Builtin edit/write stay
 	// enabled until the Phase 10 surface lock.
 	registerApplyPatch(pi);
+	registerRead(pi);
 
 	skillTool(pi); // Phase 3 (§4.5)
 
