@@ -193,9 +193,20 @@ describe("mergeProfiles", () => {
 				task: { high: { model: "anthropic/claude-opus-4-6" } },
 			},
 		});
-		expect(merged.agents.finder).toEqual({ model: "anthropic/claude-haiku-4-5", reasoning: "low" });
-		expect(merged.agents.task.high).toEqual({ model: "anthropic/claude-opus-4-6", reasoning: "high" });
-		expect(merged.agents.task.low).toEqual(BUILTIN_PROFILES.agents.task.low);
+		// a flat override is Mode-invariant: it applies under every Mode
+		for (const mode of ["low", "medium", "high"] as const) {
+			expect(resolveAgentRoute(merged, "finder", mode)).toEqual({
+				model: HAIKU,
+				reasoning: "low",
+			});
+		}
+		expect(resolveAgentRoute(merged, "task", "high")).toEqual({
+			model: "anthropic/claude-opus-4-6",
+			reasoning: "high",
+		});
+		expect(resolveAgentRoute(merged, "task", "low")).toEqual(
+			resolveAgentRoute(BUILTIN_PROFILES, "task", "low"),
+		);
 		expect(merged.agents.oracle).toEqual(BUILTIN_PROFILES.agents.oracle);
 	});
 

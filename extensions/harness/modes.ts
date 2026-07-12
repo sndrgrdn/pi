@@ -9,7 +9,7 @@
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { CustomEntry, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import {
 	DEFAULT_MODE,
@@ -90,13 +90,11 @@ function writeGlobalMode(mode: Mode): void {
 }
 
 function recordedSessionMode(ctx: ExtensionContext): unknown {
-	const entries = ctx.sessionManager.getEntries() as Array<{
-		type: string;
-		customType?: string;
-		data?: { mode?: unknown };
-	}>;
-	const last = entries.filter((e) => e.type === "custom" && e.customType === MODE_ENTRY_TYPE).pop();
-	return last?.data?.mode;
+	const last = ctx.sessionManager
+		.getEntries()
+		.filter((e): e is CustomEntry => e.type === "custom" && e.customType === MODE_ENTRY_TYPE)
+		.pop();
+	return (last?.data as { mode?: unknown } | undefined)?.mode;
 }
 
 // ── Wiring ────────────────────────────────────────────────────────
@@ -110,29 +108,35 @@ export function registerModes(pi: ExtensionAPI): void {
 	const profiles: ResolvedProfiles = loadProfiles(join(getAgentDir(), "profiles.json"));
 	let mode: Mode = DEFAULT_MODE;
 
-	/** Point Main's model/reasoning at the route for `next` (§2.1). */
-	async function applyRoute(next: Mode, ctx: ExtensionContext): Promise<void> {
+	/**
+	 * Point Main's model/reasoning at the route for `next` (§2.1). Returns
+	 * whether the route was applied; failures have already been notified.
+	 */
+	async function applyRoute(next: Mode, ctx: ExtensionContext): Promise<boolean> {
 		const route = resolveMainRoute(profiles, next);
 		const [provider, ...rest] = route.model.split("/");
 		const model = ctx.modelRegistry.find(provider ?? "", rest.join("/"));
 		if (!model) {
 			ctx.ui.notify(`Mode "${next}": model ${route.model} not found in the model registry`, "error");
-			return;
+			return false;
 		}
 		if (!(await pi.setModel(model))) {
 			ctx.ui.notify(`Mode "${next}": no API key for ${route.model}`, "error");
-			return;
+			return false;
 		}
 		pi.setThinkingLevel(route.reasoning);
+		return true;
 	}
 
 	async function switchMode(next: Mode, ctx: ExtensionContext): Promise<void> {
 		mode = next;
-		await applyRoute(next, ctx);
+		const applied = await applyRoute(next, ctx);
 		writeGlobalMode(next);
 		pi.appendEntry(MODE_ENTRY_TYPE, { mode: next });
-		const route = resolveMainRoute(profiles, next);
-		ctx.ui.notify(`Mode: ${next} (${route.model} · ${route.reasoning})`, "info");
+		if (applied) {
+			const route = resolveMainRoute(profiles, next);
+			ctx.ui.notify(`Mode: ${next} (${route.model} · ${route.reasoning})`, "info");
+		}
 	}
 
 	async function selectAndSwitch(ctx: ExtensionContext): Promise<void> {

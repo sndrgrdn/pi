@@ -36,17 +36,17 @@ export interface ModeProfile extends Route {
 	posture: string;
 }
 
-/** Mode-dependent agents route per Mode; Mode-invariant agents are flat. */
 export type AgentKey = "finder" | "librarian" | "oracle" | "task";
 
+/**
+ * Resolved bundles. Agents are uniformly `Record<Mode, Route>`: Mode-invariant
+ * agents (Finder, Librarian) simply carry the same route under every Mode —
+ * the flat-vs-per-route distinction is a profiles.json schema fact (§9.1),
+ * not a resolved-bundle fact.
+ */
 export interface ResolvedProfiles {
 	modes: Record<Mode, ModeProfile>;
-	agents: {
-		finder: Route;
-		librarian: Route;
-		oracle: Record<Mode, Route>;
-		task: Record<Mode, Route>;
-	};
+	agents: Record<AgentKey, Record<Mode, Route>>;
 }
 
 // ── Built-in defaults (route summary §8) ──────────────────────────
@@ -72,6 +72,11 @@ export const POSTURES: Record<Mode, string> = {
 /** Task posture block, appended to Task child prompts (§9.4). */
 export const TASK_POSTURE = readPrompt("task-posture.md");
 
+/** A Mode-invariant agent routes identically under every Mode. */
+function invariantRoute(route: Route): Record<Mode, Route> {
+	return { low: { ...route }, medium: { ...route }, high: { ...route } };
+}
+
 export const BUILTIN_PROFILES: ResolvedProfiles = {
 	modes: {
 		low: { model: TERRA, reasoning: "low", posture: POSTURES.low },
@@ -79,8 +84,8 @@ export const BUILTIN_PROFILES: ResolvedProfiles = {
 		high: { model: SOL, reasoning: "xhigh", posture: POSTURES.high },
 	},
 	agents: {
-		finder: { model: HAIKU, reasoning: "minimal" },
-		librarian: { model: SOL, reasoning: "off" },
+		finder: invariantRoute({ model: HAIKU, reasoning: "minimal" }),
+		librarian: invariantRoute({ model: SOL, reasoning: "off" }),
 		oracle: {
 			low: { model: SOL, reasoning: "high" },
 			medium: { model: SOL, reasoning: "high" },
@@ -107,10 +112,7 @@ export function resolveMainRoute(profiles: ResolvedProfiles, mode: Mode): Route 
  * the parent's Mode, Task from its per-call `mode` param (§8).
  */
 export function resolveAgentRoute(profiles: ResolvedProfiles, agent: AgentKey, mode: Mode): Route {
-	const entry = profiles.agents[agent];
-	return agent === "oracle" || agent === "task"
-		? (entry as Record<Mode, Route>)[mode]
-		: (entry as Route);
+	return profiles.agents[agent][mode];
 }
 
 // ── profiles.json validation (§2.3) ───────────────────────────────
@@ -148,21 +150,24 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Strictly validate a parsed profiles.json. Collects every problem so one
- * fix pass suffices; throws a single Error listing all of them.
+ * Strictly parse a profiles.json document into a `ProfilesOverride` built
+ * from the checked fields only — the raw shape never flows inward. Collects
+ * every problem so one fix pass suffices; throws a single Error listing all
+ * of them.
  */
 export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 	const errors: string[] = [];
 	const fail = (path: string, why: string) => errors.push(`${path}: ${why}`);
 
-	const checkRouteFields = (
+	const parseRouteFields = (
 		path: string,
 		value: unknown,
 		allowed: readonly string[],
-	): void => {
+	): ModeOverride => {
+		const out: ModeOverride = {};
 		if (!isPlainObject(value)) {
 			fail(path, "expected an object");
-			return;
+			return out;
 		}
 		for (const [field, fieldValue] of Object.entries(value)) {
 			if (!allowed.includes(field)) {
@@ -170,6 +175,8 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 			} else if (field === "model") {
 				if (typeof fieldValue !== "string" || !MODEL_ID_RE.test(fieldValue)) {
 					fail(`${path}.model`, `invalid model id ${JSON.stringify(fieldValue)} (expected "provider/model-id")`);
+				} else {
+					out.model = fieldValue;
 				}
 			} else if (field === "reasoning") {
 				if (typeof fieldValue !== "string" || !REASONING_LEVELS.includes(fieldValue)) {
@@ -177,16 +184,25 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 						`${path}.reasoning`,
 						`invalid reasoning level ${JSON.stringify(fieldValue)} (expected ${REASONING_LEVELS.join(", ")})`,
 					);
+				} else {
+					out.reasoning = fieldValue as ReasoningLevel;
 				}
-			} else if (field === "posture" && typeof fieldValue !== "string") {
-				fail(`${path}.posture`, "expected a string");
+			} else if (field === "posture") {
+				if (typeof fieldValue !== "string") {
+					fail(`${path}.posture`, "expected a string");
+				} else {
+					out.posture = fieldValue;
+				}
 			}
 		}
+		return out;
 	};
 
 	if (!isPlainObject(raw)) {
 		throw new Error("Invalid profiles.json: expected an object at the top level");
 	}
+
+	const parsed: ProfilesOverride = {};
 
 	for (const key of Object.keys(raw)) {
 		if (key !== "modes" && key !== "agents") {
@@ -198,11 +214,12 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 		if (!isPlainObject(raw.modes)) {
 			fail("modes", "expected an object");
 		} else {
+			parsed.modes = {};
 			for (const [mode, value] of Object.entries(raw.modes)) {
 				if (!isMode(mode)) {
 					fail("modes", `unknown Mode "${mode}" (expected ${MODES.join(", ")})`);
 				} else {
-					checkRouteFields(`modes.${mode}`, value, ["model", "reasoning", "posture"]);
+					parsed.modes[mode] = parseRouteFields(`modes.${mode}`, value, ["model", "reasoning", "posture"]);
 				}
 			}
 		}
@@ -212,6 +229,7 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 		if (!isPlainObject(raw.agents)) {
 			fail("agents", "expected an object");
 		} else {
+			parsed.agents = {};
 			for (const [agent, value] of Object.entries(raw.agents)) {
 				if (!(AGENT_KEYS as readonly string[]).includes(agent)) {
 					fail("agents", `unknown agent "${agent}" (expected ${AGENT_KEYS.join(", ")})`);
@@ -219,16 +237,22 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 					if (!isPlainObject(value)) {
 						fail(`agents.${agent}`, "expected an object");
 					} else {
+						const routes: Partial<Record<Mode, RouteOverride>> = {};
 						for (const [route, routeValue] of Object.entries(value)) {
 							if (!isMode(route)) {
 								fail(`agents.${agent}`, `unknown route "${route}" (expected ${MODES.join(", ")})`);
 							} else {
-								checkRouteFields(`agents.${agent}.${route}`, routeValue, ["model", "reasoning"]);
+								routes[route] = parseRouteFields(`agents.${agent}.${route}`, routeValue, ["model", "reasoning"]);
 							}
 						}
+						parsed.agents[agent as "oracle" | "task"] = routes;
 					}
 				} else {
-					checkRouteFields(`agents.${agent}`, value, ["model", "reasoning"]);
+					parsed.agents[agent as "finder" | "librarian"] = parseRouteFields(
+						`agents.${agent}`,
+						value,
+						["model", "reasoning"],
+					);
 				}
 			}
 		}
@@ -237,7 +261,7 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 	if (errors.length > 0) {
 		throw new Error(`Invalid profiles.json:\n${errors.map((e) => `  - ${e}`).join("\n")}`);
 	}
-	return raw as ProfilesOverride;
+	return parsed;
 }
 
 // ── Merge (partial override over built-in defaults) ───────────────
@@ -257,6 +281,13 @@ function mergePerRoute(
 	};
 }
 
+/** A flat (Mode-invariant) agent override applies under every Mode. */
+function flatOverride(
+	override: RouteOverride | undefined,
+): Partial<Record<Mode, RouteOverride>> | undefined {
+	return override ? { low: override, medium: override, high: override } : undefined;
+}
+
 /** Field-level merge of a validated override over the built-in defaults. */
 export function mergeProfiles(base: ResolvedProfiles, override: ProfilesOverride): ResolvedProfiles {
 	return {
@@ -266,8 +297,8 @@ export function mergeProfiles(base: ResolvedProfiles, override: ProfilesOverride
 			high: mergeRoute(base.modes.high, override.modes?.high),
 		},
 		agents: {
-			finder: mergeRoute(base.agents.finder, override.agents?.finder),
-			librarian: mergeRoute(base.agents.librarian, override.agents?.librarian),
+			finder: mergePerRoute(base.agents.finder, flatOverride(override.agents?.finder)),
+			librarian: mergePerRoute(base.agents.librarian, flatOverride(override.agents?.librarian)),
 			oracle: mergePerRoute(base.agents.oracle, override.agents?.oracle),
 			task: mergePerRoute(base.agents.task, override.agents?.task),
 		},
