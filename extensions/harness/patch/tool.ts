@@ -25,8 +25,12 @@ interface ApplyPatchParams {
 	patch: string;
 }
 
+/** TUI-facing per-file summary. Full file contents deliberately excluded
+ * from details to keep session records lean. */
+export type ApplyPatchFileDetail = Pick<AppliedFile, "kind" | "path" | "movePath" | "diff" | "added" | "removed">;
+
 export interface ApplyPatchDetails {
-	files: AppliedFile[];
+	files: ApplyPatchFileDetail[];
 }
 
 const description = [
@@ -70,9 +74,19 @@ export function createApplyPatchTool(): ToolDefinition<any, any, any> {
 		async execute(_toolCallId, params: ApplyPatchParams, _signal, _onUpdate, ctx) {
 			const run = async () => {
 				const result = await applyPatch(params.patch, ctx.cwd);
+				const files = result.files.map(
+					({ kind, path, movePath, diff, added, removed }): ApplyPatchFileDetail => ({
+						kind,
+						path,
+						movePath,
+						diff,
+						added,
+						removed,
+					}),
+				);
 				return {
 					content: [{ type: "text", text: result.summary }],
-					details: { files: result.files } satisfies ApplyPatchDetails,
+					details: { files } satisfies ApplyPatchDetails,
 				};
 			};
 			const turn = mutex.then(run, run);

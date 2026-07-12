@@ -41,6 +41,9 @@ describe("apply_patch tool", () => {
 		expect(result.details?.files).toHaveLength(2);
 		expect(result.details?.files[0]).toMatchObject({ kind: "add", path: "a.txt", diff: "+1 added" });
 		expect(result.details?.files[1]).toMatchObject({ kind: "update", path: "u.txt", diff: "-1 old\n+1 new" });
+		// Full file contents stay out of the session record.
+		expect(result.details?.files[0]).not.toHaveProperty("newContents");
+		expect(result.details?.files[1]).not.toHaveProperty("oldContents");
 	});
 
 	it("surfaces collected preflight errors as a tool error", async () => {

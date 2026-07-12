@@ -199,12 +199,19 @@ export interface DerivedContents {
 	replacements: Replacement[];
 }
 
+/**
+ * Split file contents into lines, dropping the trailing empty element from
+ * the final newline so line counts match standard `diff` behavior.
+ */
+export function splitContentLines(contents: string): string[] {
+	const lines = contents.split("\n");
+	if (lines[lines.length - 1] === "") lines.pop();
+	return lines;
+}
+
 /** Derive the full new file contents for an Update hunk (spec §4.4). */
 export function deriveNewContents(originalContents: string, chunks: UpdateChunk[]): DerivedContents {
-	const originalLines = originalContents.split("\n");
-	// Drop the trailing empty element from the final newline so line counts
-	// match standard `diff` behavior.
-	if (originalLines[originalLines.length - 1] === "") originalLines.pop();
+	const originalLines = splitContentLines(originalContents);
 
 	const { replacements, errors } = computeReplacements(originalLines, chunks);
 	if (errors.length > 0) return { newContents: undefined, errors, originalLines, replacements: [] };

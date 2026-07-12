@@ -9,7 +9,7 @@
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { buildDisplayDiff, countChanges } from "./diff.ts";
-import { deriveNewContents, type Replacement } from "./matcher.ts";
+import { deriveNewContents, type Replacement, splitContentLines } from "./matcher.ts";
 import { parsePatch } from "./parser.ts";
 
 /** Injectable filesystem seam (used by tests to force mid-write failures). */
@@ -52,13 +52,6 @@ export interface AppliedFile {
 	diff: string;
 	added: number;
 	removed: number;
-}
-
-/** Split file contents into diff lines, dropping the trailing-newline element. */
-function contentLines(contents: string): string[] {
-	const lines = contents.split("\n");
-	if (lines[lines.length - 1] === "") lines.pop();
-	return lines;
 }
 
 function diffFields(originalLines: string[], replacements: Replacement[]): Pick<AppliedFile, "diff" | "added" | "removed"> {
@@ -115,7 +108,7 @@ export async function applyPatch(patch: string, cwd: string, ops: PatchFsOps = d
 						movePath: undefined,
 						oldContents: prior,
 						newContents: hunk.contents,
-						...diffFields([], [{ index: 0, oldLen: 0, newLines: contentLines(hunk.contents) }]),
+						...diffFields([], [{ index: 0, oldLen: 0, newLines: splitContentLines(hunk.contents) }]),
 					},
 					steps: [{ op: "write", absPath, contents: hunk.contents, prior, makeParents: true }],
 				});
@@ -131,7 +124,7 @@ export async function applyPatch(patch: string, cwd: string, ops: PatchFsOps = d
 					break;
 				}
 				const prior = await ops.readFile(absPath);
-				const priorLines = contentLines(prior);
+				const priorLines = splitContentLines(prior);
 				planned.push({
 					file: {
 						kind: "delete",
