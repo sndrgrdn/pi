@@ -16,6 +16,10 @@ _Avoid_: mode, model preset
 The set of model-visible tools available to the main agent. Pi Harness V2 designs this surface from an empty baseline, admitting each tool only through an explicit capability decision.
 _Avoid_: profile tools, default tools
 
+**MCP Gateway**:
+The single model-facing `mcp` tool supplied by `pi-mcp-adapter`; its behavior remains adapter-owned. This is distinct from MCP-backed tools pinned as static members of a specific agent toolbox.
+_Avoid_: MCP tools, MCP integration
+
 **Minimal High-Quality Primitive**:
 A model-facing interface that is cohesive, predictable, composable, and materially useful. V2 minimizes total cognitive and schema surface rather than raw tool count; responsibilities with distinct lifecycles or authority boundaries remain separate.
 _Avoid_: fewest tools, merged gateway, convenience tool
@@ -39,6 +43,10 @@ _Avoid_: skill tool, skill runtime
 **Skill Delivery**:
 The V2 mechanism by which agents discover and load the Skill Corpus. Existing built-in and custom mechanisms carry no presumption of reuse.
 _Avoid_: skill corpus, inherited skill tool
+
+**Checkout Cache**:
+The shared local store of partial clones of remote repositories at `~/.cache/checkouts/<host>/<org>/<repo>`, kept fresh by throttled refresh and never edited in place.
+_Avoid_: clone dir, temp checkout
 
 **Subagent**:
 A delegated agent run started by the primary agent to complete a bounded assignment with its own context.
