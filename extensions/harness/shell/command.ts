@@ -9,15 +9,10 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { delimiter, isAbsolute, join, resolve } from "node:path";
-import type { ExtensionAPI, ToolDefinition, TruncationResult } from "@earendil-works/pi-coding-agent";
-import {
-	createBashToolDefinition,
-	DEFAULT_MAX_BYTES,
-	getAgentDir,
-	getShellConfig,
-	truncateTail,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { createBashToolDefinition, getAgentDir, getShellConfig } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { appendStatus, formatShellOutput, UPDATE_THROTTLE_MS } from "./output.ts";
 import {
 	BackgroundShellRegistry,
 	clampTimeoutMs,
@@ -26,8 +21,6 @@ import {
 	MAX_TIMEOUT_MS,
 	ShellOutputFile,
 } from "./registry.ts";
-
-const UPDATE_THROTTLE_MS = 100;
 
 const schema = Type.Object({
 	command: Type.String({ description: "The shell command to execute. Do not use cd — use the workdir parameter instead." }),
@@ -68,28 +61,6 @@ function shellEnv(): NodeJS.ProcessEnv {
 
 function resolveWorkdir(cwd: string, workdir?: string): string {
 	return workdir ? (isAbsolute(workdir) ? workdir : resolve(cwd, workdir)) : cwd;
-}
-
-interface FormattedOutput {
-	text: string;
-	details?: { truncation: TruncationResult; fullOutputPath: string };
-}
-
-/** Bound raw output pi-style and append the truncation footer. */
-export function formatShellOutput(raw: string, fullOutputPath: string): FormattedOutput {
-	const truncation = truncateTail(raw.trimEnd());
-	if (!truncation.truncated) {
-		return { text: truncation.content };
-	}
-	const startLine = truncation.totalLines - truncation.outputLines + 1;
-	const endLine = truncation.totalLines;
-	const limit = truncation.truncatedBy === "bytes" ? ` (${Math.round(DEFAULT_MAX_BYTES / 1024)}KB limit)` : "";
-	const footer = `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines}${limit}. Full output: ${fullOutputPath}]`;
-	return { text: truncation.content + footer, details: { truncation, fullOutputPath } };
-}
-
-function appendStatus(text: string, status: string): string {
-	return `${text ? `${text}\n\n` : ""}${status}`;
 }
 
 export function createShellCommandTool(registry: BackgroundShellRegistry): ToolDefinition<any, any, any> {

@@ -10,8 +10,9 @@
  */
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { createBashToolDefinition } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { formatShellOutput } from "./command.ts";
+import { appendStatus, formatShellOutput, UPDATE_THROTTLE_MS } from "./output.ts";
 import {
 	type BackgroundShellRegistry,
 	clampTimeoutMs,
@@ -19,8 +20,6 @@ import {
 	MAX_TIMEOUT_MS,
 	type ShellProcessRecord,
 } from "./registry.ts";
-
-const UPDATE_THROTTLE_MS = 100;
 
 const schema = Type.Object({
 	id: Type.String({ description: "Background process id returned by shell_command (e.g. shell-3)." }),
@@ -43,10 +42,6 @@ const description = [
 	"The read that observes exit reports the exit status exactly once and forgets the id; a nonzero exit is a tool error.",
 	"Output is truncated to the last 2000 lines or 50KB; the full output temp-file path is included when truncated.",
 ].join(" ");
-
-function appendStatus(text: string, status: string): string {
-	return `${text ? `${text}\n\n` : ""}${status}`;
-}
 
 function exitLabel(record: ShellProcessRecord): string {
 	return `exited ${record.exitCode ?? "(signal)"}`;
@@ -129,16 +124,21 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 				registry.endRead(record);
 			}
 		},
-		// Pi bash widget chrome, id-prefixed with the original command.
+		// Pi bash widget chrome, id-prefixed: `shell-N · $ <original command>`
+		// (spec §4.2 UI). Title is hand-built because pi's formatBashCall
+		// hardcodes the `$` prefix; renderResult still delegates to pi's bash
+		// renderer, sharing the same elapsed-time state.
 		renderCall(args: ShellStatusParams | undefined, theme, context) {
-			const command = args ? (registry.get(args.id)?.command ?? "") : "";
-			const mapped = args
-				? {
-						command: command ? `${args.id} · ${command}` : args.id,
-						timeout: args.timeout_ms !== undefined ? clampTimeoutMs(args.timeout_ms) / 1000 : undefined,
-					}
-				: args;
-			return base.renderCall?.(mapped as any, theme, context as any);
+			const state = context.state as { startedAt?: number; endedAt?: number };
+			if (context.executionStarted && state.startedAt === undefined) {
+				state.startedAt = Date.now();
+				state.endedAt = undefined;
+			}
+			const command = args ? registry.commandFor(args.id) : undefined;
+			const title = args ? (command ? `${args.id} · $ ${command}` : args.id) : "...";
+			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+			text.setText(theme.fg("toolTitle", theme.bold(title)));
+			return text;
 		},
 		renderResult(result, options, theme, context) {
 			return base.renderResult?.(result, options, theme, context as any);

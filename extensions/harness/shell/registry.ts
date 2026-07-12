@@ -125,6 +125,8 @@ export interface ShellProcessRecord extends TrackInput {
 export class BackgroundShellRegistry {
 	private nextId = 1;
 	private records = new Map<string, ShellProcessRecord>();
+	/** id → command, retained after completeRead so historic TUI re-renders keep their title. */
+	private commands = new Map<string, string>();
 	private exitHookInstalled = false;
 
 	/** Track a process that outlived its foreground window. Allocates `shell-N`. */
@@ -153,12 +155,18 @@ export class BackgroundShellRegistry {
 			},
 		);
 		this.records.set(record.id, record);
+		this.commands.set(record.id, record.command);
 		this.installExitHook();
 		return record;
 	}
 
 	get(id: string): ShellProcessRecord | undefined {
 		return this.records.get(id);
+	}
+
+	/** Original command for an id; survives record deletion (render-only). */
+	commandFor(id: string): string | undefined {
+		return this.commands.get(id);
 	}
 
 	liveIds(): string[] {
