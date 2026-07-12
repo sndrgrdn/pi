@@ -70,12 +70,12 @@ Foundation: every later agent toolbox embeds these three tools.
 
 ## Phase 3 — Skill port (§4.5)
 
-- [ ] Port `skill.ts` into `harness/skill/` — V1 behavior verbatim: tool schema `{name}`, result format (`<skill_content>` + resources cap 20), autocomplete, `$name`/`/name` triggers with path-fragment guards
-- [ ] Fold `disable-invocation.ts` logic in: strip pi's skill catalog from the system prompt (no catalog anywhere)
-- [ ] Compressed `<skill_directive>` hidden message (verify behavior vs V1's four-verb enumeration during smoke)
-- [ ] Miss-path: fuzzy-ranked **untruncated** `<available_skills>` list via `fuzzyFilter`
-- [ ] Compaction: extend the summarizer to record active skill names; if pi's compaction prompt is non-extendable, fall back to plain V1 behavior and note it in this file
-- [ ] Unit tests: trigger matcher (longest-first, multiple refs, path-fragment guards), directive construction, miss-path ranking + untruncated output, resources listing rules
+- [x] Port `skill.ts` into `harness/skill/` — V1 behavior verbatim: tool schema `{name}`, result format (`<skill_content>` + resources cap 20), autocomplete, `$name`/`/name` triggers with path-fragment guards
+- [x] Fold `disable-invocation.ts` logic in: strip pi's skill catalog from the system prompt (no catalog anywhere)
+- [x] Compressed `<skill_directive>` hidden message (verify behavior vs V1's four-verb enumeration during smoke)
+- [x] Miss-path: fuzzy-ranked **untruncated** `<available_skills>` list via `fuzzyFilter`
+- [x] Compaction: **contingency hit** — pi's compaction prompt is non-extendable (`SessionBeforeCompactResult` only allows `cancel` or full `compaction` replacement; no `customInstructions` passthrough, verified in `pi-coding-agent@0.79.1` `core/extensions/types.d.ts` + `core/agent-session.js`). Fell back to plain V1 behavior: no active-skill recording; recovery is re-invoking the trigger or prose activation via the miss-path list.
+- [x] Unit tests: trigger matcher (longest-first, multiple refs, path-fragment guards), directive construction, miss-path ranking + untruncated output, resources listing rules
 
 **Smoke:** `$skillname` in a prompt → tool call → instructions followed; unknown name recovers via list; system prompt contains no skill catalog; compaction round-trip re-loads the active skill.
 
