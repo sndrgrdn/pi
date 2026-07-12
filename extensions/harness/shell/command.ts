@@ -10,9 +10,9 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { delimiter, isAbsolute, join, resolve } from "node:path";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { createBashToolDefinition, getAgentDir, getShellConfig } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, getShellConfig } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { appendStatus, formatShellOutput, UPDATE_THROTTLE_MS } from "./output.ts";
+import { appendStatus, bashToolBase, formatShellOutput, UPDATE_THROTTLE_MS } from "./output.ts";
 import {
 	BackgroundShellRegistry,
 	clampTimeoutMs,
@@ -64,7 +64,6 @@ function resolveWorkdir(cwd: string, workdir?: string): string {
 }
 
 export function createShellCommandTool(registry: BackgroundShellRegistry): ToolDefinition<any, any, any> {
-	const base = createBashToolDefinition(process.cwd());
 	return {
 		name: "shell_command",
 		label: "shell_command",
@@ -194,10 +193,10 @@ export function createShellCommandTool(registry: BackgroundShellRegistry): ToolD
 			const mapped = args
 				? { command: args.command, timeout: args.timeout_ms !== undefined ? clampTimeoutMs(args.timeout_ms) / 1000 : undefined }
 				: args;
-			return base.renderCall?.(mapped as any, theme, context as any);
+			return bashToolBase.renderCall?.(mapped as any, theme, context as any);
 		},
 		renderResult(result, options, theme, context) {
-			return base.renderResult?.(result, options, theme, context as any);
+			return bashToolBase.renderResult?.(result, options, theme, context as any);
 		},
 	} as ToolDefinition<any, any, any>;
 }

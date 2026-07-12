@@ -93,6 +93,19 @@ describe("shell_command_cancel", () => {
 		expect(registry.get(id)).toBeUndefined();
 	});
 
+	it("concurrent double-cancel: one completes, the other gets the unknown-id error", async () => {
+		const { registry, cancel, command } = makeTools();
+		const id = await background(command, "sleep 30");
+		const results = await Promise.allSettled([run(cancel, { id }), run(cancel, { id })]);
+		const fulfilled = results.filter((r) => r.status === "fulfilled");
+		const rejected = results.filter((r) => r.status === "rejected");
+		expect(fulfilled).toHaveLength(1);
+		expect(rejected).toHaveLength(1);
+		expect((fulfilled[0] as any).value.content[0].text).toContain(`cancelled ${id}`);
+		expect((rejected[0] as any).reason.message).toMatch(/no tracked background process/);
+		expect(registry.get(id)).toBeUndefined();
+	});
+
 	it("unknown id errors loudly with the live-id list", async () => {
 		const { registry, command, cancel } = makeTools();
 		const id = await background(command, "sleep 30");

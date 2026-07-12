@@ -9,10 +9,8 @@
  * (nonzero → tool error) and deletes the record.
  */
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { createBashToolDefinition } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { appendStatus, formatShellOutput, UPDATE_THROTTLE_MS } from "./output.ts";
+import { appendStatus, bashToolBase, formatShellOutput, renderToolTitle, UPDATE_THROTTLE_MS } from "./output.ts";
 import {
 	type BackgroundShellRegistry,
 	clampTimeoutMs,
@@ -48,7 +46,6 @@ function exitLabel(record: ShellProcessRecord): string {
 }
 
 export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDefinition<any, any, any> {
-	const base = createBashToolDefinition(process.cwd());
 	return {
 		name: "shell_command_status",
 		label: "shell_command_status",
@@ -133,9 +130,8 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 			}
 		},
 		// Pi bash widget chrome, id-prefixed: `shell-N · $ <original command>`
-		// (spec §4.2 UI). Title is hand-built because pi's formatBashCall
-		// hardcodes the `$` prefix; renderResult still delegates to pi's bash
-		// renderer, sharing the same elapsed-time state.
+		// (spec §4.2 UI). renderResult delegates to pi's bash renderer, sharing
+		// the same elapsed-time state.
 		renderCall(args: ShellStatusParams | undefined, theme, context) {
 			const state = context.state as { startedAt?: number; endedAt?: number };
 			if (context.executionStarted && state.startedAt === undefined) {
@@ -144,12 +140,10 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 			}
 			const command = args ? registry.commandFor(args.id) : undefined;
 			const title = args ? (command ? `${args.id} · $ ${command}` : args.id) : "...";
-			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			text.setText(theme.fg("toolTitle", theme.bold(title)));
-			return text;
+			return renderToolTitle(title, theme, context);
 		},
 		renderResult(result, options, theme, context) {
-			return base.renderResult?.(result, options, theme, context as any);
+			return bashToolBase.renderResult?.(result, options, theme, context as any);
 		},
 	} as ToolDefinition<any, any, any>;
 }

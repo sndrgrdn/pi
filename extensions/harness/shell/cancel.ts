@@ -9,10 +9,8 @@
  * cancelled, deletes the record.
  */
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { createBashToolDefinition } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { appendStatus, formatShellOutput } from "./output.ts";
+import { appendStatus, bashToolBase, formatShellOutput, renderToolTitle } from "./output.ts";
 import { type BackgroundShellRegistry, killProcessTree } from "./registry.ts";
 
 const schema = Type.Object({
@@ -30,7 +28,6 @@ const description = [
 ].join(" ");
 
 export function createShellCancelTool(registry: BackgroundShellRegistry): ToolDefinition<any, any, any> {
-	const base = createBashToolDefinition(process.cwd());
 	return {
 		name: "shell_command_cancel",
 		label: "shell_command_cancel",
@@ -51,25 +48,38 @@ export function createShellCancelTool(registry: BackgroundShellRegistry): ToolDe
 			// SIGKILL is not negotiable; wait for the close event so the final
 			// output flush lands before the completing read.
 			await record.exitPromise;
-			// Sequence after the preempted wait's slice read: cursor stays lossless.
-			await registry.waitForReadRelease(record);
+			// Claim the read slot once any preempted status wait has taken its
+			// slice: the cursor stays single-reader and lossless.
+			for (;;) {
+				await registry.waitForReadRelease(record);
+				try {
+					registry.beginRead(record);
+					break;
+				} catch {
+					// Lost the wake-up race to another reader; wait again.
+				}
+			}
+			try {
+				// A concurrent cancel may have completed the read while we waited.
+				if (!registry.get(record.id)) throw registry.unknownIdError(record.id);
 
-			// Cancel is the completing read: consume the remainder, forget the id.
-			const { text, details } = formatShellOutput(registry.readAndAdvance(record), record.output.path);
-			registry.completeRead(record.id);
-			return { content: [{ type: "text", text: appendStatus(text, `cancelled ${record.id}`) }], details };
+				// Cancel is the completing read: consume the remainder, forget the id.
+				const { text, details } = formatShellOutput(registry.readAndAdvance(record), record.output.path);
+				registry.completeRead(record.id);
+				return { content: [{ type: "text", text: appendStatus(text, `cancelled ${record.id}`) }], details };
+			} finally {
+				registry.endRead(record);
+			}
 		},
 		// Compact row `cancelled shell-N · $ <command>` (spec §4.3 UI); final
 		// output collapsed via pi's bash result renderer.
 		renderCall(args: ShellCancelParams | undefined, theme, context) {
 			const command = args ? registry.commandFor(args.id) : undefined;
 			const title = args ? `cancelled ${args.id}${command ? ` · $ ${command}` : ""}` : "...";
-			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			text.setText(theme.fg("toolTitle", theme.bold(title)));
-			return text;
+			return renderToolTitle(title, theme, context);
 		},
 		renderResult(result, options, theme, context) {
-			return base.renderResult?.(result, options, theme, context as any);
+			return bashToolBase.renderResult?.(result, options, theme, context as any);
 		},
 	} as ToolDefinition<any, any, any>;
 }
