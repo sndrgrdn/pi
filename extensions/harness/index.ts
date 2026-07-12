@@ -16,6 +16,7 @@ import { registerShellStatus } from "./shell/status.ts";
 import skillTool from "./skill/index.ts";
 import { registerModes } from "./modes.ts";
 import { registerFinder } from "./tools/finder.ts";
+import { registerLibrarian } from "./tools/librarian.ts";
 
 export default function harness(pi: ExtensionAPI) {
 	// Per-session background-process registry (spec §3.3), shared by the
@@ -37,4 +38,5 @@ export default function harness(pi: ExtensionAPI) {
 	const profiles = registerModes(pi);
 
 	registerFinder(pi, profiles); // Phase 6 (§6.2)
+	registerLibrarian(pi, profiles); // Phase 7 (§6.4)
 }

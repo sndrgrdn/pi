@@ -41,7 +41,7 @@ Step 3 — decide:
 
 | Result | Action |
 |--------|--------|
-| Exactly one repo root | Derive `<host>/<org>/<repo>` from the path and call `checkout.sh <host>/<org>/<repo> --path-only` to refresh |
+| Exactly one repo root | Derive `<host>/<org>/<repo>` from the path and call `checkout.sh <host>/<org>/<repo>` to refresh |
 | Multiple repo roots | Show candidate paths and ask the user which one |
 | No matches | Ask for `owner/repo` or full URL — do **not** guess the org |
 
@@ -50,7 +50,7 @@ Step 3 — decide:
 For fully-qualified repo identities only:
 
 ```bash
-bash checkout.sh <repo> --path-only
+bash checkout.sh <repo>
 ```
 
 The script will:
@@ -63,7 +63,7 @@ The script will:
 ## Update strategy
 
 - **Throttled refresh** every 5 minutes by default.
-- Force immediate: `bash checkout.sh <repo> --force-update --path-only`
+- Refreshes are throttled by the shared implementation; there is no force-refresh override.
 
 ## Recommended workflow
 

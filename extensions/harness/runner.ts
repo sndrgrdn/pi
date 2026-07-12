@@ -11,6 +11,10 @@ import { join } from "node:path";
 import type { AgentDefinition } from "./registry.ts";
 import { BackgroundShellRegistry } from "./shell/registry.ts";
 import { withShellRegistry } from "./shell/session-registry.ts";
+import { createShellCommandTool } from "./shell/command.ts";
+import { createShellStatusTool } from "./shell/status.ts";
+import { createShellCancelTool } from "./shell/cancel.ts";
+import { createCheckoutTool } from "./tools/checkout.ts";
 
 export interface ChildSession {
 	sessionID: string;
@@ -112,6 +116,12 @@ export async function createSdkChildSession(config: ChildSessionConfig): Promise
 		model: resolveConfiguredModel(modelRegistry, config.definition.model),
 		thinkingLevel: config.definition.reasoningEffort,
 		tools: [...config.definition.tools, ...(config.definition.allowMcp ? ["mcp"] : [])],
+		customTools: config.definition.key === "librarian" ? [
+			createCheckoutTool(),
+			createShellCommandTool(processes),
+			createShellStatusTool(processes),
+			createShellCancelTool(processes),
+		] : undefined,
 		sessionManager: SessionManager.inMemory(config.cwd),
 	};
 	let session: Awaited<ReturnType<typeof createAgentSession>>["session"];
