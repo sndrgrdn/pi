@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import type { Model } from "@earendil-works/pi-ai";
 import type { AgentDefinition } from "./registry.ts";
-import { SubagentRunner, type ChildSession } from "./runner.ts";
+import { resolveConfiguredModel, SubagentRunner, type ChildSession } from "./runner.ts";
 import { BackgroundShellRegistry } from "./shell/registry.ts";
+import { buildEnvelope } from "./envelopes.ts";
 
 const definition: AgentDefinition = {
 	key: "oracle",
@@ -36,6 +38,7 @@ describe("shared subagent runner", () => {
 			cwd: "/parent/worktree",
 			input: { task: "check locking" },
 			mapInput: ({ task }) => `Review: ${task}`,
+			wrapResult: (sessionID, content) => buildEnvelope({ kind: "oracle", sessionID, content }),
 		});
 
 		expect(create).toHaveBeenCalledWith({ definition, cwd: "/parent/worktree" });
@@ -49,7 +52,7 @@ describe("shared subagent runner", () => {
 		const child = fakeChild(async () => { throw new Error("provider failed"); });
 		const runner = new SubagentRunner(async () => child);
 
-		await expect(runner.run({ definition, cwd: "/tmp", input: "x", mapInput: String }))
+		await expect(runner.run({ definition, cwd: "/tmp", input: "x", mapInput: String, wrapResult: () => "unused" }))
 			.rejects.toThrow("provider failed");
 		expect(child.processes.killAll).toHaveBeenCalledOnce();
 	});
@@ -61,7 +64,9 @@ describe("shared subagent runner", () => {
 		vi.mocked(child.abort).mockImplementation(async () => rejectPrompt(new Error("aborted")));
 		const runner = new SubagentRunner(async () => child);
 
-		const running = runner.run({ definition, cwd: "/tmp", input: "x", mapInput: String, signal: controller.signal });
+		const running = runner.run({
+			definition, cwd: "/tmp", input: "x", mapInput: String, wrapResult: () => "unused", signal: controller.signal,
+		});
 		await Promise.resolve();
 		controller.abort();
 
@@ -79,7 +84,9 @@ describe("shared subagent runner", () => {
 		});
 		const runner = new SubagentRunner(create);
 
-		const running = runner.run({ definition, cwd: "/tmp", input: "x", mapInput: String, signal: controller.signal });
+		const running = runner.run({
+			definition, cwd: "/tmp", input: "x", mapInput: String, wrapResult: () => "unused", signal: controller.signal,
+		});
 		controller.abort();
 		finishCreate();
 
@@ -87,5 +94,20 @@ describe("shared subagent runner", () => {
 		expect(child.abort).toHaveBeenCalledOnce();
 		expect(child.prompt).not.toHaveBeenCalled();
 		expect(child.processes.killAll).toHaveBeenCalledOnce();
+	});
+});
+
+describe("resolved child model", () => {
+	it("uses the configured model registry rather than the built-in model catalog", () => {
+		const customModel = { provider: "custom", id: "local-model" } as Model<any>;
+		const registry = { find: vi.fn(() => customModel) };
+
+		expect(resolveConfiguredModel(registry, "custom/local-model")).toBe(customModel);
+		expect(registry.find).toHaveBeenCalledWith("custom", "local-model");
+	});
+
+	it("fails at the boundary for an unconfigured model", () => {
+		expect(() => resolveConfiguredModel({ find: () => undefined }, "custom/missing"))
+			.toThrow('resolved model "custom/missing" is not configured');
 	});
 });

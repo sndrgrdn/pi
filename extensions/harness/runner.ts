@@ -1,10 +1,13 @@
-import { getModel, type Model } from "@earendil-works/pi-ai";
+import type { Model } from "@earendil-works/pi-ai";
 import {
+	AuthStorage,
 	createAgentSession,
+	getAgentDir,
+	ModelRegistry,
 	SessionManager,
 	type CreateAgentSessionOptions,
 } from "@earendil-works/pi-coding-agent";
-import { buildEnvelope } from "./envelopes.ts";
+import { join } from "node:path";
 import type { AgentDefinition } from "./registry.ts";
 import { BackgroundShellRegistry } from "./shell/registry.ts";
 import { withShellRegistry } from "./shell/session-registry.ts";
@@ -13,7 +16,7 @@ export interface ChildSession {
 	sessionID: string;
 	processes: BackgroundShellRegistry;
 	prompt(message: string): Promise<void>;
-	finalMessage(): string | undefined;
+	finalMessage(): string;
 	abort(): Promise<void>;
 	dispose(): void;
 }
@@ -30,6 +33,7 @@ export interface RunOptions<T> {
 	cwd: string;
 	input: T;
 	mapInput(input: T): string;
+	wrapResult(sessionID: string, content: string): string;
 	signal?: AbortSignal;
 }
 
@@ -40,33 +44,37 @@ function abortError(): Error {
 }
 
 export class SubagentRunner {
-	constructor(
-		private readonly createChild: ChildSessionFactory = createSdkChildSession,
-	) {}
+	constructor(private readonly createChild: ChildSessionFactory = createSdkChildSession) {}
 
 	async run<T>(options: RunOptions<T>): Promise<string> {
 		if (options.signal?.aborted) throw abortError();
 		let parentAborted = false;
 		let child: ChildSession | undefined;
+		let abortPromise: Promise<void> | undefined;
 		const onAbort = () => {
 			parentAborted = true;
-			if (child) void child.abort();
+			if (child) abortPromise = child.abort();
 		};
 		options.signal?.addEventListener("abort", onAbort, { once: true });
 
 		try {
 			child = await this.createChild({ definition: options.definition, cwd: options.cwd });
 			if (parentAborted) {
-				await child.abort();
+				abortPromise ??= child.abort();
+				await abortPromise;
 				throw abortError();
 			}
 			await child.prompt(options.mapInput(options.input));
-			if (parentAborted) throw abortError();
-			const message = child.finalMessage();
-			if (message === undefined) throw new Error(`${options.definition.key} child returned no final message`);
-			return buildEnvelope(options.definition.key, child.sessionID, message);
+			if (parentAborted) {
+				if (abortPromise) await abortPromise;
+				throw abortError();
+			}
+			return options.wrapResult(child.sessionID, child.finalMessage());
 		} catch (error) {
-			if (parentAborted) throw abortError();
+			if (parentAborted) {
+				if (abortPromise) await abortPromise;
+				throw abortError();
+			}
 			throw error;
 		} finally {
 			options.signal?.removeEventListener("abort", onAbort);
@@ -76,17 +84,27 @@ export class SubagentRunner {
 	}
 }
 
+export function resolveConfiguredModel(registry: Pick<ModelRegistry, "find">, model: string): Model<any> {
+	const slash = model.indexOf("/");
+	if (slash < 1 || slash === model.length - 1) throw new Error(`invalid resolved model "${model}"`);
+	const provider = model.slice(0, slash);
+	const modelID = model.slice(slash + 1);
+	const resolved = registry.find(provider, modelID);
+	if (!resolved) throw new Error(`resolved model "${model}" is not configured`);
+	return resolved;
+}
+
 /** Production adapter: a fresh in-memory pi SDK session, never a fork/resume. */
 export async function createSdkChildSession(config: ChildSessionConfig): Promise<ChildSession> {
 	const processes = new BackgroundShellRegistry();
-	const slash = config.definition.model.indexOf("/");
-	if (slash < 1) throw new Error(`invalid resolved model "${config.definition.model}"`);
-	const provider = config.definition.model.slice(0, slash);
-	const modelID = config.definition.model.slice(slash + 1);
-	const resolveModel = getModel as unknown as (provider: string, modelID: string) => Model<any>;
+	const agentDir = getAgentDir();
+	const authStorage = AuthStorage.create(join(agentDir, "auth.json"));
+	const modelRegistry = ModelRegistry.create(authStorage, join(agentDir, "models.json"));
 	const options: CreateAgentSessionOptions = {
 		cwd: config.cwd,
-		model: resolveModel(provider, modelID),
+		authStorage,
+		modelRegistry,
+		model: resolveConfiguredModel(modelRegistry, config.definition.model),
 		thinkingLevel: config.definition.reasoningEffort,
 		tools: [...config.definition.tools, ...(config.definition.allowMcp ? ["mcp"] : [])],
 		sessionManager: SessionManager.inMemory(config.cwd),
@@ -103,7 +121,11 @@ export async function createSdkChildSession(config: ChildSessionConfig): Promise
 		sessionID: session.sessionId,
 		processes,
 		prompt: (message) => session.agent.prompt(message),
-		finalMessage: () => session.getLastAssistantText(),
+		finalMessage: () => {
+			const message = session.getLastAssistantText();
+			if (message === undefined) throw new Error(`${config.definition.key} child returned no final message`);
+			return message;
+		},
 		abort: () => session.abort(),
 		dispose: () => session.dispose(),
 	};
