@@ -8,9 +8,10 @@ import type { ResolvedProfiles } from "../profiles.ts";
 import { resolveAgentRoute } from "../profiles.ts";
 import { resolveAgentDefinition } from "../registry.ts";
 import { SubagentRunner } from "../runner.ts";
-import { renderSubagentCall, renderSubagentResult } from "../ui/subagent.ts";
+import { createSubagentRenderer } from "../ui/subagent.ts";
 
 const prompt = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "agents", "prompts", "librarian.md"), "utf8").trim();
+const renderer = createSubagentRenderer({ running: "Librarian researching", complete: "Librarian researched" });
 
 export interface LibrarianInput { query: string; context?: string }
 
@@ -53,10 +54,10 @@ export function createLibrarianTool(runner: Pick<SubagentRunner, "run">, profile
 			} catch (error) { throw mapLibrarianError(error); }
 		},
 		renderCall(args: LibrarianInput | undefined, theme, context) {
-			return renderSubagentCall({ label: "Librarian researching", detail: args?.query }, theme, context);
+			return renderer.renderCall({ detail: args?.query }, theme, context);
 		},
 		renderResult(result, options, theme, context) {
-			return renderSubagentResult({ result, options, theme, context, labels: { running: "Librarian researching", complete: "Librarian researched" } });
+			return renderer.renderResult(result, options, theme, context);
 		},
 	} as ToolDefinition<any, any, any>;
 }

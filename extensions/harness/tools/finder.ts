@@ -3,14 +3,15 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { buildEnvelope } from "../envelopes.ts";
+import { buildEnvelope, parseEnvelope } from "../envelopes.ts";
 import type { ResolvedProfiles } from "../profiles.ts";
 import { resolveAgentRoute } from "../profiles.ts";
 import { resolveAgentDefinition } from "../registry.ts";
 import { SubagentRunner } from "../runner.ts";
-import { parseSubagentEnvelope, renderSubagentCall, renderSubagentResult } from "../ui/subagent.ts";
+import { createSubagentRenderer } from "../ui/subagent.ts";
 
 const prompt = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "agents", "prompts", "finder.md"), "utf8").trim();
+const renderer = createSubagentRenderer({ running: "Finder searching", complete: "Finder finished" });
 
 export interface FinderAnswer { title: string; content: string }
 
@@ -23,7 +24,7 @@ export function extractFinderAnswer(answer: string): FinderAnswer {
 }
 
 export function finderEnvelopeTitle(envelope: string): string | undefined {
-	return parseSubagentEnvelope(envelope)?.title;
+	return parseEnvelope(envelope)?.title;
 }
 
 export function createFinderTool(runner: Pick<SubagentRunner, "run">, profiles: ResolvedProfiles): ToolDefinition<any, any, any> {
@@ -54,10 +55,10 @@ export function createFinderTool(runner: Pick<SubagentRunner, "run">, profiles: 
 			return { content: [{ type: "text", text: envelope }], details: { title: finderEnvelopeTitle(envelope) } };
 		},
 		renderCall(args: { query?: string } | undefined, theme, context) {
-			return renderSubagentCall({ label: "Finder searching", detail: args?.query }, theme, context);
+			return renderer.renderCall({ detail: args?.query }, theme, context);
 		},
 		renderResult(result, options, theme, context) {
-			return renderSubagentResult({ result, options, theme, context, labels: { running: "Finder searching", complete: "Finder finished" } });
+			return renderer.renderResult(result, options, theme, context);
 		},
 	} as ToolDefinition<any, any, any>;
 }
