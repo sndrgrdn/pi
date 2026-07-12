@@ -105,14 +105,14 @@ export class ShellOutputFile {
 	}
 }
 
-export interface AdoptInput {
+export interface TrackInput {
 	command: string;
 	pid: number | undefined;
 	output: ShellOutputFile;
 	exitPromise: Promise<number | null>;
 }
 
-export interface ShellProcessRecord extends AdoptInput {
+export interface ShellProcessRecord extends TrackInput {
 	id: string;
 	cursor: number;
 	exited: boolean;
@@ -128,7 +128,7 @@ export class BackgroundShellRegistry {
 	private exitHookInstalled = false;
 
 	/** Track a process that outlived its foreground window. Allocates `shell-N`. */
-	adopt(input: AdoptInput): ShellProcessRecord {
+	track(input: TrackInput): ShellProcessRecord {
 		const record: ShellProcessRecord = {
 			...input,
 			id: `shell-${this.nextId++}`,

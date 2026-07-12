@@ -212,7 +212,7 @@ export function createShellCommandTool(registry: BackgroundShellRegistry): ToolD
 			// Still running at the timeout: background it.
 			backgrounded = true;
 			signal?.removeEventListener("abort", onAbort);
-			const record = registry.adopt({ command: params.command, pid: child.pid, output, exitPromise });
+			const record = registry.track({ command: params.command, pid: child.pid, output, exitPromise });
 			const snapshot = registry.readAndAdvance(record);
 			const { text, details } = formatShellOutput(snapshot, output.path);
 			const status = `backgrounded as ${record.id} · still running. Poll with shell_command_status({"id": "${record.id}"}).`;

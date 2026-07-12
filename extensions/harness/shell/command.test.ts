@@ -45,7 +45,7 @@ describe("shell_command", () => {
 		expect(record!.exited).toBe(false);
 		// Backgrounding snapshot advanced the shared cursor: nothing new yet.
 		expect(registry.readAndAdvance(record!)).toBe("");
-		record!.pid && process.kill(-record!.pid, "SIGKILL");
+		registry.killAll();
 	});
 
 	it("backgrounded processes survive turn aborts; foreground abort kills", async () => {
@@ -57,7 +57,7 @@ describe("shell_command", () => {
 		const record = registry.get("shell-1")!;
 		expect(record.exited).toBe(false);
 		expect(() => process.kill(record.pid!, 0)).not.toThrow(); // still alive
-		process.kill(-record.pid!, "SIGKILL");
+		registry.killAll();
 
 		// Foreground abort: process dies, tool errors.
 		const fg = new AbortController();
@@ -74,9 +74,6 @@ describe("shell_command", () => {
 		]);
 		const ids = [a, b].map((r: any) => r.content[0].text.match(/backgrounded as (shell-\d+)/)![1]);
 		expect(new Set(ids).size).toBe(2);
-		for (const id of ids) {
-			const record = registry.get(id)!;
-			process.kill(-record.pid!, "SIGKILL");
-		}
+		registry.killAll();
 	});
 });

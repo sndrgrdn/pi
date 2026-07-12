@@ -58,21 +58,21 @@ describe("ShellOutputFile", () => {
 	});
 });
 
-const adopt = (registry: BackgroundShellRegistry, exitPromise: Promise<number | null> = new Promise(() => {})) =>
-	registry.adopt({ command: "sleep 999", pid: undefined, output: new ShellOutputFile("pi-shell-test"), exitPromise });
+const track = (registry: BackgroundShellRegistry, exitPromise: Promise<number | null> = new Promise(() => {})) =>
+	registry.track({ command: "sleep 999", pid: undefined, output: new ShellOutputFile("pi-shell-test"), exitPromise });
 
 describe("BackgroundShellRegistry", () => {
 	it("allocates sequential per-session opaque ids", () => {
 		const registry = new BackgroundShellRegistry();
-		expect(adopt(registry).id).toBe("shell-1");
-		expect(adopt(registry).id).toBe("shell-2");
+		expect(track(registry).id).toBe("shell-1");
+		expect(track(registry).id).toBe("shell-2");
 		const other = new BackgroundShellRegistry();
-		expect(adopt(other).id).toBe("shell-1");
+		expect(track(other).id).toBe("shell-1");
 	});
 
 	it("readAndAdvance returns only new output per read (lossless cursor)", () => {
 		const registry = new BackgroundShellRegistry();
-		const record = adopt(registry);
+		const record = track(registry);
 		record.output.append(Buffer.from("first\n"));
 		expect(registry.readAndAdvance(record)).toBe("first\n");
 		expect(registry.readAndAdvance(record)).toBe("");
@@ -83,7 +83,7 @@ describe("BackgroundShellRegistry", () => {
 
 	it("marks records exited when the exit promise settles", async () => {
 		const registry = new BackgroundShellRegistry();
-		const record = adopt(registry, Promise.resolve(3));
+		const record = track(registry, Promise.resolve(3));
 		await new Promise((r) => setImmediate(r));
 		expect(record.exited).toBe(true);
 		expect(record.exitCode).toBe(3);
@@ -93,7 +93,7 @@ describe("BackgroundShellRegistry", () => {
 
 	it("completeRead deletes the record (read-once)", () => {
 		const registry = new BackgroundShellRegistry();
-		const record = adopt(registry);
+		const record = track(registry);
 		registry.completeRead(record.id);
 		expect(registry.get(record.id)).toBeUndefined();
 	});
@@ -101,7 +101,7 @@ describe("BackgroundShellRegistry", () => {
 	it("unknown-id error lists live ids", () => {
 		const registry = new BackgroundShellRegistry();
 		expect(registry.unknownIdError("shell-9").message).toContain("Live ids: none");
-		const record = adopt(registry);
+		const record = track(registry);
 		const err = registry.unknownIdError("shell-9");
 		expect(err.message).toContain('no tracked background process "shell-9"');
 		expect(err.message).toContain(`Live ids: ${record.id}`);
@@ -109,7 +109,7 @@ describe("BackgroundShellRegistry", () => {
 
 	it("single-flight: concurrent second read on the same id throws", () => {
 		const registry = new BackgroundShellRegistry();
-		const record = adopt(registry);
+		const record = track(registry);
 		registry.beginRead(record);
 		expect(() => registry.beginRead(record)).toThrow(/read already in flight/);
 		registry.endRead(record);
@@ -118,8 +118,8 @@ describe("BackgroundShellRegistry", () => {
 
 	it("sweeps exited records only after 1h idle", async () => {
 		const registry = new BackgroundShellRegistry();
-		const live = adopt(registry);
-		const exited = adopt(registry, Promise.resolve(0));
+		const live = track(registry);
+		const exited = track(registry, Promise.resolve(0));
 		await new Promise((r) => setImmediate(r));
 		const idleSince = Math.max(exited.exitedAt ?? 0, exited.lastPolledAt);
 		registry.sweep(idleSince + SWEEP_AFTER_MS);
