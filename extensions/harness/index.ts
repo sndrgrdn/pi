@@ -11,6 +11,7 @@ import { registerShellCancel } from "./shell/cancel.ts";
 import { registerShellCommand } from "./shell/command.ts";
 import { registerApplyPatch } from "./patch/tool.ts";
 import { BackgroundShellRegistry } from "./shell/registry.ts";
+import { currentShellRegistry } from "./shell/session-registry.ts";
 import { registerShellStatus } from "./shell/status.ts";
 import skillTool from "./skill/index.ts";
 import { registerModes } from "./modes.ts";
@@ -18,7 +19,7 @@ import { registerModes } from "./modes.ts";
 export default function harness(pi: ExtensionAPI) {
 	// Per-session background-process registry (spec §3.3), shared by the
 	// shell triplet (§9.2: indivisible).
-	const shellRegistry = new BackgroundShellRegistry();
+	const shellRegistry = currentShellRegistry() ?? new BackgroundShellRegistry();
 	registerShellCommand(pi, shellRegistry);
 	registerShellStatus(pi, shellRegistry);
 	registerShellCancel(pi, shellRegistry);

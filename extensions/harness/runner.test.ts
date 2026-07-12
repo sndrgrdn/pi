@@ -69,4 +69,24 @@ describe("shared subagent runner", () => {
 		expect(child.abort).toHaveBeenCalledOnce();
 		expect(processes.killAll).toHaveBeenCalledOnce();
 	});
+
+	it("honors an abort that arrives while the child session is being created", async () => {
+		const controller = new AbortController();
+		const child = fakeChild(vi.fn(async () => {}));
+		let finishCreate!: () => void;
+		const create = () => new Promise<ChildSession>((resolve) => {
+			finishCreate = () => resolve(child);
+		});
+		const processes = { killAll: vi.fn() };
+		const runner = new SubagentRunner(create, () => processes);
+
+		const running = runner.run({ definition, cwd: "/tmp", input: "x", mapInput: String, signal: controller.signal });
+		controller.abort();
+		finishCreate();
+
+		await expect(running).rejects.toMatchObject({ name: "AbortError" });
+		expect(child.abort).toHaveBeenCalledOnce();
+		expect(child.prompt).not.toHaveBeenCalled();
+		expect(processes.killAll).toHaveBeenCalledOnce();
+	});
 });

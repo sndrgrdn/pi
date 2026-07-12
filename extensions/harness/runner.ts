@@ -7,6 +7,7 @@ import {
 import { buildEnvelope } from "./envelopes.ts";
 import type { AgentDefinition } from "./registry.ts";
 import { BackgroundShellRegistry } from "./shell/registry.ts";
+import { withShellRegistry } from "./shell/session-registry.ts";
 
 export interface ChildProcesses {
 	killAll(): void;
@@ -51,15 +52,20 @@ export class SubagentRunner {
 	async run<T>(options: RunOptions<T>): Promise<string> {
 		if (options.signal?.aborted) throw abortError();
 		const processes = this.createProcesses();
-		const child = await this.createChild({ definition: options.definition, cwd: options.cwd, processes });
 		let parentAborted = false;
+		let child: ChildSession | undefined;
 		const onAbort = () => {
 			parentAborted = true;
-			void child.abort();
+			if (child) void child.abort();
 		};
 		options.signal?.addEventListener("abort", onAbort, { once: true });
 
 		try {
+			child = await this.createChild({ definition: options.definition, cwd: options.cwd, processes });
+			if (parentAborted) {
+				await child.abort();
+				throw abortError();
+			}
 			await child.prompt(options.mapInput(options.input));
 			if (parentAborted) throw abortError();
 			const message = child.finalMessage();
@@ -71,7 +77,7 @@ export class SubagentRunner {
 		} finally {
 			options.signal?.removeEventListener("abort", onAbort);
 			processes.killAll();
-			child.dispose();
+			child?.dispose();
 		}
 	}
 }
@@ -90,7 +96,7 @@ export async function createSdkChildSession(config: ChildSessionConfig): Promise
 		tools: [...config.definition.tools, ...(config.definition.allowMcp ? ["mcp"] : [])],
 		sessionManager: SessionManager.inMemory(config.cwd),
 	};
-	const { session } = await createAgentSession(options);
+	const { session } = await withShellRegistry(config.processes as BackgroundShellRegistry, () => createAgentSession(options));
 	session.agent.state.systemPrompt = config.definition.systemPrompt;
 	return {
 		sessionID: session.sessionId,
