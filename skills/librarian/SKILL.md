@@ -12,42 +12,12 @@ Goals: **stable** paths, **up-to-date** checkouts, **efficient** partial clones.
 
 `~/.cache/checkouts/<host>/<org>/<repo>`
 
-## Resolution flow — always start here
+## Resolution flow
 
-Determine input type first, then follow the matching path:
-
-| Input shape | Examples | Action |
-|-------------|----------|--------|
-| URL / `git@` / `owner/repo` | `https://github.com/foo/bar`, `foo/bar` | → [Checkout command](#checkout-command) |
-| **Bare repo name** (no `/`) | `opencode`, `minijinja` | → [Cache lookup](#cache-lookup) **first** |
-
-### Cache lookup
-
-**Never call `checkout.sh` with a bare name.** The script requires `owner/repo` at minimum.
-
-Step 1 — search:
-```bash
-find ~/.cache/checkouts -type d -name '<repo>' -prune
-```
-
-Step 2 — filter to actual repo roots:
-```bash
-# For each match, verify it is a repository root, not a nested directory:
-git -C <path> rev-parse --show-toplevel 2>/dev/null
-# Keep only paths where the output equals <path> itself.
-```
-
-Step 3 — decide:
-
-| Result | Action |
-|--------|--------|
-| Exactly one repo root | Derive `<host>/<org>/<repo>` from the path and call `checkout.sh <host>/<org>/<repo>` to refresh |
-| Multiple repo roots | Show candidate paths and ask the user which one |
-| No matches | Ask for `owner/repo` or full URL — do **not** guess the org |
+Always call the checkout command. It owns qualified-reference parsing and the
+bare-name resolution matrix, so the skill and Librarian tool cannot drift.
 
 ### Checkout command
-
-For fully-qualified repo identities only:
 
 ```bash
 bash checkout.sh <repo>
@@ -55,6 +25,8 @@ bash checkout.sh <repo>
 
 The script will:
 1. Parse the reference into host/org/repo.
+   For a bare name, refresh the sole cached match; list multiple candidates;
+   or ask for `owner/repo` when none exists.
 2. Clone with `--filter=blob:none` if missing.
 3. Reuse existing checkout if present.
 4. Fetch from `origin` when stale (default: 300s).
@@ -67,7 +39,7 @@ The script will:
 
 ## Recommended workflow
 
-1. Resolve path via the [resolution flow](#resolution-flow--always-start-here) above.
+1. Resolve path via the [resolution flow](#resolution-flow) above.
 2. Use the resolved local path for searching, reading, and analysis.
 3. On later references, re-run `checkout.sh` with `host/org/repo` — it refreshes the cached checkout.
 
@@ -78,4 +50,4 @@ Do not edit the shared cache directly. Create a worktree or copy for task-specif
 ## Notes
 
 - `owner/repo` defaults to `github.com`.
-- `checkout.sh` does not accept bare names — always resolve via cache lookup first.
+- Bare names resolve from cache only; the implementation never guesses an owner.
