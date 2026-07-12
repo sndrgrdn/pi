@@ -58,12 +58,15 @@ export function createFinderTool(runner: Pick<SubagentRunner, "run">, profiles: 
 		renderCall(args: { query?: string } | undefined, theme, context) {
 			return renderToolTitle(`Finder searching${args?.query ? ` — ${args.query}` : ""}`, theme, context);
 		},
-		renderResult(result, options, theme) {
+		renderResult(result, options, theme, context) {
 			const item = result?.content?.find((entry: { type: string }) => entry.type === "text");
 			const content = item?.type === "text" ? item.text : "";
 			const title = finderEnvelopeTitle(content) ?? "Finder finished";
-			if (!options.expanded) return new Text(theme.fg("success", `✓ ${title}`), 0, 0);
-			return new Text(`${theme.fg("success", `✓ ${title}`)}\n${theme.fg("muted", content)}`, 0, 0);
+			const row = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+			row.setText(options.expanded
+				? `${theme.fg("success", `✓ ${title}`)}\n${theme.fg("muted", content)}`
+				: theme.fg("success", `✓ ${title}`));
+			return row;
 		},
 	} as ToolDefinition<any, any, any>;
 }

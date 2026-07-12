@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { Text } from "@earendil-works/pi-tui";
 import { BUILTIN_PROFILES } from "../profiles.ts";
 import type { RunOptions } from "../runner.ts";
 import { createFinderTool, extractFinderAnswer, finderEnvelopeTitle } from "./finder.ts";
@@ -28,5 +29,17 @@ describe("finder tool", () => {
 	it("extracts and decodes the completion title for the TUI", () => {
 		expect(finderEnvelopeTitle('<finder_result title="Auth &amp; sessions" sessionID="one">\nx\n</finder_result>'))
 			.toBe("Auth & sessions");
+	});
+
+	it("replaces the running row with the completion title", () => {
+		const tool = createFinderTool({ run: vi.fn() } as any, BUILTIN_PROFILES);
+		const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
+		const row = tool.renderCall?.({ query: "find auth" }, theme, { lastComponent: undefined } as any) as Text;
+		const completed = tool.renderResult?.(
+			{ content: [{ type: "text", text: '<finder_result title="Auth files" sessionID="one">\nx\n</finder_result>' }], details: {} },
+			{ expanded: false, isPartial: false }, theme, { lastComponent: row } as any,
+		);
+		expect(completed).toBe(row);
+		expect(row.render(100).map((line) => line.trimEnd())).toEqual(["✓ Auth files"]);
 	});
 });
