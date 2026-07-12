@@ -87,6 +87,8 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 					try {
 						await Promise.race([
 							record.exitPromise,
+							// Cancel-preempts-poll (spec §4.3): a cancel wakes this wait.
+							record.cancelPromise,
 							new Promise<void>((resolvePromise) => {
 								timeoutHandle = setTimeout(resolvePromise, timeoutMs);
 								onAbort = () => resolvePromise();
@@ -108,6 +110,12 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 				}
 
 				const { text, details } = formatShellOutput(registry.readAndAdvance(record), record.output.path);
+
+				if (record.cancelled) {
+					// Preempted by cancel: resolve non-error with output-so-far.
+					// The cancel call is the completing read, not this one.
+					return { content: [{ type: "text", text: appendStatus(text, `${record.id} · cancelled`) }], details };
+				}
 
 				if (!record.exited) {
 					return { content: [{ type: "text", text: appendStatus(text, `${record.id} · still running`) }], details };

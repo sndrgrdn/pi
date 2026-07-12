@@ -120,6 +120,10 @@ export interface ShellProcessRecord extends TrackInput {
 	exitedAt?: number;
 	lastPolledAt: number;
 	readInFlight: boolean;
+	/** Set by requestCancel; an in-flight status wait checks this on wake. */
+	cancelled: boolean;
+	/** Resolves when the record is cancelled; raced by in-flight status waits. */
+	cancelPromise: Promise<void>;
 }
 
 export class BackgroundShellRegistry {
@@ -128,9 +132,15 @@ export class BackgroundShellRegistry {
 	/** id → command, retained after completeRead so historic TUI re-renders keep their title. */
 	private commands = new Map<string, string>();
 	private exitHookInstalled = false;
+	private cancelResolvers = new Map<string, () => void>();
+	private releaseWaiters = new Map<string, Array<() => void>>();
 
 	/** Track a process that outlived its foreground window. Allocates `shell-N`. */
 	track(input: TrackInput): ShellProcessRecord {
+		let resolveCancel!: () => void;
+		const cancelPromise = new Promise<void>((resolvePromise) => {
+			resolveCancel = resolvePromise;
+		});
 		const record: ShellProcessRecord = {
 			...input,
 			id: `shell-${this.nextId++}`,
@@ -139,7 +149,10 @@ export class BackgroundShellRegistry {
 			exitCode: null,
 			lastPolledAt: Date.now(),
 			readInFlight: false,
+			cancelled: false,
+			cancelPromise,
 		};
+		this.cancelResolvers.set(record.id, resolveCancel);
 		input.exitPromise.then(
 			(code) => {
 				record.exited = true;
@@ -196,6 +209,8 @@ export class BackgroundShellRegistry {
 		if (!record) return;
 		record.output.close();
 		this.records.delete(id);
+		this.cancelResolvers.delete(id);
+		this.releaseWaiters.delete(id);
 	}
 
 	/** Same-id single-flight: a concurrent second read is a tool error. */
@@ -208,6 +223,33 @@ export class BackgroundShellRegistry {
 
 	endRead(record: ShellProcessRecord): void {
 		record.readInFlight = false;
+		const waiters = this.releaseWaiters.get(record.id);
+		if (waiters) {
+			this.releaseWaiters.delete(record.id);
+			for (const wake of waiters) wake();
+		}
+	}
+
+	/**
+	 * Cancel-preempts-poll (spec §4.3): mark the record cancelled and wake any
+	 * in-flight status wait so it resolves immediately with output-so-far.
+	 */
+	requestCancel(record: ShellProcessRecord): void {
+		record.cancelled = true;
+		this.cancelResolvers.get(record.id)?.();
+	}
+
+	/**
+	 * Resolves once no read is in flight for the record. Lets cancel sequence
+	 * after a preempted status wait's slice read, keeping the cursor lossless.
+	 */
+	waitForReadRelease(record: ShellProcessRecord): Promise<void> {
+		if (!record.readInFlight) return Promise.resolve();
+		return new Promise((resolvePromise) => {
+			const waiters = this.releaseWaiters.get(record.id) ?? [];
+			waiters.push(resolvePromise);
+			this.releaseWaiters.set(record.id, waiters);
+		});
 	}
 
 	/** Drop exited records unread for 1h since max(exitedAt, lastPolledAt). */
@@ -216,8 +258,7 @@ export class BackgroundShellRegistry {
 			if (!record.exited) continue;
 			const idleSince = Math.max(record.exitedAt ?? 0, record.lastPolledAt);
 			if (now - idleSince > SWEEP_AFTER_MS) {
-				record.output.close();
-				this.records.delete(record.id);
+				this.completeRead(record.id);
 			}
 		}
 	}

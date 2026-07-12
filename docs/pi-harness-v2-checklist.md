@@ -49,8 +49,8 @@ Foundation: every later agent toolbox embeds these three tools.
 - [ ] `shell/registry.ts`: per-session background-process registry — opaque `shell-N` ids, accumulator temp-file byte-offset cursors, read-once completion, 1h lazy sweep, same-id single-flight, `killProcessTree` kill path (§3.3, §4.2)
 - [ ] `shell/command.ts`: `shell_command` — pi spawn machinery + output bounds verbatim; wait-not-kill timeout (clamp 0–60s, default 10s); backgrounding return contract (§4.1)
 - [ ] `shell/status.ts`: `shell_command_status` — pure-observation poll, lossless cursor reads, exit-exactly-once, unknown/stale-id loud error with live-id list (§4.2)
-- [ ] `shell/cancel.ts`: `shell_command_cancel` — cancel-preempts-poll, cancel is the completing read (§4.3)
-- [ ] TUI: pi bash widget verbatim for `shell_command` incl. `backgrounded as <id>` finalizer; id-prefixed chrome for status/cancel widgets (§4.1–§4.3 UI clauses)
+- [x] `shell/cancel.ts`: `shell_command_cancel` — cancel-preempts-poll, cancel is the completing read (§4.3)
+- [x] TUI: pi bash widget verbatim for `shell_command` incl. `backgrounded as <id>` finalizer; id-prefixed chrome for status/cancel widgets (§4.1–§4.3 UI clauses)
 - [ ] Register the triplet on the main session (builtin `bash` stays enabled until Phase 10)
 - [ ] Unit tests: registry lifecycle (background → poll → complete → read-once delete), cursor losslessness across snapshot/status/cancel reads, sweep timing, single-flight rejection, timeout clamp table, unknown-id error shape
 
