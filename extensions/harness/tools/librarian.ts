@@ -2,14 +2,13 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { buildEnvelope } from "../envelopes.ts";
 import type { ResolvedProfiles } from "../profiles.ts";
 import { resolveAgentRoute } from "../profiles.ts";
 import { resolveAgentDefinition } from "../registry.ts";
 import { SubagentRunner } from "../runner.ts";
-import { renderToolTitle } from "../shell/output.ts";
+import { renderSubagentCall, renderSubagentResult } from "../ui/subagent.ts";
 
 const prompt = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "agents", "prompts", "librarian.md"), "utf8").trim();
 
@@ -54,13 +53,10 @@ export function createLibrarianTool(runner: Pick<SubagentRunner, "run">, profile
 			} catch (error) { throw mapLibrarianError(error); }
 		},
 		renderCall(args: LibrarianInput | undefined, theme, context) {
-			return renderToolTitle(`Librarian researching${args?.query ? ` — ${args.query}` : ""}`, theme, context);
+			return renderSubagentCall({ label: "Librarian researching", detail: args?.query }, theme, context);
 		},
-		renderResult(result, options, theme) {
-			const item = result?.content?.find((entry: { type: string }) => entry.type === "text");
-			const text = item?.type === "text" ? item.text : "";
-			if (!options.expanded) return new Text(theme.fg("success", "✓ Librarian researched"), 0, 0);
-			return new Text(`${theme.fg("success", "✓ Librarian researched")}\n${theme.fg("muted", text)}`, 0, 0);
+		renderResult(result, options, theme, context) {
+			return renderSubagentResult({ result, options, theme, context, labels: { running: "Librarian researching", complete: "Librarian researched" } });
 		},
 	} as ToolDefinition<any, any, any>;
 }

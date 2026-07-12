@@ -2,14 +2,13 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { buildEnvelope } from "../envelopes.ts";
 import type { ResolvedProfiles } from "../profiles.ts";
 import { resolveAgentRoute } from "../profiles.ts";
 import { resolveAgentDefinition } from "../registry.ts";
 import { SubagentRunner } from "../runner.ts";
-import { renderToolTitle } from "../shell/output.ts";
+import { parseSubagentEnvelope, renderSubagentCall, renderSubagentResult } from "../ui/subagent.ts";
 
 const prompt = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "agents", "prompts", "finder.md"), "utf8").trim();
 
@@ -24,8 +23,7 @@ export function extractFinderAnswer(answer: string): FinderAnswer {
 }
 
 export function finderEnvelopeTitle(envelope: string): string | undefined {
-	const encoded = envelope.match(/^<finder_result title="([^"]*)"/)?.[1];
-	return encoded?.replaceAll("&quot;", '"').replaceAll("&gt;", ">").replaceAll("&lt;", "<").replaceAll("&amp;", "&");
+	return parseSubagentEnvelope(envelope)?.title;
 }
 
 export function createFinderTool(runner: Pick<SubagentRunner, "run">, profiles: ResolvedProfiles): ToolDefinition<any, any, any> {
@@ -56,17 +54,10 @@ export function createFinderTool(runner: Pick<SubagentRunner, "run">, profiles: 
 			return { content: [{ type: "text", text: envelope }], details: { title: finderEnvelopeTitle(envelope) } };
 		},
 		renderCall(args: { query?: string } | undefined, theme, context) {
-			return renderToolTitle(`Finder searching${args?.query ? ` — ${args.query}` : ""}`, theme, context);
+			return renderSubagentCall({ label: "Finder searching", detail: args?.query }, theme, context);
 		},
 		renderResult(result, options, theme, context) {
-			const item = result?.content?.find((entry: { type: string }) => entry.type === "text");
-			const content = item?.type === "text" ? item.text : "";
-			const title = finderEnvelopeTitle(content) ?? "Finder finished";
-			const row = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			row.setText(options.expanded
-				? `${theme.fg("success", `✓ ${title}`)}\n${theme.fg("muted", content)}`
-				: theme.fg("success", `✓ ${title}`));
-			return row;
+			return renderSubagentResult({ result, options, theme, context, labels: { running: "Finder searching", complete: "Finder finished" } });
 		},
 	} as ToolDefinition<any, any, any>;
 }
