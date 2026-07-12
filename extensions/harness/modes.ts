@@ -18,6 +18,7 @@ import {
 	type ResolvedProfiles,
 	isMode,
 	loadProfiles,
+	resolveAgentRoute,
 	resolveMainRoute,
 	selectPosture,
 } from "./profiles.ts";
@@ -65,6 +66,28 @@ export function pickInitialMode(recorded: unknown, global: unknown): Mode {
 	if (isMode(recorded)) return recorded;
 	if (isMode(global)) return global;
 	return DEFAULT_MODE;
+}
+
+/**
+ * `/mode` docs (§2.5: agent route tables are documented here, not in the
+ * selector), derived from the loaded Profiles so overrides never go stale.
+ */
+export function describeModeCommand(profiles: ResolvedProfiles): string {
+	const fmt = (r: { model: string; reasoning: string }) =>
+		`${r.model.split("/").pop()}/${r.reasoning}`;
+	const perMode = (route: (m: Mode) => { model: string; reasoning: string }) =>
+		MODES.map((m) => fmt(route(m))).join(" · ");
+	// Finder/Librarian are Mode-invariant by schema (flat overrides only), so
+	// one Mode's route describes all three.
+	const flat = (agent: "finder" | "librarian") =>
+		fmt(resolveAgentRoute(profiles, agent, DEFAULT_MODE));
+	return (
+		`Switch Mode (${MODES.join("/")}). Routes — ` +
+		`Main: ${perMode((m) => resolveMainRoute(profiles, m))}; ` +
+		`Oracle: ${perMode((m) => resolveAgentRoute(profiles, "oracle", m))}; ` +
+		`Task (per-call mode): ${perMode((m) => resolveAgentRoute(profiles, "task", m))}; ` +
+		`Finder: ${flat("finder")}; Librarian: ${flat("librarian")}`
+	);
 }
 
 // ── Persistence ───────────────────────────────────────────────────
@@ -171,10 +194,7 @@ export function registerModes(pi: ExtensionAPI): void {
 	}
 
 	pi.registerCommand("mode", {
-		description:
-			"Switch Mode (low/medium/high). Routes — Main: Terra/low · Sol/medium · Sol/xhigh; " +
-			"Oracle: Sol/high (low+medium) · Fable/high (high); Task (per-call mode): Sol/low · Sol/high · Fable/high; " +
-			"Finder: Haiku/minimal; Librarian: Sol/off",
+		description: describeModeCommand(profiles),
 		handler: async (args, ctx) => {
 			const arg = args?.trim();
 			if (arg) {

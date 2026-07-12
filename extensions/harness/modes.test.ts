@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { decorateTopBorder, pickInitialMode } from "./modes.ts";
+import { decorateTopBorder, describeModeCommand, pickInitialMode } from "./modes.ts";
+import { BUILTIN_PROFILES, mergeProfiles } from "./profiles.ts";
 
 // ── Border decoration (spec §2.5: Mode right-aligned in top border) ──
 
@@ -63,5 +64,28 @@ describe("pickInitialMode", () => {
 	it("ignores values that are not a known Mode", () => {
 		expect(pickInitialMode("ultra", "custom")).toBe("medium");
 		expect(pickInitialMode(42, "high")).toBe("high");
+	});
+});
+
+// ── /mode docs derive from live Profiles (§2.5) ───────────────────
+
+describe("describeModeCommand", () => {
+	it("documents the built-in route table per agent per Mode", () => {
+		const docs = describeModeCommand(BUILTIN_PROFILES);
+		expect(docs).toContain("Main: gpt-5.6-terra/low · gpt-5.6-sol/medium · gpt-5.6-sol/xhigh");
+		expect(docs).toContain("Oracle: gpt-5.6-sol/high · gpt-5.6-sol/high · claude-fable-5/high");
+		expect(docs).toContain("Task (per-call mode): gpt-5.6-sol/low · gpt-5.6-sol/high · claude-fable-5/high");
+		expect(docs).toContain("Finder: claude-haiku-4-5/minimal");
+		expect(docs).toContain("Librarian: gpt-5.6-sol/off");
+	});
+
+	it("reflects profiles.json overrides instead of going stale", () => {
+		const merged = mergeProfiles(BUILTIN_PROFILES, {
+			modes: { high: { model: "anthropic/claude-opus-4-6" } },
+			agents: { finder: { reasoning: "low" } },
+		});
+		const docs = describeModeCommand(merged);
+		expect(docs).toContain("claude-opus-4-6/xhigh");
+		expect(docs).toContain("Finder: claude-haiku-4-5/low");
 	});
 });
