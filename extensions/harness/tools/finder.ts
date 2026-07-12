@@ -24,7 +24,8 @@ export function extractFinderAnswer(answer: string): FinderAnswer {
 }
 
 export function finderEnvelopeTitle(envelope: string): string | undefined {
-	return parseEnvelope(envelope)?.title;
+	const parsed = parseEnvelope(envelope);
+	return parsed?.tag === "finder_result" ? parsed.title : undefined;
 }
 
 export function createFinderTool(runner: Pick<SubagentRunner, "run">, profiles: ResolvedProfiles): ToolDefinition<any, any, any> {

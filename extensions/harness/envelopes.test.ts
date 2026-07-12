@@ -16,4 +16,15 @@ describe("subagent result envelopes", () => {
 		expect(parseEnvelope('<finder_result title="Auth &amp; sessions" sessionID="child-1">\n/abs/auth.ts:2\n</finder_result>'))
 			.toEqual({ tag: "finder_result", title: "Auth & sessions", sessionID: "child-1", content: "/abs/auth.ts:2" });
 	});
+
+	it("preserves meaningful whitespace inside the harness framing", () => {
+		const envelope = buildEnvelope({ kind: "oracle", sessionID: "child-1", content: "  indented\ntrailing  " });
+		expect(parseEnvelope(envelope)?.content).toBe("  indented\ntrailing  ");
+	});
+
+	it("rejects unknown tags and illegal title combinations", () => {
+		expect(parseEnvelope('<unknown_result sessionID="one">\nx\n</unknown_result>')).toBeUndefined();
+		expect(parseEnvelope('<finder_result sessionID="one">\nx\n</finder_result>')).toBeUndefined();
+		expect(parseEnvelope('<oracle_result title="Nope" sessionID="one">\nx\n</oracle_result>')).toBeUndefined();
+	});
 });
