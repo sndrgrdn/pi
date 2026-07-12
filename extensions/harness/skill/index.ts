@@ -106,7 +106,7 @@ export default function skillTool(pi: ExtensionAPI): void {
 	// resumed skill results lost their custom renderer and dumped raw content.
 	pi.registerTool({
 		name: "skill",
-		label: "Skill",
+		label: "skill",
 		description: [
 			"Load a skill by exact name and return its full instructions: specialized guidance for specific tasks.",
 			"Call it when the user explicitly requests a skill or an active skill explicitly directs invoking one.",
