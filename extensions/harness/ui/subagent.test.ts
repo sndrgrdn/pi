@@ -7,10 +7,11 @@ describe("shared subagent tool renderer", () => {
 	const renderer = createSubagentRenderer({ running: "Finder searching", complete: "Finder finished" });
 
 	it("updates one component from query and actions to the XML title", () => {
-		const row = renderer.renderCall({ detail: "find auth" }, theme, { lastComponent: undefined });
-		renderer.renderResult(
+		const call = renderer.renderCall({ detail: "find auth" }, theme, { lastComponent: undefined });
+		expect(call.render(100)).toEqual([]);
+		const row = renderer.renderResult(
 			{ content: [{ type: "text", text: "searching" }], details: { state: "running", query: "find auth", actions: { grep: 2, read: 1 } } },
-			{ expanded: false }, theme, { lastComponent: row },
+			{ expanded: false }, theme, { lastComponent: undefined },
 		);
 		expect(row.render(100)[0]?.trimEnd()).toBe("◐ Finder searching — find auth — grep ×2, read ×1");
 

@@ -42,9 +42,12 @@ function parseDetails(value: unknown): SubagentDetails | undefined {
 /** One mutable Amp-style row: query/action tally while running, XML title on completion. */
 export function createSubagentRenderer(labels: SubagentRendererLabels) {
 	return {
-		renderCall(args: { detail?: string } | undefined, theme: RenderTheme, context: RenderContext): Text {
+		renderCall(_args: { detail?: string } | undefined, _theme: RenderTheme, context: RenderContext): Text {
 			const component = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			component.setText(theme.fg("toolTitle", theme.bold(`${labels.running}${args?.detail ? ` — ${args.detail}` : ""}`)));
+			// Pi renders call and result as separate components. The immediate
+			// onUpdate owns the visible running row; keeping the call blank avoids
+			// duplicating it above the live result component.
+			component.setText("");
 			return component;
 		},
 		renderResult(result: SubagentRenderResult, options: { expanded: boolean }, theme: RenderTheme, context: RenderContext): Text {
