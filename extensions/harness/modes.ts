@@ -100,7 +100,7 @@ export const MODE_REQUEST_EVENT = "harness:mode:request";
 
 // ── Wiring ────────────────────────────────────────────────────────
 
-export function registerModes(pi: ExtensionAPI): void {
+export function registerModes(pi: ExtensionAPI): ResolvedProfiles {
 	// Load at startup so an invalid profiles.json fails loudly here — no
 	// fallback, no recovery (§2.3).
 	const profiles: ResolvedProfiles = loadProfiles(join(getAgentDir(), "profiles.json"));
@@ -208,4 +208,6 @@ export function registerModes(pi: ExtensionAPI): void {
 		pi.appendEntry(MODE_ENTRY_TYPE, { mode });
 		sessionStarted = true;
 	});
+
+	return profiles;
 }

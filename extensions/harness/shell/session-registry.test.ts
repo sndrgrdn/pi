@@ -10,4 +10,16 @@ describe("child shell registry binding", () => {
 		});
 		expect(currentShellRegistry()).toBeUndefined();
 	});
+
+	it("keeps simultaneous child namespaces isolated from Main and each other", async () => {
+		const main = new BackgroundShellRegistry();
+		const first = new BackgroundShellRegistry();
+		const second = new BackgroundShellRegistry();
+		expect(currentShellRegistry()).toBeUndefined();
+		await Promise.all([
+			withShellRegistry(first, async () => expect(currentShellRegistry()).toBe(first)),
+			withShellRegistry(second, async () => expect(currentShellRegistry()).toBe(second)),
+		]);
+		expect(currentShellRegistry()).not.toBe(main);
+	});
 });

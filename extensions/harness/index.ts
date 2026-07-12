@@ -15,6 +15,7 @@ import { currentShellRegistry } from "./shell/session-registry.ts";
 import { registerShellStatus } from "./shell/status.ts";
 import skillTool from "./skill/index.ts";
 import { registerModes } from "./modes.ts";
+import { registerFinder } from "./tools/finder.ts";
 
 export default function harness(pi: ExtensionAPI) {
 	// Per-session background-process registry (spec §3.3), shared by the
@@ -33,7 +34,7 @@ export default function harness(pi: ExtensionAPI) {
 
 	// Phase 4 (§2): Modes + Profiles. Loads (and strictly validates)
 	// ~/.pi/agent/profiles.json — an invalid file fails startup loudly.
-	registerModes(pi);
+	const profiles = registerModes(pi);
 
-	// Later phases: subagent runtime.
+	registerFinder(pi, profiles); // Phase 6 (§6.2)
 }

@@ -19,6 +19,7 @@ export interface ChildSession {
 	finalMessage(): string;
 	abort(): Promise<void>;
 	dispose(): void;
+	onAction?(listener: (toolName: string) => void): () => void;
 }
 
 export interface ChildSessionConfig {
@@ -34,6 +35,7 @@ export interface RunOptions<T> {
 	input: T;
 	mapInput(input: T): string;
 	wrapResult(sessionID: string, content: string): string;
+	onAction?(toolName: string): void;
 	signal?: AbortSignal;
 }
 
@@ -51,6 +53,7 @@ export class SubagentRunner {
 		let parentAborted = false;
 		let child: ChildSession | undefined;
 		let abortPromise: Promise<void> | undefined;
+		let unsubscribe: (() => void) | undefined;
 		const onAbort = () => {
 			parentAborted = true;
 			if (child) abortPromise = child.abort();
@@ -59,6 +62,7 @@ export class SubagentRunner {
 
 		try {
 			child = await this.createChild({ definition: options.definition, cwd: options.cwd });
+			if (options.onAction && child.onAction) unsubscribe = child.onAction(options.onAction);
 			if (parentAborted) {
 				abortPromise ??= child.abort();
 				await abortPromise;
@@ -77,6 +81,7 @@ export class SubagentRunner {
 			}
 			throw error;
 		} finally {
+			unsubscribe?.();
 			options.signal?.removeEventListener("abort", onAbort);
 			child?.processes.killAll();
 			child?.dispose();
@@ -128,5 +133,8 @@ export async function createSdkChildSession(config: ChildSessionConfig): Promise
 		},
 		abort: () => session.abort(),
 		dispose: () => session.dispose(),
+		onAction: (listener) => session.subscribe((event) => {
+			if (event.type === "tool_execution_start") listener(event.toolName);
+		}),
 	};
 }
