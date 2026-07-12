@@ -1,5 +1,3 @@
-import { Text, type Component } from "@earendil-works/pi-tui";
-
 export interface SubagentRow {
 	state: "running" | "complete";
 	label: string;
@@ -16,9 +14,4 @@ export function renderSubagentRow(row: SubagentRow, expanded = false): string[] 
 		lines.push(...row.transcript.split("\n").map((line) => `  ${line}`));
 	}
 	return lines;
-}
-
-/** Adapter for pi tool renderCall/renderResult hooks. */
-export function subagentRowComponent(row: SubagentRow, expanded = false): Component {
-	return new Text(renderSubagentRow(row, expanded).join("\n"), 0, 0);
 }

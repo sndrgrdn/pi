@@ -9,12 +9,9 @@ import type { AgentDefinition } from "./registry.ts";
 import { BackgroundShellRegistry } from "./shell/registry.ts";
 import { withShellRegistry } from "./shell/session-registry.ts";
 
-export interface ChildProcesses {
-	killAll(): void;
-}
-
 export interface ChildSession {
 	sessionID: string;
+	processes: BackgroundShellRegistry;
 	prompt(message: string): Promise<void>;
 	finalMessage(): string | undefined;
 	abort(): Promise<void>;
@@ -24,7 +21,6 @@ export interface ChildSession {
 export interface ChildSessionConfig {
 	definition: AgentDefinition;
 	cwd: string;
-	processes: ChildProcesses;
 }
 
 export type ChildSessionFactory = (config: ChildSessionConfig) => Promise<ChildSession>;
@@ -46,12 +42,10 @@ function abortError(): Error {
 export class SubagentRunner {
 	constructor(
 		private readonly createChild: ChildSessionFactory = createSdkChildSession,
-		private readonly createProcesses: () => ChildProcesses = () => new BackgroundShellRegistry(),
 	) {}
 
 	async run<T>(options: RunOptions<T>): Promise<string> {
 		if (options.signal?.aborted) throw abortError();
-		const processes = this.createProcesses();
 		let parentAborted = false;
 		let child: ChildSession | undefined;
 		const onAbort = () => {
@@ -61,7 +55,7 @@ export class SubagentRunner {
 		options.signal?.addEventListener("abort", onAbort, { once: true });
 
 		try {
-			child = await this.createChild({ definition: options.definition, cwd: options.cwd, processes });
+			child = await this.createChild({ definition: options.definition, cwd: options.cwd });
 			if (parentAborted) {
 				await child.abort();
 				throw abortError();
@@ -76,7 +70,7 @@ export class SubagentRunner {
 			throw error;
 		} finally {
 			options.signal?.removeEventListener("abort", onAbort);
-			processes.killAll();
+			child?.processes.killAll();
 			child?.dispose();
 		}
 	}
@@ -84,6 +78,7 @@ export class SubagentRunner {
 
 /** Production adapter: a fresh in-memory pi SDK session, never a fork/resume. */
 export async function createSdkChildSession(config: ChildSessionConfig): Promise<ChildSession> {
+	const processes = new BackgroundShellRegistry();
 	const slash = config.definition.model.indexOf("/");
 	if (slash < 1) throw new Error(`invalid resolved model "${config.definition.model}"`);
 	const provider = config.definition.model.slice(0, slash);
@@ -96,10 +91,17 @@ export async function createSdkChildSession(config: ChildSessionConfig): Promise
 		tools: [...config.definition.tools, ...(config.definition.allowMcp ? ["mcp"] : [])],
 		sessionManager: SessionManager.inMemory(config.cwd),
 	};
-	const { session } = await withShellRegistry(config.processes as BackgroundShellRegistry, () => createAgentSession(options));
+	let session: Awaited<ReturnType<typeof createAgentSession>>["session"];
+	try {
+		({ session } = await withShellRegistry(processes, () => createAgentSession(options)));
+	} catch (error) {
+		processes.killAll();
+		throw error;
+	}
 	session.agent.state.systemPrompt = config.definition.systemPrompt;
 	return {
 		sessionID: session.sessionId,
+		processes,
 		prompt: (message) => session.agent.prompt(message),
 		finalMessage: () => session.getLastAssistantText(),
 		abort: () => session.abort(),
