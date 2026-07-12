@@ -238,6 +238,10 @@ describe("selectPosture", () => {
 		const merged = mergeProfiles(BUILTIN_PROFILES, { modes: { medium: { posture: "brief" } } });
 		expect(selectPosture(merged, "medium")).toBe("brief");
 	});
+
+	it("selects no posture for a null Mode", () => {
+		expect(selectPosture(BUILTIN_PROFILES, null)).toBeUndefined();
+	});
 });
 
 // ── loadProfiles (file seam) ──────────────────────────────────────

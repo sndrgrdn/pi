@@ -5,8 +5,8 @@
  *
  * Three fixed Modes (low/medium/high, default medium). Switching a Mode
  * re-routes Main's model/reasoning through the Profile layer. Manual model
- * changes remain ordinary pi behavior — no `custom` state exists; the border
- * keeps the last explicitly selected Mode.
+ * or reasoning changes remain ordinary pi behavior and select `null` — the
+ * absence of a named Mode, never a fourth `custom` Mode.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -31,8 +31,10 @@ import {
  * over the globally persisted Mode; default `medium`. Unknown values are
  * ignored — Modes are exactly three.
  */
-export function pickInitialMode(recorded: unknown, global: unknown): Mode {
+export function pickInitialMode(recorded: unknown, global: unknown): Mode | null {
+	if (recorded === null) return null;
 	if (isMode(recorded)) return recorded;
+	if (global === null) return null;
 	if (isMode(global)) return global;
 	return DEFAULT_MODE;
 }
@@ -77,7 +79,7 @@ function readGlobalMode(): unknown {
 	}
 }
 
-function writeGlobalMode(mode: Mode): void {
+function writeGlobalMode(mode: Mode | null): void {
 	writeFileSync(globalModePath(), `${JSON.stringify({ mode }, null, "\t")}\n`);
 }
 
@@ -91,7 +93,7 @@ function recordedSessionMode(ctx: ExtensionContext): unknown {
 
 // ── Cross-extension Mode indicator (events bus) ───────────────────
 
-/** Emitted with the active Mode whenever it changes (payload: `Mode`). */
+/** Emitted whenever Mode changes (payload: `Mode | null`). */
 export const MODE_EVENT = "harness:mode";
 /** Emit this to ask the harness to re-announce the current Mode. */
 export const MODE_REQUEST_EVENT = "harness:mode:request";
@@ -102,7 +104,9 @@ export function registerModes(pi: ExtensionAPI): void {
 	// Load at startup so an invalid profiles.json fails loudly here — no
 	// fallback, no recovery (§2.3).
 	const profiles: ResolvedProfiles = loadProfiles(join(getAgentDir(), "profiles.json"));
-	let mode: Mode = DEFAULT_MODE;
+	let mode: Mode | null = DEFAULT_MODE;
+	let applyingMode = false;
+	let sessionStarted = false;
 
 	// Mode indicator (§2.5): state lives here; rendering lives in the
 	// prompt-box extension, which subscribes to MODE_EVENT.
@@ -130,11 +134,13 @@ export function registerModes(pi: ExtensionAPI): void {
 	}
 
 	async function switchMode(next: Mode, ctx: ExtensionContext): Promise<void> {
-		mode = next;
-		announceMode();
+		applyingMode = true;
 		const applied = await applyRoute(next, ctx);
+		applyingMode = false;
+		mode = next;
 		writeGlobalMode(next);
 		pi.appendEntry(MODE_ENTRY_TYPE, { mode: next });
+		announceMode();
 		if (applied) {
 			const route = resolveMainRoute(profiles, next);
 			ctx.ui.notify(`Mode: ${next} (${route.model} · ${route.reasoning})`, "info");
@@ -142,8 +148,16 @@ export function registerModes(pi: ExtensionAPI): void {
 	}
 
 	async function selectAndSwitch(ctx: ExtensionContext): Promise<void> {
-		const choice = await ctx.ui.select(`Mode (active: ${mode})`, [...MODES]);
+		const choice = await ctx.ui.select(`Mode (active: ${mode ?? "custom"})`, [...MODES]);
 		if (choice && choice !== mode) await switchMode(choice as Mode, ctx);
+	}
+
+	function selectCustomMode(): void {
+		if (!sessionStarted || applyingMode || mode === null) return;
+		mode = null;
+		writeGlobalMode(null);
+		pi.appendEntry(MODE_ENTRY_TYPE, { mode: null });
+		announceMode();
 	}
 
 	pi.registerCommand("mode", {
@@ -172,15 +186,26 @@ export function registerModes(pi: ExtensionAPI): void {
 	// Posture injection at session build (§2.4, §9.4): append the active
 	// Mode's posture block to the system prompt.
 	pi.on("before_agent_start", async (event) => {
-		return { systemPrompt: `${event.systemPrompt}\n\n${selectPosture(profiles, mode)}` };
+		const posture = selectPosture(profiles, mode);
+		if (posture) return { systemPrompt: `${event.systemPrompt}\n\n${posture}` };
 	});
 
-	pi.on("session_start", async (_event, ctx) => {
+	pi.on("model_select", async (event) => {
+		if (event.source !== "restore") selectCustomMode();
+	});
+
+	pi.on("thinking_level_select", async () => {
+		selectCustomMode();
+	});
+
+	pi.on("session_start", async (event, ctx) => {
 		// Resume restores the session's recorded Mode, re-resolved against
-		// current Profiles; otherwise the globally persisted Mode (§2.5).
-		mode = pickInitialMode(recordedSessionMode(ctx), readGlobalMode());
+		// current Profiles; new/reload reads global state. Neither applies a
+		// route: pi owns model/provider/thinking restoration.
+		const recorded = event.reason === "resume" ? recordedSessionMode(ctx) : undefined;
+		mode = pickInitialMode(recorded, readGlobalMode());
 		announceMode();
-		await applyRoute(mode, ctx);
 		pi.appendEntry(MODE_ENTRY_TYPE, { mode });
+		sessionStarted = true;
 	});
 }

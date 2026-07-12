@@ -83,11 +83,11 @@ Foundation: every later agent toolbox embeds these three tools.
 
 - [ ] `profiles.ts`: built-in Profile defaults (route tables §8); `~/.pi/agent/profiles.json` two-section partial-override schema, strict validation with precise errors (§2.3)
 - [ ] Posture blocks (low/medium/high + Task posture text) as prompt assets; uniform injection — append active posture to system prompt at session build (§2.4, §9.4)
-- [ ] `modes.ts`: Mode state; `/mode` command + `ctrl+s` selector; Mode published on the event bus for prompt-box to render in the editor top border; global persistence; resume restores recorded Mode and re-resolves against current Profiles (§2.5)
-- [ ] Main route switching per Mode (Terra/low, Sol/medium, Sol/xhigh); manual model changes remain ordinary pi behavior, border keeps last named Mode
+- [ ] `modes.ts`: `low | medium | high | null` Mode state; `/mode` command + `ctrl+s` selector; Mode published on the event bus for prompt-box to render in the editor top border; global persistence; resume restores recorded Mode state (§2.5)
+- [ ] Main route switching only on explicit Mode selection (Terra/low, Sol/medium, Sol/xhigh); startup/new/reload/resume preserve pi's model/provider/reasoning; manual model/reasoning changes persist `null`
 - [ ] Unit tests: profiles.json validation matrix (unknown Mode key, unknown agent key, unknown field, bad model id, bad reasoning level → each a precise error), merge semantics (partial override over defaults), route resolution per agent per Mode, posture selection
 
-**Smoke:** switch Modes via both entry points; border updates; model/reasoning follow §2.1; restart pi → Mode restored; invalid profiles.json fails loudly at startup; valid override observed live.
+**Smoke:** switch Modes via both entry points → route + named-only border update; manually change model/reasoning → `null` state + existing model/reasoning border; restart/new/reload/resume preserve pi's route and restore the appropriate global/session Mode state; invalid profiles.json fails loudly at startup; valid override observed live.
 
 ## Phase 5 — Shared subagent runtime (§3)
 

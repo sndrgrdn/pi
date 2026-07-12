@@ -22,6 +22,11 @@ const THINK_LABEL: Record<string, string> = {
   off: "off", minimal: "min", low: "low", medium: "med", high: "high", xhigh: "xhi", max: "max",
 };
 
+/** Named Mode replaces model/thinking; null preserves prompt-box's display. */
+export function selectTopRightParts(parts: string[], mode: string | null): string[] {
+  return mode === null ? parts : [mode];
+}
+
 // ── Extension ────────────────────────────────
 
 export default function promptBox(pi: ExtensionAPI) {
@@ -57,11 +62,9 @@ export default function promptBox(pi: ExtensionAPI) {
       parts.push(colorFn(label));
     }
 
-    if (harnessMode) {
-      parts.push(theme.fg("accent", harnessMode));
-    }
-
-    return parts.join(dot);
+    const displayed = selectTopRightParts(parts, harnessMode);
+    if (harnessMode !== null) displayed[0] = theme.fg("accent", harnessMode);
+    return displayed.join(dot);
   };
 
   // ── bl: tokens + metrics ─────────

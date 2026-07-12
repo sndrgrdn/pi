@@ -13,6 +13,11 @@ describe("pickInitialMode", () => {
 		expect(pickInitialMode(undefined, "low")).toBe("low");
 	});
 
+	it("preserves an explicit null Mode from the session or global setting", () => {
+		expect(pickInitialMode(null, "high")).toBeNull();
+		expect(pickInitialMode(undefined, null)).toBeNull();
+	});
+
 	it("defaults to medium when nothing is recorded", () => {
 		expect(pickInitialMode(undefined, undefined)).toBe("medium");
 	});

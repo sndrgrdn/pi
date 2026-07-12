@@ -307,9 +307,9 @@ export function mergeProfiles(base: ResolvedProfiles, override: ProfilesOverride
 
 // ── Posture selection (§2.4) ──────────────────────────────────────
 
-/** The posture block appended to the system prompt for the active Mode. */
-export function selectPosture(profiles: ResolvedProfiles, mode: Mode): string {
-	return profiles.modes[mode].posture;
+/** The posture block appended for a named Mode; custom (`null`) has none. */
+export function selectPosture(profiles: ResolvedProfiles, mode: Mode | null): string | undefined {
+	return mode === null ? undefined : profiles.modes[mode].posture;
 }
 
 // ── Load (startup seam) ───────────────────────────────────────────

@@ -19,7 +19,7 @@ Baseline: pi `@earendil-works/pi-coding-agent` on the `v2` branch of `~/.pi/agen
 
 ### 2.1 Modes
 
-Three fixed named Modes: `low`, `medium`, `high`. Default `medium`. No `custom` state exists anywhere — manual model/reasoning changes are ordinary pi behavior; the border keeps the last explicitly selected named Mode. `profiles.json` cannot define additional Modes; unknown Mode keys are a validation error.
+Three fixed named Modes: `low`, `medium`, `high`. Default `medium`. Mode selection state is `low | medium | high | null`: `null` means the current model/reasoning was selected through ordinary pi behavior, not a fourth `custom` Mode. `profiles.json` cannot define additional Modes; unknown Mode keys are a validation error.
 
 Main routes:
 
@@ -69,9 +69,10 @@ Small prompt blocks tuning **reasoning depth, initiative, and verification inten
 
 ### 2.5 Persistence & UI
 
-- Selected Mode persists globally for future sessions. Resumed sessions restore their recorded Mode and re-resolve it against current Profile configuration.
+- Selected Mode (including `null`) persists globally for future sessions. Resumed sessions restore their recorded Mode state. Startup, new-session, reload, and resume never apply a Mode route: pi's restored/settings model, provider, and reasoning remain authoritative. Only explicit `/mode` or `ctrl+s` selection applies a route.
 - `/mode` command and `ctrl+s` both open a `low`/`medium`/`high` selector.
-- Active Mode right-aligned in the editor top border: `╭─── Sol · med · medium ─╮`. Mode *state* is harness-owned (`modes.ts`), published on the shared extension event bus (`harness:mode`, with a `harness:mode:request` reply); *rendering* belongs to the prompt-box extension, which owns all border styling.
+- Prompt-box's editor top border shows only the named Mode (`╭──── medium ─╮`). For `null`, prompt-box shows its existing model/reasoning display (`╭──── GPT-5.6 Sol · med ─╮`). Mode *state* is harness-owned (`modes.ts`), published on the shared extension event bus (`harness:mode`, with a `harness:mode:request` reply); *rendering* belongs to prompt-box, which owns all border styling.
+- Manual model or reasoning changes persist `null` and inject no Mode posture. Explicit Mode selection persists the named Mode and injects its posture.
 - No per-agent lines in the Mode selector; agent route tables are documented in `/mode` docs.
 
 ## 3. Shared subagent runtime
