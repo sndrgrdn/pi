@@ -1,5 +1,5 @@
 /**
- * Modes — session Mode state, `/mode` + ctrl+s entry points, editor-border
+ * Modes — session Mode state, `/mode` + ctrl+shift+m entry points, editor-border
  * indicator (published for prompt-box to render), persistence, and posture
  * injection (spec §2.1, §2.4–§2.5).
  *
@@ -176,7 +176,7 @@ export function registerModes(pi: ExtensionAPI): void {
 		},
 	});
 
-	pi.registerShortcut("ctrl+s", {
+	pi.registerShortcut("ctrl+shift+m", {
 		description: "Switch Mode",
 		handler: async (ctx) => {
 			await selectAndSwitch(ctx);
