@@ -71,7 +71,7 @@ Small prompt blocks tuning **reasoning depth, initiative, and verification inten
 
 - Selected Mode persists globally for future sessions. Resumed sessions restore their recorded Mode and re-resolve it against current Profile configuration.
 - `/mode` command and `ctrl+s` both open a `low`/`medium`/`high` selector.
-- Active Mode right-aligned in the editor top border: `╭──── medium ─╮`.
+- Active Mode right-aligned in the editor top border: `╭─── Sol · med · medium ─╮`. Mode *state* is harness-owned (`modes.ts`), published on the shared extension event bus (`harness:mode`, with a `harness:mode:request` reply); *rendering* belongs to the prompt-box extension, which owns all border styling.
 - No per-agent lines in the Mode selector; agent route tables are documented in `/mode` docs.
 
 ## 3. Shared subagent runtime

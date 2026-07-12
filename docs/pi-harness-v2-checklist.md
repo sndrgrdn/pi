@@ -25,7 +25,7 @@ Dispositions for existing V1 material:
   ```
   extensions/harness/
     index.ts            # extension entry: wires everything
-    modes.ts            # Mode state, /mode, ctrl+s, border, persistence
+    modes.ts            # Mode state, /mode, ctrl+s, mode events, persistence
     profiles.ts         # built-in Profiles + profiles.json load/validate/merge
     registry.ts         # flat agent-definition registry (§3.1)
     runner.ts           # shared subagent runner (createAgentSession)
@@ -83,7 +83,7 @@ Foundation: every later agent toolbox embeds these three tools.
 
 - [ ] `profiles.ts`: built-in Profile defaults (route tables §8); `~/.pi/agent/profiles.json` two-section partial-override schema, strict validation with precise errors (§2.3)
 - [ ] Posture blocks (low/medium/high + Task posture text) as prompt assets; uniform injection — append active posture to system prompt at session build (§2.4, §9.4)
-- [ ] `modes.ts`: Mode state; `/mode` command + `ctrl+s` selector; Mode right-aligned in editor top border; global persistence; resume restores recorded Mode and re-resolves against current Profiles (§2.5)
+- [ ] `modes.ts`: Mode state; `/mode` command + `ctrl+s` selector; Mode published on the event bus for prompt-box to render in the editor top border; global persistence; resume restores recorded Mode and re-resolves against current Profiles (§2.5)
 - [ ] Main route switching per Mode (Terra/low, Sol/medium, Sol/xhigh); manual model changes remain ordinary pi behavior, border keeps last named Mode
 - [ ] Unit tests: profiles.json validation matrix (unknown Mode key, unknown agent key, unknown field, bad model id, bad reasoning level → each a precise error), merge semantics (partial override over defaults), route resolution per agent per Mode, posture selection
 
