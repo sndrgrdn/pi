@@ -13,6 +13,7 @@ import { registerApplyPatch } from "./patch/tool.ts";
 import { BackgroundShellRegistry } from "./shell/registry.ts";
 import { registerShellStatus } from "./shell/status.ts";
 import skillTool from "./skill/index.ts";
+import { registerModes } from "./modes.ts";
 
 export default function harness(pi: ExtensionAPI) {
 	// Per-session background-process registry (spec §3.3), shared by the
@@ -29,5 +30,9 @@ export default function harness(pi: ExtensionAPI) {
 
 	skillTool(pi); // Phase 3 (§4.5)
 
-	// Later phases: modes, subagent runtime.
+	// Phase 4 (§2): Modes + Profiles. Loads (and strictly validates)
+	// ~/.pi/agent/profiles.json — an invalid file fails startup loudly.
+	registerModes(pi);
+
+	// Later phases: subagent runtime.
 }
