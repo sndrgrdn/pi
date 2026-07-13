@@ -54,7 +54,8 @@ const spec: AgentToolSpec<LibrarianParams> = {
 	}),
 	finalize: (answer) => ({ content: answer }),
 	recover: (error) => {
-		throw mapLibrarianError(error); // always rethrows — friendlier message for context exhaustion
+		// Rethrow rather than return a recovery: librarian has no partial report worth salvaging.
+		throw mapLibrarianError(error);
 	},
 	presentation: { action: "librarian", target: (params) => params.query },
 	tools: [
