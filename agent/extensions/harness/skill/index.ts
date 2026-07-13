@@ -24,11 +24,12 @@
  */
 
 import { dirname } from "node:path";
-import type { ExtensionAPI, Skill } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, Skill, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { formatSkillsForPrompt } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem, AutocompleteProvider, AutocompleteSuggestions } from "@earendil-works/pi-tui";
-import { fuzzyFilter, Text } from "@earendil-works/pi-tui";
+import { fuzzyFilter } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import { createTraceRenderer, type TraceInvocation, withTraceDetails } from "../ui/trace.ts";
 import {
 	availableSkillsBlock,
 	buildDirective,
@@ -37,6 +38,61 @@ import {
 	type SkillEntry,
 	TRIGGER_CLASS,
 } from "./core.ts";
+
+interface SkillParams {
+	name: string;
+}
+
+function skillTraceInvocation(args: SkillParams): TraceInvocation {
+	return { action: "skill", target: args.name };
+}
+
+const traceRenderer = createTraceRenderer<SkillParams>({ invocation: skillTraceInvocation });
+
+export function createSkillTool(skillsByName: ReadonlyMap<string, SkillEntry>): ToolDefinition<any, any, any> {
+	function activateSkill(name: string): { title: string; text: string } {
+		const skill = skillsByName.get(name);
+		const names = [...skillsByName.keys()];
+		if (!skill) {
+			// Only on a miss does the catalog enter context, as recovery —
+			// fuzzy-ranked against the attempted name, untruncated.
+			throw new Error(`Unknown skill "${name}".\n${availableSkillsBlock(names, name)}`);
+		}
+		try {
+			const text = renderSkillContent(skill);
+			return { title: `Loaded skill: ${name}`, text };
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			throw new Error(
+				`Failed to load skill "${name}" from ${skill.filePath}: ${message}\n${availableSkillsBlock(names, name)}`,
+			);
+		}
+	}
+
+	return {
+		name: "skill",
+		label: "skill",
+		description: [
+			"Load a skill by exact name and return its full instructions: specialized guidance for specific tasks.",
+			"Call it when the user explicitly requests a skill or an active skill explicitly directs invoking one.",
+			"For active-skill handoffs, wait until the surrounding instruction is reached and its condition holds; mentions and examples are inert.",
+			"Pass the name exactly as given — never an invented name or a filesystem path.",
+		].join("\n"),
+		parameters: Type.Object({
+			name: Type.String({ description: "Name of the skill the user asked for" }),
+		}),
+		async execute(_toolCallId, params: SkillParams, _signal, onUpdate) {
+			onUpdate?.({ content: [{ type: "text", text: "" }], details: withTraceDetails(undefined, "running") });
+			const { title, text } = activateSkill(params.name);
+			return {
+				content: [{ type: "text", text }],
+				details: withTraceDetails({ title, skill: params.name }, "success"),
+			};
+		},
+		renderCall: traceRenderer.renderCall,
+		renderResult: traceRenderer.renderResult,
+	} as ToolDefinition<any, any, any>;
+}
 
 export default function skillTool(pi: ExtensionAPI): void {
 	// ── State ──
@@ -77,70 +133,12 @@ export default function skillTool(pi: ExtensionAPI): void {
 		);
 	}
 
-	function activateSkill(name: string): { title: string; text: string } {
-		const skill = skillsByName.get(name);
-		const names = [...skillsByName.keys()];
-		if (!skill) {
-			// Only on a miss does the catalog enter context, as recovery —
-			// fuzzy-ranked against the attempted name, untruncated.
-			throw new Error(`Unknown skill "${name}".\n${availableSkillsBlock(names, name)}`);
-		}
-		try {
-			const text = renderSkillContent(skill);
-			return { title: `Loaded skill: ${name}`, text };
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			throw new Error(
-				`Failed to load skill "${name}" from ${skill.filePath}: ${message}\n${availableSkillsBlock(names, name)}`,
-			);
-		}
-	}
-
 	// ── Tool ──
 	// Registered eagerly at load time: on /resume pi renders the restored chat
 	// BEFORE emitting session_start (renderBeforeBind), and ToolExecution
 	// captures the tool definition at construction. Lazy registration meant
 	// resumed skill results lost their custom renderer and dumped raw content.
-	pi.registerTool({
-		name: "skill",
-		label: "skill",
-		description: [
-			"Load a skill by exact name and return its full instructions: specialized guidance for specific tasks.",
-			"Call it when the user explicitly requests a skill or an active skill explicitly directs invoking one.",
-			"For active-skill handoffs, wait until the surrounding instruction is reached and its condition holds; mentions and examples are inert.",
-			"Pass the name exactly as given — never an invented name or a filesystem path.",
-		].join("\n"),
-		parameters: Type.Object({
-			name: Type.String({ description: "Name of the skill the user asked for" }),
-		}),
-		async execute(_toolCallId, params) {
-			const { title, text } = activateSkill(params.name);
-			return {
-				content: [{ type: "text", text }],
-				details: { title, skill: params.name },
-			};
-		},
-		renderCall(args, theme, context) {
-			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			const name = (args as { name?: string })?.name ?? "";
-			const skill = skillsByName.get(name);
-			let line = `${theme.fg("toolTitle", theme.bold("skill"))} ${theme.fg("accent", name)}`;
-			if (skill) line += ` ${theme.fg("muted", skill.filePath)}`;
-			text.setText(line);
-			return text;
-		},
-		renderResult(result, options, theme, context) {
-			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			if (!options.expanded && !context.isError) {
-				text.setText("");
-				return text;
-			}
-			const output = result.content.find((c): c is { type: "text"; text: string } => c.type === "text")?.text ?? "";
-			const lines = output.split("\n");
-			text.setText(`\n${lines.map((line) => theme.fg("toolOutput", line)).join("\n")}`);
-			return text;
-		},
-	});
+	pi.registerTool(createSkillTool(skillsByName));
 
 	// ── Events ──
 
