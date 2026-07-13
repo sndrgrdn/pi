@@ -1,5 +1,5 @@
 /**
- * apply_patch chunk matcher (spec §4.4 Matching): Codex 4-pass ladder per
+ * apply_patch chunk matcher: Codex 4-pass ladder per
  * chunk (exact → rstrip → trim → unicode-punctuation-normalize), forward scan
  * from the previous chunk's end, `@@` context narrowing, `*** End of File`
  * EOF anchoring, trailing-empty-line retry — plus ambiguity detection: after
@@ -118,14 +118,14 @@ function findSecondHit(lines: string[], pattern: string[], match: SeekResult): n
 export interface ComputedReplacements {
 	/** Empty when any error was collected. */
 	replacements: Replacement[];
-	/** File-scoped error messages (spec §4.4 error catalog, path prefixed by the caller). */
+	/** File-scoped error messages, path prefixed by the caller. */
 	errors: string[];
 }
 
 /**
  * Schedule the replacements that transform `originalLines` per `chunks`.
  * Collect-all: a failed chunk records its error and matching continues with
- * later chunks so one retry turn can fix everything (spec §4.4 Errors).
+ * later chunks so one retry turn can fix everything.
  */
 export function computeReplacements(originalLines: string[], chunks: UpdateChunk[]): ComputedReplacements {
 	const replacements: Replacement[] = [];
@@ -209,7 +209,7 @@ export function splitContentLines(contents: string): string[] {
 	return lines;
 }
 
-/** Derive the full new file contents for an Update hunk (spec §4.4). */
+/** Derive the full new file contents for an Update hunk. */
 export function deriveNewContents(originalContents: string, chunks: UpdateChunk[]): DerivedContents {
 	const originalLines = splitContentLines(originalContents);
 

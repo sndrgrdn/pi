@@ -19,7 +19,6 @@ This repository implements **Pi Harness V2**: a constrained main-agent tool surf
     ├── models.json           # provider and model overrides
     ├── profiles.json         # mode and delegated-agent model routing
     ├── harness-mode.json     # active low/medium/high mode
-    ├── docs/                 # Harness V2 specification and checklist
     ├── extensions/           # TypeScript extensions and tests
     ├── skills/               # skill corpus loaded on demand
     ├── research/             # implementation research and evidence
@@ -51,11 +50,6 @@ The locked main-agent tool surface is:
 | `mcp` | Access MCP-backed integrations through `pi-mcp-adapter` |
 
 Modes (`low`, `medium`, and `high`) select main-agent model and reasoning settings. `agent/profiles.json` independently routes `finder`, `oracle`, `librarian`, and `task`; `agent/harness-mode.json` stores the active mode.
-
-The contract and implementation history live in:
-
-- [`agent/docs/pi-harness-v2-spec.md`](agent/docs/pi-harness-v2-spec.md)
-- [`agent/docs/pi-harness-v2-checklist.md`](agent/docs/pi-harness-v2-checklist.md)
 
 ## Extensions
 

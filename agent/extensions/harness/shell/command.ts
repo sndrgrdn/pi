@@ -1,5 +1,5 @@
 /**
- * `shell_command` — wait-not-kill shell execution (spec §4.1).
+ * `shell_command` — wait-not-kill shell execution.
  *
  * Runs foreground; if still running at the timeout (clamp 0–60s, default 10s)
  * it returns bounded output-so-far plus an opaque `shell-N` id and keeps
@@ -152,7 +152,7 @@ export function createShellCommandTool(registry: BackgroundShellRegistry): ToolD
 			child.stderr?.on("data", handleData);
 
 			// Foreground abort kills the process tree; backgrounded processes
-			// survive turn aborts (spec §4.1 kill paths).
+			// survive turn aborts.
 			let backgrounded = false;
 			const onAbort = () => {
 				if (!backgrounded && child.pid) killProcessTree(child.pid);

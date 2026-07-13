@@ -1,7 +1,7 @@
 /**
  * Modes — session Mode state, `/mode` + alt+s entry points, editor-border
  * indicator (published for prompt-box to render), persistence, and posture
- * injection (spec §2.1, §2.4–§2.5).
+ * injection.
  *
  * Three fixed Modes (low/medium/high, default medium). Switching a Mode
  * re-routes Main's model/reasoning through the Profile layer. Manual model
@@ -27,7 +27,7 @@ import {
 // ── Pure helpers (unit-tested) ────────────────────────────────────
 
 /**
- * Initial Mode precedence (§2.5): the session's recorded Mode (resume) wins
+ * Initial Mode precedence: the session's recorded Mode (resume) wins
  * over the globally persisted Mode; default `medium`. Unknown values are
  * ignored — Modes are exactly three.
  */
@@ -40,8 +40,8 @@ export function pickInitialMode(recorded: unknown, global: unknown): Mode | null
 }
 
 /**
- * `/mode` docs (§2.5: agent route tables are documented here, not in the
- * selector), derived from the loaded Profiles so overrides never go stale.
+ * `/mode` agent route tables are documented here, not in the selector, and
+ * derived from the loaded Profiles so overrides never go stale.
  */
 export function describeModeCommand(profiles: ResolvedProfiles): string {
 	const fmt = (r: { model: string; reasoning: string }) => `${r.model.split("/").pop()}/${r.reasoning}`;
@@ -105,19 +105,19 @@ export interface RegisteredModes {
 
 export function registerModes(pi: ExtensionAPI): RegisteredModes {
 	// Load at startup so an invalid profiles.json fails loudly here — no
-	// fallback, no recovery (§2.3).
+	// fallback or recovery.
 	const profiles: ResolvedProfiles = loadProfiles(join(getAgentDir(), "profiles.json"));
 	let mode: Mode | null = DEFAULT_MODE;
 	let applyingMode = false;
 	let sessionStarted = false;
 
-	// Mode indicator (§2.5): state lives here; rendering lives in the
+	// Mode indicator state lives here; rendering lives in the
 	// prompt-box extension, which subscribes to MODE_EVENT.
 	const announceMode = () => pi.events.emit(MODE_EVENT, mode);
 	pi.events.on(MODE_REQUEST_EVENT, announceMode);
 
 	/**
-	 * Point Main's model/reasoning at the route for `next` (§2.1). Returns
+	 * Point Main's model/reasoning at the route for `next`. Returns
 	 * whether the route was applied; failures have already been notified.
 	 */
 	async function applyRoute(next: Mode, ctx: ExtensionContext): Promise<boolean> {
@@ -186,7 +186,7 @@ export function registerModes(pi: ExtensionAPI): RegisteredModes {
 		},
 	});
 
-	// Posture injection at session build (§2.4, §9.4): append the active
+	// Posture injection at session build: append the active
 	// Mode's posture block to the system prompt.
 	pi.on("before_agent_start", async (event) => {
 		const posture = selectPosture(profiles, mode);

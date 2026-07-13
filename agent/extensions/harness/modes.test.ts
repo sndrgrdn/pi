@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { describeModeCommand, pickInitialMode } from "./modes.ts";
 import { BUILTIN_PROFILES, mergeProfiles } from "./profiles.ts";
 
-// ── Initial Mode precedence (spec §2.5 persistence) ───────────────
+// ── Initial Mode precedence ──────────────────────────────────────
 
 describe("pickInitialMode", () => {
 	it("prefers the session-recorded Mode (resume restores its Mode)", () => {
@@ -28,7 +28,7 @@ describe("pickInitialMode", () => {
 	});
 });
 
-// ── /mode docs derive from live Profiles (§2.5) ───────────────────
+// ── /mode docs derive from live Profiles ─────────────────────────
 
 describe("describeModeCommand", () => {
 	it("documents the built-in route table per agent per Mode", () => {

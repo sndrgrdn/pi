@@ -1,5 +1,5 @@
 /**
- * `shell_command_cancel` — kill a backgrounded process (spec §4.3).
+ * `shell_command_cancel` — kill a backgrounded process.
  *
  * Kill = killProcessTree verbatim: SIGKILL to the process group, the same
  * primitive as pi's foreground abort — one kill story. Cancel-preempts-poll:
@@ -41,7 +41,7 @@ export function createShellCancelTool(registry: BackgroundShellRegistry): ToolDe
 		renderShell: "self",
 		async execute(_toolCallId, params: ShellCancelParams, _signal, onUpdate, _ctx) {
 			emitTraceRunning(onUpdate);
-			// Lazy sweep of exited-but-unpolled records (spec §4.2 lifetime).
+			// Lazy sweep of exited-but-unpolled records.
 			registry.sweep();
 
 			const record = registry.get(params.id);

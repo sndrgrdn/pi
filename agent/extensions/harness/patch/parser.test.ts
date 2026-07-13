@@ -1,5 +1,5 @@
 /**
- * Grammar accept/reject table for the apply_patch envelope parser (spec §4.4).
+ * Grammar accept/reject table for the apply_patch envelope parser.
  * Fixture cases ported from Codex `apply-patch/src/parser.rs` and
  * `streaming_parser.rs`.
  */

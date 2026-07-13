@@ -1,5 +1,5 @@
 /**
- * `apply_patch` — the sole editor on the V2 surface (spec §4.4).
+ * `apply_patch` — the sole editor on the V2 surface.
  *
  * Plain JSON tool, schema `{patch}`. The model sees a summary-only A/M/D
  * result; Trace View renders one collapsed lifecycle row while expansion
@@ -90,7 +90,7 @@ const traceRenderer = createTraceRenderer<ApplyPatchParams>({
 });
 
 export function createApplyPatchTool(): ToolDefinition<any, any, any> {
-	// Per-session mutex: calls serialize (spec §4.4 Concurrency). The tool is
+	// Per-session mutex: calls serialize. The tool is
 	// constructed per session, so this closure is the session scope.
 	let mutex: Promise<unknown> = Promise.resolve();
 

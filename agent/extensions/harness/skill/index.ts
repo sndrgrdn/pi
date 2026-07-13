@@ -1,5 +1,5 @@
 /**
- * Skill tool extension (§4.5) — context-purist V1 carry-forward.
+ * Skill tool extension — context-purist V1 carry-forward.
  *
  * Implements the "dedicated tool activation" pattern from the Agent Skills
  * spec instead of pi's built-in "read the SKILL.md" pattern: skill content
@@ -17,10 +17,9 @@
  * - no dedupe: repeated activations re-inject content on purpose, so skills
  *   survive compaction in long sessions
  *
- * Compaction contingency (§4.5): pi's SessionBeforeCompactResult only allows
+ * Compaction contingency: pi's SessionBeforeCompactResult only allows
  * cancel or full compaction replacement — the summarizer prompt is NOT
- * extendable, so active-skill recording falls back to plain V1 behavior
- * (noted in docs/pi-harness-v2-checklist.md Phase 3).
+ * extendable, so active-skill recording falls back to plain V1 behavior.
  */
 
 import { dirname } from "node:path";
@@ -154,7 +153,7 @@ export default function skillTool(
 
 	// One handler, three jobs: sync the skill map with pi's authoritative
 	// data, strip pi's skill catalog from the system prompt (no catalog
-	// anywhere — §4.5 activation authority), and inject the skill-reference
+	// anywhere), and inject the skill-reference
 	// directive as a hidden message (in LLM context, invisible in the TUI).
 	// Scans the expanded prompt (post-template-expansion) so refs from
 	// prompt templates are caught too.

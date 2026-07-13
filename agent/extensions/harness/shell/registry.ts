@@ -1,5 +1,5 @@
 /**
- * Per-session background-process registry for the shell triplet (spec §3.3, §4.1–§4.3).
+ * Per-session background-process registry for the shell triplet.
  *
  * Owns opaque `shell-N` ids, the accumulator temp file with byte-offset
  * cursors for lossless incremental reads, read-once completion, the 1h lazy
@@ -16,7 +16,7 @@ export const SWEEP_AFTER_MS = 60 * 60 * 1000;
 /** Cap on how much of the temp file a single read pulls into memory. */
 const MAX_READ_BYTES = 5 * 1024 * 1024;
 
-/** Clamp 0–60000ms, default 10000, floor, non-finite → default (spec §4.1). */
+/** Clamp 0–60000ms, default 10000, floor, non-finite → default. */
 export function clampTimeoutMs(value: unknown): number {
 	if (typeof value !== "number" || !Number.isFinite(value)) return DEFAULT_TIMEOUT_MS;
 	return Math.min(MAX_TIMEOUT_MS, Math.max(0, Math.floor(value)));
@@ -223,7 +223,7 @@ export class BackgroundShellRegistry {
 	}
 
 	/**
-	 * Cancel-preempts-poll (spec §4.3): mark the record cancelled and wake any
+	 * Cancel-preempts-poll: mark the record cancelled and wake any
 	 * in-flight status wait so it resolves immediately with output-so-far.
 	 */
 	requestCancel(record: ShellProcessRecord): void {
@@ -255,7 +255,7 @@ export class BackgroundShellRegistry {
 		}
 	}
 
-	/** Session end kills everything still alive (spec §3.3). */
+	/** Session end kills everything still alive. */
 	killAll(): void {
 		for (const record of this.records.values()) {
 			if (!record.exited && record.pid) killProcessTree(record.pid);

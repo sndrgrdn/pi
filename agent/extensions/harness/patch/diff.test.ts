@@ -1,5 +1,5 @@
 /**
- * Display-diff generation for the apply_patch TUI (spec §4.4 UI): pi's
+ * Display-diff generation for the apply_patch TUI: pi's
  * line-numbered diff format (`+N `, `-N `, ` N `, `...`), built exactly from
  * the preflighted replacement plan — no diff algorithm.
  */

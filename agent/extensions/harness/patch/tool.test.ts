@@ -1,5 +1,5 @@
 /**
- * apply_patch tool contract (spec §4.4): schema `{patch}`, summary-only A/M/D
+ * apply_patch tool contract: schema `{patch}`, summary-only A/M/D
  * model result, per-file diff details for the TUI, per-session mutex.
  */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";

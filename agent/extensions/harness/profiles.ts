@@ -1,6 +1,5 @@
 /**
- * Profiles — built-in resolved bundles + profiles.json load/validate/merge
- * (spec §2.2–§2.3, §8; synthesis decision §9.1).
+ * Profiles — built-in resolved bundles + profiles.json load/validate/merge.
  *
  * A Profile is an internal resolved bundle: model, reasoning, and posture per
  * Mode for Main, plus per-agent routes. Route tables for Mode-dependent
@@ -31,7 +30,7 @@ export interface Route {
 	reasoning: ReasoningLevel;
 }
 
-/** Main's per-Mode bundle: route + posture prompt block (§2.4). */
+/** Main's per-Mode bundle: route + posture prompt block. */
 export interface ModeProfile extends Route {
 	posture: string;
 }
@@ -41,7 +40,7 @@ export type AgentKey = "finder" | "librarian" | "oracle" | "task";
 /**
  * Resolved bundles. Agents are uniformly `Record<Mode, Route>`: Mode-invariant
  * agents (Finder, Librarian) simply carry the same route under every Mode —
- * the flat-vs-per-route distinction is a profiles.json schema fact (§9.1),
+ * the flat-vs-per-route distinction is a profiles.json schema fact,
  * not a resolved-bundle fact.
  */
 export interface ResolvedProfiles {
@@ -49,7 +48,7 @@ export interface ResolvedProfiles {
 	agents: Record<AgentKey, Record<Mode, Route>>;
 }
 
-// ── Built-in defaults (route summary §8) ──────────────────────────
+// ── Built-in defaults ─────────────────────────────────────────────
 
 const TERRA = "openai-codex/gpt-5.6-terra";
 const SOL = "openai-codex/gpt-5.6-sol";
@@ -62,14 +61,14 @@ function readPrompt(name: string): string {
 	return readFileSync(join(PROMPTS_DIR, name), "utf8").trim();
 }
 
-/** Posture blocks tune depth/initiative/verification only (§2.4). */
+/** Posture blocks tune depth/initiative/verification only. */
 export const POSTURES: Record<Mode, string> = {
 	low: readPrompt("posture-low.md"),
 	medium: readPrompt("posture-medium.md"),
 	high: readPrompt("posture-high.md"),
 };
 
-/** Task posture block, appended to Task child prompts (§9.4). */
+/** Task posture block, appended to Task child prompts. */
 export const TASK_POSTURE = readPrompt("task-posture.md");
 
 /** A Mode-invariant agent routes identically under every Mode. */
@@ -101,7 +100,7 @@ export const BUILTIN_PROFILES: ResolvedProfiles = {
 
 // ── Route resolution ──────────────────────────────────────────────
 
-/** Main's route for a Mode (§2.1). */
+/** Main's route for a Mode. */
 export function resolveMainRoute(profiles: ResolvedProfiles, mode: Mode): Route {
 	const { model, reasoning } = profiles.modes[mode];
 	return { model, reasoning };
@@ -109,13 +108,13 @@ export function resolveMainRoute(profiles: ResolvedProfiles, mode: Mode): Route 
 
 /**
  * An agent's route. Finder/Librarian are Mode-invariant; Oracle routes from
- * the parent's Mode, Task from its per-call `mode` param (§8).
+ * the parent's Mode, Task from its per-call `mode` param.
  */
 export function resolveAgentRoute(profiles: ResolvedProfiles, agent: AgentKey, mode: Mode): Route {
 	return profiles.agents[agent][mode];
 }
 
-// ── profiles.json validation (§2.3) ───────────────────────────────
+// ── profiles.json validation ──────────────────────────────────────
 
 /** Partial override shape accepted from profiles.json. */
 export interface RouteOverride {
@@ -141,8 +140,8 @@ export const AGENT_KEYS: readonly AgentKey[] = ["finder", "librarian", "oracle",
 const PER_ROUTE_AGENTS: readonly AgentKey[] = ["oracle", "task"];
 
 // Shape-level model id check: `provider/model-id`. Whether the model actually
-// exists/authenticates is resolved live via pi's registry and setModel (§2.3:
-// no fallback machinery; pi natively owns provider failures).
+// exists/authenticates is resolved live via pi's registry and setModel. There
+// is no fallback machinery; pi natively owns provider failures.
 const MODEL_ID_RE = /^[^\s/]+\/[^\s/][^\s]*$/;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -301,7 +300,7 @@ export function mergeProfiles(base: ResolvedProfiles, override: ProfilesOverride
 	};
 }
 
-// ── Posture selection (§2.4) ──────────────────────────────────────
+// ── Posture selection ─────────────────────────────────────────────
 
 /** The posture block appended for a named Mode; custom (`null`) has none. */
 export function selectPosture(profiles: ResolvedProfiles, mode: Mode | null): string | undefined {
@@ -313,7 +312,7 @@ export function selectPosture(profiles: ResolvedProfiles, mode: Mode | null): st
 /**
  * Load resolved Profiles: built-in defaults, optionally overridden by a
  * global profiles.json. Missing file → defaults. Malformed or invalid file →
- * loud Error naming the file; no fallback (§2.3).
+ * loud Error naming the file; no fallback.
  */
 export function loadProfiles(filePath: string): ResolvedProfiles {
 	if (!existsSync(filePath)) return structuredClone(BUILTIN_PROFILES);

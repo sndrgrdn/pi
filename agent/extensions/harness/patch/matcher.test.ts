@@ -1,5 +1,5 @@
 /**
- * 4-pass matching ladder + ambiguity detection (spec §4.4 Matching).
+ * 4-pass matching ladder + ambiguity detection.
  * seekSequence fixtures ported from Codex `apply-patch/src/seek_sequence.rs`;
  * replacement fixtures from `lib.rs` compute_replacements tests.
  */

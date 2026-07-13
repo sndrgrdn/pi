@@ -17,7 +17,7 @@ const SOL = "openai-codex/gpt-5.6-sol";
 const FABLE = "anthropic/claude-fable-5";
 const HAIKU = "anthropic/claude-haiku-4-5";
 
-// ── Route resolution (spec §8 route summary) ──────────────────────
+// ── Route resolution ──────────────────────────────────────────────
 
 describe("route resolution", () => {
 	it("scales Main's model and reasoning effort with the selected Mode", () => {
@@ -57,7 +57,7 @@ describe("route resolution", () => {
 	});
 });
 
-// ── profiles.json validation matrix (spec §2.3) ───────────────────
+// ── profiles.json validation matrix ───────────────────────────────
 
 describe("validateProfilesOverride", () => {
 	it("accepts an empty object and both empty sections", () => {
@@ -216,7 +216,7 @@ describe("mergeProfiles", () => {
 	});
 });
 
-// ── Posture selection (§2.4) ──────────────────────────────────────
+// ── Posture selection ─────────────────────────────────────────────
 
 describe("selectPosture", () => {
 	it("selects the active Mode's posture block", () => {

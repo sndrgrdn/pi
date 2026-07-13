@@ -1,5 +1,5 @@
 /**
- * Output formatting shared by the shell triplet (spec §4.1–§4.3): pi-style
+ * Output formatting shared by the shell triplet: pi-style
  * truncation with the temp-file footer, status-line suffixing, and the
  * 100ms TUI streaming throttle.
  */

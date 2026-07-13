@@ -1,5 +1,5 @@
 /**
- * `shell_command_status` — pure observation of a backgrounded process (spec §4.2).
+ * `shell_command_status` — pure observation of a backgrounded process.
  *
  * Waits for completion or timeout, streaming new output as progress. Reads
  * are lossless since-last-read slices backed by the accumulator temp-file
@@ -59,7 +59,7 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 		renderShell: "self",
 		async execute(_toolCallId, params: ShellStatusParams, signal, onUpdate, _ctx) {
 			emitTraceRunning(onUpdate);
-			// Lazy sweep of exited-but-unpolled records (spec §4.2 lifetime).
+			// Lazy sweep of exited-but-unpolled records.
 			registry.sweep();
 
 			const record = registry.get(params.id);
@@ -91,7 +91,7 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 					try {
 						await Promise.race([
 							record.exitPromise,
-							// Cancel-preempts-poll (spec §4.3): a cancel wakes this wait.
+							// Cancel-preempts-poll: a cancel wakes this wait.
 							record.cancelPromise,
 							new Promise<void>((resolvePromise) => {
 								timeoutHandle = setTimeout(resolvePromise, timeoutMs);

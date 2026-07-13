@@ -1,5 +1,5 @@
 /**
- * apply_patch applier (spec §4.4): full preflight → sequential writes →
+ * apply_patch applier: full preflight → sequential writes →
  * rollback; collect-all preflight errors; move + parent-dir creation;
  * cwd-relative and absolute path handling; A/M/D summary.
  */

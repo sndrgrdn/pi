@@ -1,5 +1,5 @@
 /**
- * Skill tool — pure logic (§4.5).
+ * Skill tool — pure logic.
  *
  * Everything model-facing that doesn't need the extension runtime lives
  * here so it's unit-testable: trigger matching, directive construction,

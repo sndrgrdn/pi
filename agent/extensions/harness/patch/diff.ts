@@ -1,5 +1,5 @@
 /**
- * Display-diff builder for the apply_patch TUI (spec §4.4 UI). Produces pi's
+ * Display-diff builder for the apply_patch TUI. Produces pi's
  * line-numbered diff text (`+N content` / `-N content` / ` N content` with a
  * `...` separator), consumable by pi's `renderDiff`. Built directly from the
  * preflighted replacement plan, so it reflects exactly what was applied.

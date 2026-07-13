@@ -1,5 +1,5 @@
 /**
- * apply_patch applier (spec §4.4 Atomicity/Paths/Errors): full preflight —
+ * apply_patch applier: full preflight —
  * parse, read every target, match every chunk, compute all new contents —
  * before any write. Sequential writes with rollback from held prior contents;
  * any write failure restores written files and reports the patch wholly
@@ -62,7 +62,7 @@ function diffFields(
 }
 
 export interface ApplyPatchResult {
-	/** Model-facing summary: `Success. …` + `A/M/D` lines only (spec §4.4 Result). */
+	/** Model-facing summary: `Success. …` + `A/M/D` lines only. */
 	summary: string;
 	files: AppliedFile[];
 }
@@ -93,7 +93,7 @@ export async function applyPatch(
 	if (hunks.length === 0) throw new Error("No files were modified.");
 
 	// Preflight: read every target, match every chunk, compute all new
-	// contents before any write. Collect every error (spec §4.4 Errors).
+	// contents before any write. Collect every error.
 	const planned: PlannedFile[] = [];
 	const errors: string[] = [];
 
@@ -196,7 +196,7 @@ export async function applyPatch(
 
 	if (errors.length > 0) throw new Error(errors.join("\n"));
 
-	// Sequential writes with rollback (spec §4.4 Atomicity).
+	// Sequential writes with rollback.
 	const executed: WriteStep[] = [];
 	try {
 		for (const { steps } of planned) {
@@ -250,7 +250,7 @@ async function rollback(ops: PatchFsOps, executed: WriteStep[]): Promise<string[
 	return failures;
 }
 
-/** cwd-relative display path; absolute patch paths stay absolute (spec §4.4 Paths). */
+/** cwd-relative display path; absolute patch paths stay absolute. */
 export function displayPath(cwd: string, path: string): string {
 	if (!isAbsolute(path)) return path;
 	const rel = relative(cwd, path);

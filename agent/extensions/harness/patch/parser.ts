@@ -1,5 +1,5 @@
 /**
- * apply_patch envelope parser (spec §4.4): full Codex envelope grammar with
+ * apply_patch envelope parser: full Codex envelope grammar with
  * lenient parse and loud truncation failure. Ported from Codex
  * `apply-patch/src/parser.rs` + `streaming_parser.rs`.
  *
@@ -40,7 +40,7 @@ export type Hunk =
 	| { type: "delete"; path: string }
 	| { type: "update"; path: string; movePath: string | undefined; chunks: UpdateChunk[] };
 
-/** Envelope parse failure. Parse errors are fail-fast (spec §4.4 Errors). */
+/** Envelope parse failure. Parse errors are fail-fast. */
 export class PatchParseError extends Error {
 	constructor(why: string, lineNumber?: number) {
 		super(lineNumber === undefined ? `Invalid patch: ${why}` : `Invalid patch (line ${lineNumber}): ${why}`);
