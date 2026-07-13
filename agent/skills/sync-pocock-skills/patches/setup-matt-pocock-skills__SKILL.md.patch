@@ -9,16 +9,16 @@
  - `CONTEXT.md` and `CONTEXT-MAP.md` at the repo root
  - `docs/adr/` and any `src/*/docs/adr/` directories
  - `docs/agents/` — does this skill's prior output already exist?
-@@ -77,7 +77,7 @@
+@@ -64,7 +64,7 @@
  
  Show the user a draft of:
  
 -- The `## Agent skills` block to add to whichever of `CLAUDE.md` / `AGENTS.md` is being edited (see step 4 for selection rules)
 +- The `## Agent skills` block to add to whichever of `AGENTS.md` / `CLAUDE.md` is being edited (see step 4 for selection rules)
- - The contents of `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md`, `docs/agents/domain.md`
+ - The contents of `docs/agents/issue-tracker.md`, `docs/agents/domain.md`, and `docs/agents/triage-labels.md` (the last only when `triage` is installed)
  
  Let them edit before writing.
-@@ -86,8 +86,8 @@
+@@ -73,8 +73,8 @@
  
  **Pick the file to edit:**
  
