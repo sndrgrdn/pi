@@ -68,6 +68,16 @@ Foundation: every later agent toolbox embeds these three tools.
 
 **Smoke:** multi-file patch applies atomically in TUI with diffs; deliberately ambiguous patch errors with both line numbers; malformed envelope fails loudly.
 
+## Phase 2a — read tool (§4.3a, amendment §11)
+
+Added by the 2026-07-12 amendment. Harness-built `read` — the harness runs builtin-less; port the V1 read extension from git history (deleted in Phase 0 commit `de70a3a`).
+
+- [ ] Port V1 `read.ts` into the harness: `{path, offset?, limit?}`, text bounds 2000 lines / 50KB + continuation hint, image formats (jpg/png/gif/webp/bmp) as attachments, loud missing-file errors
+- [ ] Register on Main (Task gets it in Phase 9)
+- [ ] Unit tests: offset/limit windows, truncation bounds, image mime detection, missing-file error shape
+
+**Smoke:** read a text file with offset/limit; read a png → image attachment in the TUI.
+
 ## Phase 3 — Skill port (§4.5)
 
 - [x] Port `skill.ts` into `harness/skill/` — V1 behavior verbatim: tool schema `{name}`, result format (`<skill_content>` + resources cap 20), autocomplete, `$name`/`/name` triggers with path-fragment guards
@@ -136,7 +146,7 @@ Foundation: every later agent toolbox embeds these three tools.
 
 - [ ] Binding: `{prompt, description, mode?}` (omitted = `low`); Task-owned routes via Profiles; parent Mode never flows in; `mode` field description names the three routes
 - [ ] Prompt assembly: `SYSTEM.md` verbatim + `APPEND_SYSTEM.md` + project context + Mode posture block for the `mode` param + Task posture block (§9.4)
-- [ ] Toolbox: shell triplet + `apply_patch` + `skill` + `finder` + `librarian` + `mcp` gateway (`allowMcp: true`); no `task`, no `oracle`; per-child apply_patch mutex
+- [ ] Toolbox: shell triplet + harness `read` (§4.3a) + `apply_patch` + `skill` + `finder` + `librarian` + `mcp` gateway (`allowMcp: true`); no `task`, no `oracle`; per-child apply_patch mutex
 - [ ] `$name` skill triggers run on `prompt` args exactly as on user prompts
 - [ ] Cancellation report: mechanical completed-work report from tool log (caps per §6.5) in `<task_error sessionID>`; child hard error → LLM summarizer pass over the tool-call log
 - [ ] Envelope `<task_result sessionID>`; TUI `Subagent (<mode>) working` → `Subagent finished`, detail = description
@@ -146,13 +156,13 @@ Foundation: every later agent toolbox embeds these three tools.
 
 ## Phase 10 — Surface lock (§4, §4.6)
 
-- [ ] Disable remaining pi builtins on Main via `pi.setActiveTools()` — no builtin read/edit/write/bash/ls visible
+- [ ] Disable any remaining pi builtins on Main via `pi.setActiveTools()` — harness tools only; no builtin read/edit/write/bash/ls visible (harness `read` per §4.3a is the only read)
 - [ ] Admit `pi-mcp-adapter@2.10.0` gateway unchanged on Main (and Task per Phase 9); no wrapper, no dynamic direct MCP tools; adapter commands/renderers preserved (§4.6)
-- [ ] Assert exactly ten tools on Main: `shell_command`, `shell_command_status`, `shell_command_cancel`, `apply_patch`, `skill`, `finder`, `oracle`, `librarian`, `task`, `mcp`
+- [ ] Assert exactly eleven tools on Main: `shell_command`, `shell_command_status`, `shell_command_cancel`, `read`, `apply_patch`, `skill`, `finder`, `oracle`, `librarian`, `task`, `mcp`
 - [ ] Assert child surfaces match the §6 toolbox matrix (incl. shell-triplet indivisibility §9.2)
 - [ ] Unit tests: toolbox matrix assertions per agent (registry-level)
 
-**Smoke:** fresh session lists exactly the ten tools; `/mcp` status works through the adapter; a builtin-tool name in a prompt produces no phantom call.
+**Smoke:** fresh session lists exactly the eleven tools; `read` returns an image attachment for a png; `/mcp` status works through the adapter; a disabled builtin-tool name in a prompt produces no phantom call.
 
 ## Phase 11 — Prompt & context reconciliation (§7)
 
@@ -167,7 +177,7 @@ Foundation: every later agent toolbox embeds these three tools.
 
 Run the full smoke script (all phase smoke items) plus the binary acceptance criteria:
 
-1. [ ] Main exposes exactly the ten §4 tools; no builtin read/edit/write/bash visible
+1. [ ] Main exposes exactly the eleven §4 tools (incl. harness `read`); no pi builtins visible
 2. [ ] Route table §8 verified live per Mode per agent (model + reasoning observed in session)
 3. [ ] Shell: background → lossless poll → cancel; child sessions cannot see Main's ids
 4. [ ] apply_patch: multi-file patch atomic; ambiguity error; rollback on forced failure

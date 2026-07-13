@@ -111,9 +111,9 @@ Amp-style single row per call: spinner + detail while running, completion label 
 
 ## 4. Main Agent Tool Surface
 
-Exactly ten tools: `shell_command`, `shell_command_status`, `shell_command_cancel`, `apply_patch`, `skill`, `finder`, `oracle`, `librarian`, `task`, `mcp`.
+Exactly eleven tools: `shell_command`, `shell_command_status`, `shell_command_cancel`, `read`, `apply_patch`, `skill`, `finder`, `oracle`, `librarian`, `task`, `mcp`. (Amended from ten — §11.)
 
-Omitted harness-wide: Todo, direct read/retrieval tools, direct web tools, media tools, dynamic plugin loading, all thread/session tools, `set_session_name`.
+Omitted harness-wide: Todo, other direct retrieval tools (no `grep`/`glob`/`ls` on Main), direct web tools, dedicated media tools, dynamic plugin loading, all thread/session tools, `set_session_name`.
 
 **Shell triplet rule (synthesis decision §9.2):** `shell_command`, `shell_command_status`, and `shell_command_cancel` are indivisible — any toolbox containing one contains all three.
 
@@ -148,6 +148,10 @@ Schema `{id}`. Kill = `killProcessTree` verbatim: immediate SIGKILL to the proce
 - **Cancel-preempts-poll:** cancel is always accepted, never queued. An in-flight status wait resolves immediately with output-so-far + `cancelled` marker (non-error); the cancel call itself is the completing read — consumes the remainder, reports cancelled, deletes the record.
 - Unknown id: same loud error as status.
 - **UI:** compact row `cancelled shell-N · $ <command>` + final output collapsed.
+
+### 4.3a `read` (amendment, §11)
+
+Harness-built `read` tool on Main and Task — the harness runs builtin-less, so this is a harness extension with a pi-parity contract, standing to pi's read machinery as `shell_command` stands to pi's bash machinery. It is a port of the V1 read extension (deleted in Phase 0; recover from git history): schema `{path, offset?, limit?}`, text bounded to pi's limits (2000 lines / 50KB, continuation hint), images (jpg/png/gif/webp/bmp) returned as attachments, loud missing-file errors. Rationale: subagent envelopes are text-only, so images can never reach the parent model through `finder`; shell covers text but cannot attach media. The image path is the V2 answer to Amp's `view_media`, and direct focused text reads make the `## Delegation` "never delegate one read" line literally satisfiable. Bulk exploration still belongs to `finder` (prompt-level discipline, not gating).
 
 ### 4.4 `apply_patch`
 
@@ -210,11 +214,11 @@ Toolbox matrix (shell triplet per §9.2):
 
 | Agent | Toolbox | allowMcp |
 |---|---|---|
-| Main | the ten tools of §4 | gateway on surface |
+| Main | the eleven tools of §4 | gateway on surface |
 | Finder | `grep`, `glob`, `read` (custom) | false |
 | Oracle | shell triplet, `finder`, `librarian` | false |
 | Librarian | `checkout`, `grep`, `glob`, `read`, shell triplet, pinned `web_search` + `web_fetch` (Exa) | false |
-| Task | shell triplet, `apply_patch`, `skill`, `finder`, `librarian`, `mcp` | true (gateway) |
+| Task | shell triplet, `read` (harness, §4.3a), `apply_patch`, `skill`, `finder`, `librarian`, `mcp` | true (gateway) |
 
 ### 6.1 Main
 
@@ -257,7 +261,7 @@ The mutating delegate. Full write authority identical to Main: ungated shell + `
 - **Isolation:** fresh session, parent's cwd, `prompt` arg as sole user message; no history fork, no resume.
 - **Verification is contractual:** the posture block demands verification results in the report; the tool description tells the parent to specify verification steps and to summarize for the user (the result is invisible to the user — Amp parity).
 - **Errors & cancellation (Amp parity):** parent abort kills children; a cancelled child returns a mechanical completed-work report built from the tool log (`Task was cancelled.` + `## Completed work` with 20-line diff / 10-line bash-output / 80-char command caps + `## In progress when cancelled`); child hard error (esp. context overflow) → an LLM summarizer pass over the full tool-call log returns accomplishments/files modified/findings. All error payloads in `<task_error sessionID>`. Spawn/validation failures plain and loud.
-- Depth = 1 via toolbox (no `task`, no `oracle`); `librarian` is the V2 translation of Amp's web tools; `view_media` has no V2 equivalent.
+- Depth = 1 via toolbox (no `task`, no `oracle`); `librarian` is the V2 translation of Amp's web tools; `view_media`'s role is covered by the harness `read` tool (§4.3a).
 
 ## 7. Prompt & project-context reconciliation
 
@@ -326,3 +330,7 @@ Model ids: `openai-codex/gpt-5.6-terra`, `openai-codex/gpt-5.6-sol`, `anthropic/
 ## 10. Out of scope (map-inherited)
 
 Production implementation; migration or V1 compatibility; V1 retirement; thread/session workflows; treating Amp behavior as automatically correct.
+
+## 11. Amendments
+
+1. **2026-07-12 — harness `read` tool added on Main + Task (surface ten → eleven).** Post-map amendment. The map omitted direct read tools and left `view_media` without an equivalent; that made media invisible to Main — subagent envelopes are text-only, so images cannot cross a `finder` result, and shell cannot attach them. Because the harness runs builtin-less, `read` is a harness-built extension with a pi-parity contract (port of the V1 read extension, §4.3a) — not an admitted builtin. Supersedes §4's original "direct read/retrieval tools omitted" and §6.5's "`view_media` has no V2 equivalent". Not on Finder (has its own custom `read`), Oracle (harness embeds files; shell suffices), or Librarian (has custom `read`).
