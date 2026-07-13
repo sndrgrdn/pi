@@ -8,6 +8,19 @@
         "claude-sonnet-4-6": {
           "contextWindow": 300000
         }
+      },
+      "openai-codex": {
+        "modelOverrides": {
+          "gpt-5.6-luna": {
+            "contextWindow": 272000
+          },
+          "gpt-5.6-sol": {
+            "contextWindow": 272000
+          },
+          "gpt-5.6-terra": {
+            "contextWindow": 272000
+          }
+        }
       }
     },
     "mlx": {
@@ -26,7 +39,10 @@
           "id": "mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit",
           "name": "Qwen3.6 (MLX local)",
           "reasoning": true,
-          "input": ["text", "image"],
+          "input": [
+            "text",
+            "image"
+          ],
           "contextWindow": 131072,
           "maxTokens": 8192,
           "cost": {
