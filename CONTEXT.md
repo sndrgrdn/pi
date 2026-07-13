@@ -51,3 +51,15 @@ _Avoid_: clone dir, temp checkout
 **Subagent**:
 A delegated agent run started by the primary agent to complete a bounded assignment with its own context.
 _Avoid_: child bot, worker agent
+
+**Trace View**:
+A compact presentation of tool activity that preserves full evidence behind expansion rather than changing or discarding tool output.
+_Avoid_: reduced output, terse mode
+
+**Mechanical State**:
+A tool outcome derived directly from lifecycle facts such as running, succeeded, failed, cancelled, backgrounded, or exit code, without interpreting output semantics.
+_Avoid_: inferred outcome, semantic summary
+
+**Progress Signal**:
+Ephemeral evidence that an active tool is advancing, shown only while it runs and omitted from the completed trace.
+_Avoid_: result summary, permanent activity log

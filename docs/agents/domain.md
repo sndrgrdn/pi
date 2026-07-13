@@ -1,33 +1,32 @@
 # Domain Docs
 
-How the engineering skills should consume a repo's domain documentation when exploring the codebase.
+How engineering skills consume this repo's domain documentation.
 
-## Before exploring, read these
+## Layout
 
-1. Check for **`CONTEXT.md`** at the repo root. If it exists, read it for the domain glossary. (Ignore `CONTEXT-MAP.md` — repos are treated as single-context.)
-2. Check **`docs/adr/`** for architectural decisions.
+This is a single-context repository:
 
-If none of these files exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The producer skill (`/grill-with-docs`) creates them lazily when terms or decisions actually get resolved.
-
-## File structure
-
-```
+```text
 /
 ├── CONTEXT.md
-├── docs/adr/
-│   ├── 0001-event-sourced-orders.md
-│   └── 0002-postgres-for-write-model.md
-└── src/
+└── docs/adr/
 ```
 
-## Use the glossary's vocabulary
+`docs/adr/` is created lazily when the first qualifying architectural decision is recorded.
 
-When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in `CONTEXT.md`. Don't drift to synonyms the glossary explicitly avoids.
+## Before exploring
 
-If the concept you need isn't in the glossary yet, that's a signal — either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/grill-with-docs`).
+1. Read `CONTEXT.md` at the repository root for the domain glossary.
+2. Read relevant decisions under `docs/adr/` when that directory exists.
 
-## Flag ADR conflicts
+If a file or directory does not exist, proceed silently. Do not propose creating it pre-emptively; `/domain-modeling` creates domain documentation when terms or decisions are resolved.
 
-If your output contradicts an existing ADR, surface it explicitly rather than silently overriding:
+## Use canonical vocabulary
 
-> _Contradicts ADR-0007 (event-sourced orders) — but worth reopening because…_
+Use terms as defined in `CONTEXT.md` in issue titles, specifications, hypotheses, tests, and implementation discussions. Avoid synonyms explicitly rejected by the glossary.
+
+If a required concept is absent, reconsider whether it belongs to the domain. If it does, resolve it through `/domain-modeling` and update the glossary inline.
+
+## Respect architectural decisions
+
+Surface any conflict with an existing ADR explicitly instead of silently overriding it.
