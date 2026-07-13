@@ -2,16 +2,15 @@
  * `apply_patch` — the sole editor on the V2 surface (spec §4.4).
  *
  * Plain JSON tool, schema `{patch}`. The model sees a summary-only A/M/D
- * result; the TUI renders a collapsed header (`apply_patch · N files (+x -y)`)
- * plus one block per file with its diff via pi's diff renderer. Calls
- * serialize through a per-session mutex.
+ * result; Trace View renders one collapsed lifecycle row while expansion
+ * preserves one block per file with pi's diff renderer. Calls serialize
+ * through a per-session mutex.
  */
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { renderDiff } from "@earendil-works/pi-coding-agent";
-import { Container, Spacer, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { renderToolTitle } from "../shell/output.ts";
-import { type AppliedFile, applyPatch, displayPath } from "./applier.ts";
+import { createTraceRenderer, formatTracePath, type TraceInvocation, withTraceDetails } from "../ui/trace.ts";
+import { type AppliedFile, applyPatch } from "./applier.ts";
 import { parsePatch } from "./parser.ts";
 
 const schema = Type.Object({
@@ -43,25 +42,47 @@ const description = [
 	"All preflight errors are reported together, so fix every reported problem in one retry.",
 ].join(" ");
 
-/** Collapsed TUI header: `apply_patch · N files (+x -y)` (spec §4.4 UI). */
-export function buildPatchHeader(patch: string): string {
-	let fileCount: number;
+function patchTraceInvocation(args: ApplyPatchParams, cwd: string): TraceInvocation {
+	let paths: string[] = [];
 	try {
-		fileCount = parsePatch(patch).length;
+		paths = [...new Set(parsePatch(args.patch).map((hunk) => formatTracePath(hunk.path, cwd)))];
 	} catch {
-		return "apply_patch";
+		// Incomplete and malformed invocations still receive a lifecycle row.
 	}
 	let added = 0;
 	let removed = 0;
-	for (const line of patch.split("\n")) {
+	for (const line of args.patch.split("\n")) {
 		if (line.startsWith("*** ")) continue;
 		if (line.startsWith("+")) added += 1;
 		else if (line.startsWith("-")) removed += 1;
 	}
-	return `apply_patch · ${fileCount} ${fileCount === 1 ? "file" : "files"} (+${added} -${removed})`;
+	return {
+		action: "apply_patch",
+		target: paths.length === 1 ? paths[0] : paths.length > 1 ? `${paths.length} files` : undefined,
+		qualifiers: [`+${added} -${removed}`],
+	};
 }
 
-export function createApplyPatchTool(): ToolDefinition<any, any, any> {
+const traceRenderer = createTraceRenderer<ApplyPatchParams>({
+	invocation: patchTraceInvocation,
+	evidence(result, theme, context) {
+		if (context.isError) return undefined;
+		const files = (result.details as ApplyPatchDetails | undefined)?.files ?? [];
+		if (files.length === 0) return undefined;
+		return files
+			.map((file) => {
+				const source = formatTracePath(file.path, context.cwd);
+				const label =
+					file.movePath === undefined ? source : `${source} -> ${formatTracePath(file.movePath, context.cwd)}`;
+				const marker = file.kind === "add" ? "A" : file.kind === "delete" ? "D" : "M";
+				const title = theme.fg("toolTitle", theme.bold(`${marker} ${label}`));
+				return file.diff ? `${title}\n${renderDiff(file.diff, { filePath: label })}` : title;
+			})
+			.join("\n");
+	},
+});
+
+export function createApplyPatchTool(cancelledCalls = new Set<string>()): ToolDefinition<any, any, any> {
 	// Per-session mutex: calls serialize (spec §4.4 Concurrency). The tool is
 	// constructed per session, so this closure is the session scope.
 	let mutex: Promise<unknown> = Promise.resolve();
@@ -71,9 +92,20 @@ export function createApplyPatchTool(): ToolDefinition<any, any, any> {
 		label: "apply_patch",
 		description,
 		parameters: schema,
-		async execute(_toolCallId, params: ApplyPatchParams, _signal, _onUpdate, ctx) {
+		async execute(toolCallId, params: ApplyPatchParams, signal, onUpdate, ctx) {
+			onUpdate?.({ content: [{ type: "text", text: "" }], details: withTraceDetails(undefined, "running") });
 			const run = async () => {
-				const result = await applyPatch(params.patch, ctx.cwd);
+				if (signal?.aborted) {
+					cancelledCalls.add(toolCallId);
+					throw new Error("Patch aborted");
+				}
+				let result: Awaited<ReturnType<typeof applyPatch>>;
+				try {
+					result = await applyPatch(params.patch, ctx.cwd, undefined, signal);
+				} catch (error) {
+					if (signal?.aborted) cancelledCalls.add(toolCallId);
+					throw error;
+				}
 				const files = result.files.map(
 					({ kind, path, movePath, diff, added, removed }): ApplyPatchFileDetail => ({
 						kind,
@@ -86,50 +118,23 @@ export function createApplyPatchTool(): ToolDefinition<any, any, any> {
 				);
 				return {
 					content: [{ type: "text", text: result.summary }],
-					details: { files } satisfies ApplyPatchDetails,
+					details: withTraceDetails({ files } satisfies ApplyPatchDetails, "success"),
 				};
 			};
 			const turn = mutex.then(run, run);
 			mutex = turn.catch(() => {});
 			return turn;
 		},
-		renderCall(args: ApplyPatchParams | undefined, theme, context) {
-			return renderToolTitle(buildPatchHeader(args?.patch ?? ""), theme, context);
-		},
-		renderResult(result, _options, theme, context) {
-			const container = (context.lastComponent as Container | undefined) ?? new Container();
-			container.clear();
-
-			if (context.isError) {
-				const text = (result?.content ?? [])
-					.map((c: { type: string; text?: string }) => (c.type === "text" ? (c.text ?? "") : ""))
-					.filter(Boolean)
-					.join("\n");
-				if (text) {
-					container.addChild(new Spacer(1));
-					container.addChild(new Text(theme.fg("error", text), 1, 0));
-				}
-				return container;
-			}
-
-			const files = (result?.details as ApplyPatchDetails | undefined)?.files ?? [];
-			for (const file of files) {
-				const label =
-					file.movePath === undefined
-						? displayPath(context.cwd, file.path)
-						: `${displayPath(context.cwd, file.path)} -> ${displayPath(context.cwd, file.movePath)}`;
-				const marker = file.kind === "add" ? "A" : file.kind === "delete" ? "D" : "M";
-				container.addChild(new Spacer(1));
-				container.addChild(new Text(theme.fg("toolTitle", theme.bold(`${marker} ${label}`)), 1, 0));
-				if (file.diff) {
-					container.addChild(new Text(renderDiff(file.diff, { filePath: label }), 1, 0));
-				}
-			}
-			return container;
-		},
+		renderCall: traceRenderer.renderCall,
+		renderResult: traceRenderer.renderResult,
 	} as ToolDefinition<any, any, any>;
 }
 
 export function registerApplyPatch(pi: ExtensionAPI): void {
-	pi.registerTool(createApplyPatchTool());
+	const cancelledCalls = new Set<string>();
+	pi.registerTool(createApplyPatchTool(cancelledCalls));
+	pi.on("tool_result", (event) => {
+		if (event.toolName !== "apply_patch" || !cancelledCalls.delete(event.toolCallId)) return undefined;
+		return { details: withTraceDetails(event.details, "cancelled") };
+	});
 }

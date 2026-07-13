@@ -39,6 +39,7 @@ interface TraceRenderContext<TArgs> {
 
 interface TraceRendererOptions<TArgs> {
 	invocation(args: TArgs, cwd: string): TraceInvocation;
+	evidence?(result: TraceResult, theme: TraceTheme, context: TraceRenderContext<TArgs>): string | undefined;
 }
 
 const statePresentation: Record<TraceState, { glyph: string; color: string }> = {
@@ -111,16 +112,15 @@ export function createTraceRenderer<TArgs>(options: TraceRendererOptions<TArgs>)
 				.map((value) => ` · ${theme.fg("muted", value)}`)
 				.join("");
 			const row = `${theme.fg(presentation.color, presentation.glyph)} ${theme.bold(invocation.action)}${target}${qualifiers}`;
-			const evidence = renderOptions.expanded ? resultText(result) : "";
-			component.setTrace(
-				row,
-				evidence
-					? evidence
-							.split("\n")
-							.map((line) => theme.fg("toolOutput", line))
-							.join("\n")
-					: "",
-			);
+			const customEvidence = renderOptions.expanded ? options.evidence?.(result, theme, context) : undefined;
+			const evidence = !renderOptions.expanded
+				? ""
+				: (customEvidence ??
+					resultText(result)
+						.split("\n")
+						.map((line) => theme.fg("toolOutput", line))
+						.join("\n"));
+			component.setTrace(row, evidence);
 			return component;
 		},
 	};

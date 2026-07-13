@@ -137,6 +137,38 @@ describe("applyPatch — preflight errors (collect-all)", () => {
 });
 
 describe("applyPatch — atomicity", () => {
+	it("rolls back writes when cancellation arrives during execution", async () => {
+		const cwd = makeCwd();
+		writeFileSync(join(cwd, "one.txt"), "one-old\n");
+		writeFileSync(join(cwd, "two.txt"), "two-old\n");
+		const controller = new AbortController();
+		let writes = 0;
+		const abortingOps: PatchFsOps = {
+			...defaultFsOps,
+			writeFile: async (path, content) => {
+				await defaultFsOps.writeFile(path, content);
+				writes += 1;
+				if (writes === 1) controller.abort();
+			},
+		};
+		const patch = wrap(
+			[
+				"*** Update File: one.txt",
+				"@@",
+				"-one-old",
+				"+one-new",
+				"*** Update File: two.txt",
+				"@@",
+				"-two-old",
+				"+two-new",
+			].join("\n"),
+		);
+
+		await expect(applyPatch(patch, cwd, abortingOps, controller.signal)).rejects.toThrow(/aborted/);
+		expect(readFileSync(join(cwd, "one.txt"), "utf8")).toBe("one-old\n");
+		expect(readFileSync(join(cwd, "two.txt"), "utf8")).toBe("two-old\n");
+	});
+
 	it("rolls back all written files on a forced mid-write failure", async () => {
 		const cwd = makeCwd();
 		writeFileSync(join(cwd, "one.txt"), "one-old\n");

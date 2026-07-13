@@ -88,9 +88,11 @@ export async function applyPatch(
 	patch: string,
 	cwd: string,
 	ops: PatchFsOps = defaultFsOps,
+	signal?: AbortSignal,
 ): Promise<ApplyPatchResult> {
 	const hunks = parsePatch(patch); // parse failure alone is fail-fast
 	if (hunks.length === 0) throw new Error("No files were modified.");
+	signal?.throwIfAborted();
 
 	// Preflight: read every target, match every chunk, compute all new
 	// contents before any write. Collect every error (spec §4.4 Errors).
@@ -98,6 +100,7 @@ export async function applyPatch(
 	const errors: string[] = [];
 
 	for (const hunk of hunks) {
+		signal?.throwIfAborted();
 		const absPath = resolvePath(cwd, hunk.path);
 		const existing = await ops.stat(absPath);
 
@@ -201,13 +204,18 @@ export async function applyPatch(
 	try {
 		for (const { steps } of planned) {
 			for (const step of steps) {
+				signal?.throwIfAborted();
 				if (step.op === "write") {
-					if (step.makeParents) await ops.mkdirs(dirname(step.absPath));
+					if (step.makeParents) {
+						await ops.mkdirs(dirname(step.absPath));
+						signal?.throwIfAborted();
+					}
 					await ops.writeFile(step.absPath, step.contents);
 				} else {
 					await ops.unlink(step.absPath);
 				}
 				executed.push(step);
+				signal?.throwIfAborted();
 			}
 		}
 	} catch (writeError) {
