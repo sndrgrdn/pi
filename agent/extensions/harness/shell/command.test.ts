@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createShellCommandTool } from "./command.ts";
+import { createShellCommandTool, registerShellCommand } from "./command.ts";
 import { BackgroundShellRegistry } from "./registry.ts";
 
 const ctx = { cwd: process.cwd() } as any;
@@ -23,13 +23,17 @@ describe("shell_command", () => {
 			(update: any) => updates.push(update),
 			ctx,
 		);
-		expect(updates[0]).toEqual({ content: [{ type: "text", text: "" }], details: undefined });
+		expect(updates[0]).toEqual({
+			content: [{ type: "text", text: "" }],
+			details: { trace: { state: "running", qualifiers: undefined } },
+		});
 	});
 
 	it("returns output for a completed exit-0 command", async () => {
 		const { tool } = makeTool();
 		const result = await run(tool, { command: "echo hello" });
 		expect(result.content[0].text).toBe("hello");
+		expect(result.details.trace).toEqual({ state: "success", qualifiers: undefined });
 	});
 
 	it("nonzero exit on a completed run is a tool error with output", async () => {
@@ -53,12 +57,36 @@ describe("shell_command", () => {
 		expect(text).toContain("started");
 		expect(text).toContain("backgrounded as shell-1 · still running");
 		expect(text).toContain("shell_command_status");
+		expect(result.details.trace).toEqual({ state: "success", qualifiers: ["shell-1", "backgrounded"] });
 		const record = registry.get("shell-1");
 		expect(record).toBeDefined();
 		expect(record!.exited).toBe(false);
 		// Backgrounding snapshot advanced the shared cursor: nothing new yet.
 		expect(registry.readAndAdvance(record!)).toBe("");
 		registry.killAll();
+	});
+
+	it("persists cancellation as structured result state", async () => {
+		let tool: any;
+		let resultHandler: any;
+		registerShellCommand(
+			{
+				registerTool: (definition: any) => {
+					tool = definition;
+				},
+				on: (event: string, handler: any) => {
+					if (event === "tool_result") resultHandler = handler;
+				},
+			} as any,
+			new BackgroundShellRegistry(),
+		);
+		const controller = new AbortController();
+		const pending = run(tool, { command: "sleep 30", timeout_ms: 5000 }, controller.signal);
+		setTimeout(() => controller.abort(), 100);
+		await expect(pending).rejects.toThrow(/Command aborted/);
+		expect(resultHandler({ toolName: "shell_command", toolCallId: "call-1", details: undefined })).toEqual({
+			details: { trace: { state: "cancelled", qualifiers: undefined } },
+		});
 	});
 
 	it("backgrounded processes survive turn aborts; foreground abort kills", async () => {

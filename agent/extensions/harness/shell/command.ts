@@ -23,6 +23,21 @@ import {
 	ShellOutputFile,
 } from "./registry.ts";
 
+type ShellTraceState = "running" | "success" | "cancelled";
+
+interface ShellTraceDetails {
+	trace: { state: ShellTraceState; qualifiers?: string[] };
+}
+
+function traceDetails(
+	details: unknown,
+	state: ShellTraceState,
+	qualifiers?: string[],
+): Record<string, unknown> & ShellTraceDetails {
+	const base = typeof details === "object" && details !== null && !Array.isArray(details) ? details : {};
+	return { ...base, trace: { state, qualifiers } };
+}
+
 const schema = Type.Object({
 	command: Type.String({
 		description: "The shell command to execute. Do not use cd — use the workdir parameter instead.",
@@ -68,21 +83,27 @@ function resolveWorkdir(cwd: string, workdir?: string): string {
 	return workdir ? (isAbsolute(workdir) ? workdir : resolve(cwd, workdir)) : cwd;
 }
 
-export function createShellCommandTool(registry: BackgroundShellRegistry): ToolDefinition<any, any, any> {
+export function createShellCommandTool(
+	registry: BackgroundShellRegistry,
+	cancelledCalls = new Set<string>(),
+): ToolDefinition<any, any, any> {
 	return {
 		name: "shell_command",
 		label: "shell_command",
 		description,
 		parameters: schema,
 		renderShell: "self",
-		async execute(_toolCallId, params: ShellCommandParams, signal, onUpdate, ctx) {
-			onUpdate?.({ content: [{ type: "text", text: "" }], details: undefined });
+		async execute(toolCallId, params: ShellCommandParams, signal, onUpdate, ctx) {
+			onUpdate?.({ content: [{ type: "text", text: "" }], details: traceDetails(undefined, "running") });
 			const workdir = resolveWorkdir(ctx.cwd, params.workdir);
 			if (!existsSync(workdir)) {
 				throw new Error(`Working directory does not exist: ${workdir}`);
 			}
 			const timeoutMs = clampTimeoutMs(params.timeout_ms);
-			if (signal?.aborted) throw new Error("Command aborted");
+			if (signal?.aborted) {
+				cancelledCalls.add(toolCallId);
+				throw new Error("Command aborted");
+			}
 
 			const { shell, args } = getShellConfig();
 			const output = new ShellOutputFile();
@@ -178,12 +199,16 @@ export function createShellCommandTool(registry: BackgroundShellRegistry): ToolD
 				if (details) output.close();
 				else output.unlink();
 				if (signal?.aborted) {
+					cancelledCalls.add(toolCallId);
 					throw new Error(appendStatus(text, "Command aborted"));
 				}
 				if (exitCode !== 0 && exitCode !== null) {
 					throw new Error(appendStatus(text, `Command exited with code ${exitCode}`));
 				}
-				return { content: [{ type: "text", text: text || "(no output)" }], details };
+				return {
+					content: [{ type: "text", text: text || "(no output)" }],
+					details: traceDetails(details, "success"),
+				};
 			}
 
 			// Still running at the timeout: background it.
@@ -193,7 +218,10 @@ export function createShellCommandTool(registry: BackgroundShellRegistry): ToolD
 			const snapshot = registry.readAndAdvance(record);
 			const { text, details } = formatShellOutput(snapshot, output.path);
 			const status = `backgrounded as ${record.id} · still running. Poll with shell_command_status({"id": "${record.id}"}).`;
-			return { content: [{ type: "text", text: appendStatus(text, status) }], details };
+			return {
+				content: [{ type: "text", text: appendStatus(text, status) }],
+				details: traceDetails(details, "success", [record.id, "backgrounded"]),
+			};
 		},
 		renderCall: traceRenderer.renderCall,
 		renderResult: traceRenderer.renderResult,
@@ -201,5 +229,10 @@ export function createShellCommandTool(registry: BackgroundShellRegistry): ToolD
 }
 
 export function registerShellCommand(pi: ExtensionAPI, registry: BackgroundShellRegistry): void {
-	pi.registerTool(createShellCommandTool(registry));
+	const cancelledCalls = new Set<string>();
+	pi.registerTool(createShellCommandTool(registry, cancelledCalls));
+	pi.on("tool_result", (event) => {
+		if (event.toolName !== "shell_command" || !cancelledCalls.delete(event.toolCallId)) return undefined;
+		return { details: traceDetails(event.details, "cancelled") };
+	});
 }

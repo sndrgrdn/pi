@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
 import { createTraceRenderer, formatTracePath, shellTraceInvocation } from "./trace.ts";
 
@@ -63,6 +64,35 @@ describe("Trace renderer", () => {
 			"/work",
 		);
 		expect(invocation).toEqual({ action: "$", target: "echo first …", qualifiers: ["in ./app"] });
+	});
+
+	it("clips rather than wraps a long collapsed row", () => {
+		const plainTheme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
+		const component = renderer.renderResult(
+			{ content: [{ type: "text", text: "hidden" }] },
+			{ expanded: false, isPartial: false },
+			plainTheme,
+			{ args: { command: "echo a very long command" }, cwd: "/work", isError: false },
+		);
+		const rendered = component.render(12);
+		expect(rendered).toHaveLength(1);
+		expect(visibleWidth(rendered[0]!)).toBe(12);
+		expect(rendered[0]).toContain("✓ $ echo a v");
+	});
+
+	it("adds mechanical result qualifiers", () => {
+		const component = renderer.renderResult(
+			{
+				content: [{ type: "text", text: "hidden" }],
+				details: { trace: { state: "success", qualifiers: ["shell-3", "backgrounded"] } },
+			},
+			{ expanded: false, isPartial: false },
+			theme,
+			{ args: { command: "sleep 10" }, cwd: "/work", isError: false },
+		);
+		expect(lines(component)).toEqual([
+			"<success>✓</success> <b>$</b> sleep 10 · <muted>shell-3</muted> · <muted>backgrounded</muted>",
+		]);
 	});
 });
 

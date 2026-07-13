@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { isAbsolute, relative, resolve } from "node:path";
-import { Text } from "@earendil-works/pi-tui";
+import { Text, truncateToWidth } from "@earendil-works/pi-tui";
 
 export type TraceState = "running" | "success" | "failed" | "cancelled";
 
@@ -11,7 +11,7 @@ export interface TraceInvocation {
 }
 
 interface TraceDetails {
-	trace?: { state?: TraceState };
+	trace?: { state?: TraceState; qualifiers?: string[] };
 }
 
 interface TraceResult {
@@ -48,6 +48,12 @@ function explicitState(details: unknown): TraceState | undefined {
 	return state && state in statePresentation ? state : undefined;
 }
 
+function detailQualifiers(details: unknown): string[] {
+	if (typeof details !== "object" || details === null) return [];
+	const qualifiers = (details as TraceDetails).trace?.qualifiers;
+	return Array.isArray(qualifiers) ? qualifiers.filter((value): value is string => typeof value === "string") : [];
+}
+
 function resultText(result: TraceResult): string {
 	return result.content
 		.filter((item): item is { type: string; text: string } => item.type === "text" && typeof item.text === "string")
@@ -56,12 +62,30 @@ function resultText(result: TraceResult): string {
 		.join("\n");
 }
 
+class TraceText extends Text {
+	private row = "";
+	private evidence = "";
+
+	setTrace(row: string, evidence: string): void {
+		this.row = row;
+		this.evidence = evidence;
+		this.invalidate();
+	}
+
+	override render(width: number): string[] {
+		if (!this.row) return [];
+		const row = truncateToWidth(this.row, width, "", true);
+		if (!this.evidence) return [row];
+		return [row, ...new Text(this.evidence, 0, 0).render(width)];
+	}
+}
+
 /** Shared public-contract renderer for one-row Trace View entries. */
 export function createTraceRenderer<TArgs>(options: TraceRendererOptions<TArgs>) {
 	return {
-		renderCall(_args: TArgs, _theme: TraceTheme, context: { lastComponent?: unknown }): Text {
-			const component = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			component.setText("");
+		renderCall(_args: TArgs, _theme: TraceTheme, context: { lastComponent?: unknown }): TraceText {
+			const component = (context.lastComponent as TraceText | undefined) ?? new TraceText("", 0, 0);
+			component.setTrace("", "");
 			return component;
 		},
 		renderResult(
@@ -69,24 +93,27 @@ export function createTraceRenderer<TArgs>(options: TraceRendererOptions<TArgs>)
 			renderOptions: { expanded: boolean; isPartial: boolean },
 			theme: TraceTheme,
 			context: TraceRenderContext<TArgs>,
-		): Text {
-			const component = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+		): TraceText {
+			const component = (context.lastComponent as TraceText | undefined) ?? new TraceText("", 0, 0);
 			const state =
 				explicitState(result.details) ??
 				(renderOptions.isPartial ? "running" : context.isError ? "failed" : "success");
 			const presentation = statePresentation[state];
 			const invocation = options.invocation(context.args, context.cwd);
 			const target = invocation.target ? ` ${invocation.target}` : "";
-			const qualifiers = (invocation.qualifiers ?? []).map((value) => ` · ${theme.fg("muted", value)}`).join("");
+			const qualifiers = [...(invocation.qualifiers ?? []), ...detailQualifiers(result.details)]
+				.map((value) => ` · ${theme.fg("muted", value)}`)
+				.join("");
 			const row = `${theme.fg(presentation.color, presentation.glyph)} ${theme.bold(invocation.action)}${target}${qualifiers}`;
 			const evidence = renderOptions.expanded ? resultText(result) : "";
-			component.setText(
+			component.setTrace(
+				row,
 				evidence
-					? `${row}\n${evidence
+					? evidence
 							.split("\n")
 							.map((line) => theme.fg("toolOutput", line))
-							.join("\n")}`
-					: row,
+							.join("\n")
+					: "",
 			);
 			return component;
 		},
