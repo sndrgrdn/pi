@@ -6,7 +6,7 @@ import { Type } from "typebox";
 import { buildEnvelope, parseEnvelope } from "../envelopes.ts";
 import type { ResolvedProfiles } from "../profiles.ts";
 import { resolveAgentRoute } from "../profiles.ts";
-import { resolveAgentDefinition } from "../registry.ts";
+import { AGENT_TOOLBOX_MATRIX, resolveAgentDefinition } from "../registry.ts";
 import type { SubagentRunner } from "../runner.ts";
 import { createSubagentRenderer } from "../ui/subagent.ts";
 
@@ -29,8 +29,9 @@ export function finderEnvelopeTitle(envelope: string): string | undefined {
 }
 
 export function createFinderTool(runner: Pick<SubagentRunner, "run">, profiles: ResolvedProfiles): ToolDefinition<any, any, any> {
+	const toolbox = AGENT_TOOLBOX_MATRIX.finder;
 	const definition = resolveAgentDefinition({
-		key: "finder", systemPrompt: prompt, tools: ["read", "grep", "find", "ls"], allowMcp: false,
+		key: "finder", systemPrompt: prompt, ...toolbox,
 	}, resolveAgentRoute(profiles, "finder", "medium"));
 	return {
 		name: "finder",

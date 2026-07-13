@@ -4,7 +4,7 @@ import { getAgentDir, type ToolDefinition } from "@earendil-works/pi-coding-agen
 import { Type } from "typebox";
 import { buildEnvelope } from "../envelopes.ts";
 import { type Mode, type ResolvedProfiles, TASK_POSTURE, resolveAgentRoute } from "../profiles.ts";
-import { resolveAgentDefinition } from "../registry.ts";
+import { AGENT_TOOLBOX_MATRIX, resolveAgentDefinition } from "../registry.ts";
 import { SubagentRunError, type SubagentRunner, type ToolLogEntry } from "../runner.ts";
 import { createShellCancelTool } from "../shell/cancel.ts";
 import { createShellCommandTool } from "../shell/command.ts";
@@ -22,7 +22,6 @@ const renderer = createSubagentRenderer({
 	running: ({ mode }) => `Subagent (${mode ?? "low"}) working`,
 	complete: "Subagent finished",
 });
-const TASK_TOOLS = ["shell_command", "shell_command_status", "shell_command_cancel", "read", "apply_patch", "skill", "finder", "librarian"] as const;
 
 export interface TaskInput { prompt: string; description: string; mode?: Mode }
 export interface TaskPromptParts { system: string; appendSystem: string; projectContext: string; modePosture: string; taskPosture: string }
@@ -87,7 +86,7 @@ export function createTaskTool(runner: Pick<SubagentRunner, "run">, profiles: Re
 			const systemPrompt = [base.system, base.appendSystem, base.projectContext, profiles.modes[mode].posture, TASK_POSTURE]
 				.filter(Boolean).join("\n\n");
 			const definition = resolveAgentDefinition({
-				key: "task", allowMcp: true, tools: TASK_TOOLS,
+				key: "task", ...AGENT_TOOLBOX_MATRIX.task,
 				systemPrompt,
 			}, resolveAgentRoute(profiles, "task", mode));
 			let envelope: string;

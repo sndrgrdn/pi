@@ -22,6 +22,20 @@ import { createTaskTool } from "./tools/task.ts";
 import { SubagentRunner } from "./runner.ts";
 import registerRead from "./tools/read.ts";
 
+export const MAIN_TOOL_NAMES = [
+	"shell_command",
+	"shell_command_status",
+	"shell_command_cancel",
+	"read",
+	"apply_patch",
+	"skill",
+	"finder",
+	"oracle",
+	"librarian",
+	"task",
+	"mcp",
+] as const;
+
 export default function harness(pi: ExtensionAPI) {
 	// Per-session background-process registry (spec §3.3), shared by the
 	// shell triplet (§9.2: indivisible).
@@ -48,4 +62,8 @@ export default function harness(pi: ExtensionAPI) {
 	pi.registerTool(createLibrarianTool(runner, profiles)); // Phase 7 (§6.4)
 	pi.registerTool(createOracleTool(runner, profiles, modes.activeMode)); // Phase 8 (§6.3)
 	pi.registerTool(createTaskTool(runner, profiles)); // Phase 9 (§6.5)
+
+	// Phase 10 (§4): start from an empty builtin baseline and admit only the
+	// designed Main Agent Tool Surface. `mcp` remains adapter-owned.
+	pi.setActiveTools([...MAIN_TOOL_NAMES]);
 }

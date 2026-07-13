@@ -5,7 +5,7 @@ import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { buildEnvelope } from "../envelopes.ts";
 import { DEFAULT_MODE, type Mode, type ResolvedProfiles, resolveAgentRoute } from "../profiles.ts";
-import { resolveAgentDefinition } from "../registry.ts";
+import { AGENT_TOOLBOX_MATRIX, resolveAgentDefinition } from "../registry.ts";
 import type { SubagentRunner } from "../runner.ts";
 import { createSubagentRenderer } from "../ui/subagent.ts";
 import { createFinderTool } from "./finder.ts";
@@ -16,7 +16,6 @@ import { createShellCancelTool } from "../shell/cancel.ts";
 
 const prompt = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "agents", "prompts", "oracle.md"), "utf8").trim();
 const renderer = createSubagentRenderer({ running: "Oracle exploring", complete: "Oracle has spoken" });
-const ORACLE_TOOL_NAMES = ["shell_command", "shell_command_status", "shell_command_cancel", "finder", "librarian"] as const;
 
 export interface OracleInput {
 	task: string;
@@ -62,8 +61,7 @@ export function createOracleTool(
 			const definition = resolveAgentDefinition({
 				key: "oracle",
 				systemPrompt: `${prompt}\n\nWorking directory: ${ctx.cwd}\nCurrent date: ${new Date().toISOString().slice(0, 10)}`,
-				tools: ORACLE_TOOL_NAMES,
-				allowMcp: false,
+				...AGENT_TOOLBOX_MATRIX.oracle,
 			}, resolveAgentRoute(profiles, "oracle", activeMode() ?? DEFAULT_MODE));
 			const envelope = await runner.run({
 				definition, cwd: ctx.cwd, input: params, signal,

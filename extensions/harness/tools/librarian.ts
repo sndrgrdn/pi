@@ -6,7 +6,7 @@ import { Type } from "typebox";
 import { buildEnvelope } from "../envelopes.ts";
 import type { ResolvedProfiles } from "../profiles.ts";
 import { resolveAgentRoute } from "../profiles.ts";
-import { resolveAgentDefinition } from "../registry.ts";
+import { AGENT_TOOLBOX_MATRIX, resolveAgentDefinition } from "../registry.ts";
 import type { SubagentRunner } from "../runner.ts";
 import { createSubagentRenderer } from "../ui/subagent.ts";
 import { createCheckoutTool } from "./checkout.ts";
@@ -32,11 +32,11 @@ export function mapLibrarianError(error: unknown): Error {
 }
 
 export function createLibrarianTool(runner: Pick<SubagentRunner, "run">, profiles: ResolvedProfiles): ToolDefinition<any, any, any> {
+	const toolbox = AGENT_TOOLBOX_MATRIX.librarian;
 	const definition = resolveAgentDefinition({
 		key: "librarian",
 		systemPrompt: prompt,
-		tools: ["checkout", "grep", "find", "read", "shell_command", "shell_command_status", "shell_command_cancel", "web_search_exa", "web_fetch_exa"],
-		allowMcp: false,
+		...toolbox,
 	}, resolveAgentRoute(profiles, "librarian", "medium"));
 	return {
 		name: "librarian",
