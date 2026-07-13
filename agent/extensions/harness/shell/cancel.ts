@@ -10,7 +10,8 @@
  */
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { appendStatus, bashToolBase, formatShellOutput, renderToolTitle } from "./output.ts";
+import { createTraceRenderer, withTraceDetails } from "../ui/trace.ts";
+import { appendStatus, formatShellOutput } from "./output.ts";
 import { type BackgroundShellRegistry, killProcessTree } from "./registry.ts";
 
 const schema = Type.Object({
@@ -27,13 +28,19 @@ const description = [
 	"An in-flight shell_command_status wait on the same id resolves immediately with output-so-far and a cancelled marker.",
 ].join(" ");
 
+const traceRenderer = createTraceRenderer<ShellCancelParams>({
+	invocation: (args) => ({ action: "cancel", target: args.id }),
+});
+
 export function createShellCancelTool(registry: BackgroundShellRegistry): ToolDefinition<any, any, any> {
 	return {
 		name: "shell_command_cancel",
 		label: "shell_command_cancel",
 		description,
 		parameters: schema,
-		async execute(_toolCallId, params: ShellCancelParams, _signal, _onUpdate, _ctx) {
+		renderShell: "self",
+		async execute(_toolCallId, params: ShellCancelParams, _signal, onUpdate, _ctx) {
+			onUpdate?.({ content: [{ type: "text", text: "" }], details: withTraceDetails(undefined, "running") });
 			// Lazy sweep of exited-but-unpolled records (spec §4.2 lifetime).
 			registry.sweep();
 
@@ -66,21 +73,16 @@ export function createShellCancelTool(registry: BackgroundShellRegistry): ToolDe
 				// Cancel is the completing read: consume the remainder, forget the id.
 				const { text, details } = formatShellOutput(registry.readAndAdvance(record), record.output.path);
 				registry.completeRead(record.id);
-				return { content: [{ type: "text", text: appendStatus(text, `cancelled ${record.id}`) }], details };
+				return {
+					content: [{ type: "text", text: appendStatus(text, `cancelled ${record.id}`) }],
+					details: withTraceDetails(details, "cancelled"),
+				};
 			} finally {
 				registry.endRead(record);
 			}
 		},
-		// Compact row `cancelled shell-N · $ <command>` (spec §4.3 UI); final
-		// output collapsed via pi's bash result renderer.
-		renderCall(args: ShellCancelParams | undefined, theme, context) {
-			const command = args ? registry.commandFor(args.id) : undefined;
-			const title = args ? `cancelled ${args.id}${command ? ` · $ ${command}` : ""}` : "...";
-			return renderToolTitle(title, theme, context);
-		},
-		renderResult(result, options, theme, context) {
-			return bashToolBase.renderResult?.(result, options, theme, context as any);
-		},
+		renderCall: traceRenderer.renderCall,
+		renderResult: traceRenderer.renderResult,
 	} as ToolDefinition<any, any, any>;
 }
 

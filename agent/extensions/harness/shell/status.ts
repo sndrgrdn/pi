@@ -10,7 +10,8 @@
  */
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { appendStatus, bashToolBase, formatShellOutput, renderToolTitle, UPDATE_THROTTLE_MS } from "./output.ts";
+import { createTraceRenderer, withTraceDetails } from "../ui/trace.ts";
+import { appendStatus, formatShellOutput, UPDATE_THROTTLE_MS } from "./output.ts";
 import {
 	type BackgroundShellRegistry,
 	clampTimeoutMs,
@@ -41,6 +42,10 @@ const description = [
 	"Output is truncated to the last 2000 lines or 50KB; the full output temp-file path is included when truncated.",
 ].join(" ");
 
+const traceRenderer = createTraceRenderer<ShellStatusParams>({
+	invocation: (args) => ({ action: "poll", target: args.id }),
+});
+
 function exitLabel(record: ShellProcessRecord): string {
 	return `exited ${record.exitCode ?? "(signal)"}`;
 }
@@ -51,7 +56,9 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 		label: "shell_command_status",
 		description,
 		parameters: schema,
+		renderShell: "self",
 		async execute(_toolCallId, params: ShellStatusParams, signal, onUpdate, _ctx) {
+			onUpdate?.({ content: [{ type: "text", text: "" }], details: withTraceDetails(undefined, "running") });
 			// Lazy sweep of exited-but-unpolled records (spec §4.2 lifetime).
 			registry.sweep();
 
@@ -75,7 +82,7 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 								record.output.readSlice(record.cursor, lastEmitted),
 								record.output.path,
 							);
-							onUpdate({ content: [{ type: "text", text }], details });
+							onUpdate({ content: [{ type: "text", text }], details: withTraceDetails(details, "running") });
 						}, UPDATE_THROTTLE_MS);
 					}
 
@@ -111,13 +118,16 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 				if (record.cancelled) {
 					// Preempted by cancel: resolve non-error with output-so-far.
 					// The cancel call is the completing read, not this one.
-					return { content: [{ type: "text", text: appendStatus(text, `${record.id} · cancelled`) }], details };
+					return {
+						content: [{ type: "text", text: appendStatus(text, `${record.id} · cancelled`) }],
+						details: withTraceDetails(details, "cancelled"),
+					};
 				}
 
 				if (!record.exited) {
 					return {
 						content: [{ type: "text", text: appendStatus(text, `${record.id} · still running`) }],
-						details,
+						details: withTraceDetails(details, "success", ["still running"]),
 					};
 				}
 
@@ -126,28 +136,17 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 				if (record.exitCode !== 0 && record.exitCode !== null) {
 					throw new Error(appendStatus(text, exitLabel(record)));
 				}
-				return { content: [{ type: "text", text: appendStatus(text, exitLabel(record)) }], details };
+				return {
+					content: [{ type: "text", text: appendStatus(text, exitLabel(record)) }],
+					details: withTraceDetails(details, "success", [exitLabel(record)]),
+				};
 			} finally {
 				if (updateTimer) clearInterval(updateTimer);
 				registry.endRead(record);
 			}
 		},
-		// Pi bash widget chrome, id-prefixed: `shell-N · $ <original command>`
-		// (spec §4.2 UI). renderResult delegates to pi's bash renderer, sharing
-		// the same elapsed-time state.
-		renderCall(args: ShellStatusParams | undefined, theme, context) {
-			const state = context.state as { startedAt?: number; endedAt?: number };
-			if (context.executionStarted && state.startedAt === undefined) {
-				state.startedAt = Date.now();
-				state.endedAt = undefined;
-			}
-			const command = args ? registry.commandFor(args.id) : undefined;
-			const title = args ? (command ? `${args.id} · $ ${command}` : args.id) : "...";
-			return renderToolTitle(title, theme, context);
-		},
-		renderResult(result, options, theme, context) {
-			return bashToolBase.renderResult?.(result, options, theme, context as any);
-		},
+		renderCall: traceRenderer.renderCall,
+		renderResult: traceRenderer.renderResult,
 	} as ToolDefinition<any, any, any>;
 }
 

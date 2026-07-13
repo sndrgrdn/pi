@@ -98,15 +98,6 @@ describe("BackgroundShellRegistry", () => {
 		expect(registry.get(record.id)).toBeUndefined();
 	});
 
-	it("commandFor survives completeRead for historic re-renders", () => {
-		const registry = new BackgroundShellRegistry();
-		const record = track(registry);
-		expect(registry.commandFor(record.id)).toBe("sleep 999");
-		registry.completeRead(record.id);
-		expect(registry.commandFor(record.id)).toBe("sleep 999");
-		expect(registry.commandFor("shell-99")).toBeUndefined();
-	});
-
 	it("unknown-id error lists live ids", () => {
 		const registry = new BackgroundShellRegistry();
 		expect(registry.unknownIdError("shell-9").message).toContain("Live ids: none");

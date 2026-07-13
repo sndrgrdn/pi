@@ -4,23 +4,7 @@
  * 100ms TUI streaming throttle.
  */
 import type { TruncationResult } from "@earendil-works/pi-coding-agent";
-import { createBashToolDefinition, DEFAULT_MAX_BYTES, truncateTail } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
-
-/**
- * Pi's builtin bash tool definition, shared by the triplet for TUI
- * delegation: `shell_command` uses its renderCall/renderResult verbatim;
- * status/cancel hand-build their id-prefixed titles (pi's formatBashCall
- * hardcodes the `$` prefix) but delegate renderResult.
- */
-export const bashToolBase = createBashToolDefinition(process.cwd());
-
-/** Render a hand-built tool title row, reusing the previous Text component. */
-export function renderToolTitle(title: string, theme: any, context: any): Text {
-	const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-	text.setText(theme.fg("toolTitle", theme.bold(title)));
-	return text;
-}
+import { DEFAULT_MAX_BYTES, truncateTail } from "@earendil-works/pi-coding-agent";
 
 /** Pi bash parity: throttle streaming TUI updates to 100ms. */
 export const UPDATE_THROTTLE_MS = 100;

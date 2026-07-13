@@ -4,6 +4,14 @@ import { BackgroundShellRegistry, SWEEP_AFTER_MS } from "./registry.ts";
 import { createShellStatusTool } from "./status.ts";
 
 const ctx = { cwd: process.cwd() } as any;
+const theme = {
+	fg: (color: string, value: string) => `<${color}>${value}</${color}>`,
+	bold: (value: string) => `<b>${value}</b>`,
+} as any;
+
+function renderedLines(component: { render(width: number): string[] }): string[] {
+	return component.render(200).map((line) => line.trimEnd());
+}
 
 function makeTools() {
 	const registry = new BackgroundShellRegistry();
@@ -25,6 +33,36 @@ async function background(command: any, cmd: string): Promise<string> {
 }
 
 describe("shell_command_status", () => {
+	it("renders polling as a compact shell-id row with expandable evidence", () => {
+		const { status } = makeTools();
+		const result = {
+			content: [{ type: "text", text: "new output\n\nshell-1 · still running" }],
+			details: { trace: { state: "success", qualifiers: ["still running"] } },
+		} as any;
+		const context = { args: { id: "shell-1" }, cwd: "/work", isError: false } as any;
+
+		expect(
+			renderedLines(status.renderResult!(result, { expanded: false, isPartial: false }, theme, context)),
+		).toEqual(["<success>✓</success> <b>poll</b> shell-1 · <muted>still running</muted>"]);
+		expect(renderedLines(status.renderResult!(result, { expanded: true, isPartial: false }, theme, context))).toEqual(
+			[
+				"<success>✓</success> <b>poll</b> shell-1 · <muted>still running</muted>",
+				"<toolOutput>new output</toolOutput>",
+				"<toolOutput></toolOutput>",
+				"<toolOutput>shell-1 · still running</toolOutput>",
+			],
+		);
+	});
+
+	it("emits running state immediately", async () => {
+		const { registry, command, status } = makeTools();
+		const id = await background(command, "sleep 30");
+		const updates: any[] = [];
+		await run(status, { id, timeout_ms: 0 }, (update) => updates.push(update));
+		expect(updates[0]?.details.trace).toEqual({ state: "running" });
+		registry.killAll();
+	});
+
 	it("second poll sees only output produced since the first (lossless cursor)", async () => {
 		const { registry, command, status } = makeTools();
 		const id = await background(command, "echo first; sleep 0.6; echo second; sleep 30");
@@ -49,6 +87,7 @@ describe("shell_command_status", () => {
 		const text = result.content[0].text;
 		expect(text).toContain("done");
 		expect(text).toContain("exited 0");
+		expect(result.details.trace).toEqual({ state: "success", qualifiers: ["exited 0"] });
 		expect(registry.get(id)).toBeUndefined();
 		// Subsequent poll: unknown-id error listing live ids.
 		await expect(run(status, { id, timeout_ms: 0 })).rejects.toThrow(
@@ -70,6 +109,7 @@ describe("shell_command_status", () => {
 		const result = await run(status, { id, timeout_ms: 0 });
 		expect(Date.now() - started).toBeLessThan(500);
 		expect(result.content[0].text).toContain("still running");
+		expect(result.details.trace).toEqual({ state: "success", qualifiers: ["still running"] });
 		expect(registry.get(id)).toBeDefined();
 		registry.killAll();
 	});
