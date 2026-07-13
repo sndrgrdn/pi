@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { BUILTIN_PROFILES, POSTURES, TASK_POSTURE } from "../profiles.ts";
 import { type RunOptions, SubagentAbortError, SubagentRunError } from "../runner.ts";
 import { BackgroundShellRegistry } from "../shell/registry.ts";
-import { buildCancellationReport, createTaskTool, type TaskInput } from "./task.ts";
+import { createTaskTool, type TaskInput } from "./task.ts";
 
 describe("task tool", () => {
 	it("keeps the restraint-first delegation contract in the Task child prompt", async () => {
@@ -91,8 +91,14 @@ describe("task tool", () => {
 		expect(updates.at(-1)?.details).toMatchObject({
 			trace: { state: "running" },
 			actions: { apply_patch: 1 },
+			mode: mode ?? "low",
+			description: "implementation",
 		});
-		expect(result.details).toMatchObject({ trace: { state: "success" }, mode: mode ?? "low" });
+		expect(result.details).toMatchObject({
+			trace: { state: "success" },
+			mode: mode ?? "low",
+			description: "implementation",
+		});
 	});
 
 	it.each([undefined, "low", "medium", "high"] as const)("always renders selected Mode %s", (mode) => {
@@ -108,8 +114,8 @@ describe("task tool", () => {
 		expect(row.render(100).map((line) => line.trimEnd())).toEqual([`✓ task (${mode ?? "low"}) fix renderer`]);
 	});
 
-	it("builds a capped mechanical cancellation report from a synthetic tool log", () => {
-		const report = buildCancellationReport([
+	it("reports capped completed and in-progress work when cancellation interrupts a tool log", async () => {
+		const abort = new SubagentAbortError("task-cancelled", [
 			{
 				id: "1",
 				tool: "apply_patch",
@@ -124,7 +130,15 @@ describe("task tool", () => {
 			},
 			{ id: "3", tool: "read", input: { path: "still-reading.png" } },
 		]);
+		const tool = createTaskTool({ run: vi.fn().mockRejectedValue(abort) } as any, BUILTIN_PROFILES, {
+			basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),
+		});
+		const result = await tool.execute("call", { prompt: "Work", description: "work" }, undefined, undefined, {
+			cwd: "/repo",
+		} as any);
+		const report = (result.content[0] as { text: string }).text;
 
+		expect(report).toContain('<task_error sessionID="task-cancelled">');
 		expect(report).toContain("Task was cancelled.\n\n## Completed work");
 		expect(report).toContain("+line 19");
 		expect(report).not.toContain("+line 20");
@@ -132,6 +146,7 @@ describe("task tool", () => {
 		expect(report).not.toContain("output 10");
 		expect(report).toContain(`Command: ${"x".repeat(80)}…`);
 		expect(report).toContain("## In progress when cancelled\n\n- read: still-reading.png");
+		expect(result.details).toMatchObject({ trace: { state: "cancelled" }, mode: "low", description: "work" });
 	});
 
 	it("returns cancellation failures in a task_error envelope", async () => {

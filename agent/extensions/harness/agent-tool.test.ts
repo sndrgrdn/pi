@@ -84,6 +84,46 @@ describe("agent tool factory", () => {
 		]);
 	});
 
+	it("threads plan traceDetails through running, success, and recover details", async () => {
+		const spec = probeSpec({
+			plan: (params) => ({
+				systemPrompt: "You are a probe.",
+				message: `Do: ${params.assignment}`,
+				traceDetails: { flavor: "salty" },
+			}),
+		});
+		const run = vi.fn(async (options: RunOptions<ProbeParams>) => {
+			options.onAction?.("read");
+			return options.wrapResult("probe-session", "done");
+		});
+		const updates: any[] = [];
+		const tool = createAgentTool(spec, { run } as any, BUILTIN_PROFILES);
+		const result = await tool.execute(
+			"call",
+			{ assignment: "probe it" },
+			undefined,
+			(update: any) => updates.push(update),
+			{ cwd: "/repo" } as any,
+		);
+
+		expect(updates.map((update) => update.details)).toEqual([
+			{ trace: { state: "running" }, flavor: "salty", actions: {} },
+			{ trace: { state: "running" }, flavor: "salty", actions: { read: 1 } },
+		]);
+		expect(result.details).toEqual({ trace: { state: "success" }, flavor: "salty" });
+
+		const failure = new SubagentRunError("probe-session", [], new Error("boom"));
+		const recovering = createAgentTool(
+			{ ...spec, recover: () => ({ content: "salvaged", outcome: "cancelled" as const }) },
+			{ run: vi.fn().mockRejectedValue(failure) } as any,
+			BUILTIN_PROFILES,
+		);
+		const recovered = await recovering.execute("call", { assignment: "probe it" }, undefined, undefined, {
+			cwd: "/repo",
+		} as any);
+		expect(recovered.details).toEqual({ trace: { state: "cancelled" }, flavor: "salty" });
+	});
+
 	it("propagates a finalize throw as the tool failure", async () => {
 		const spec = probeSpec({
 			finalize: () => {
@@ -109,17 +149,22 @@ describe("agent tool factory", () => {
 	it("wraps a recover result as the error envelope with the recovered outcome", async () => {
 		const failure = new SubagentRunError("probe-session", [], new Error("boom"));
 		const recover = vi.fn(async () => ({ content: "salvaged report", outcome: "failed" as const }));
+		const controller = new AbortController();
 		const tool = createAgentTool(
 			probeSpec({ recover }),
 			{ run: vi.fn().mockRejectedValue(failure) } as any,
 			BUILTIN_PROFILES,
 		);
 
-		const result = await tool.execute("call", { assignment: "probe it" }, undefined, undefined, {
+		const result = await tool.execute("call", { assignment: "probe it" }, controller.signal, undefined, {
 			cwd: "/repo",
 		} as any);
 
-		expect(recover).toHaveBeenCalledWith(failure);
+		expect(recover).toHaveBeenCalledWith(failure, {
+			params: { assignment: "probe it" },
+			cwd: "/repo",
+			signal: controller.signal,
+		});
 		expect(result.content[0]).toEqual({
 			type: "text",
 			text: '<task_error sessionID="probe-session">\nsalvaged report\n</task_error>',

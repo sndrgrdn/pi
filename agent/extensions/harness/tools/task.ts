@@ -2,47 +2,39 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAgentDir, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { buildEnvelope } from "../envelopes.ts";
+import { type AgentToolRecovery, type AgentToolSpec, createAgentTool } from "../agent-tool.ts";
 import { createApplyPatchTool } from "../patch/tool.ts";
 import { type Mode, type ResolvedProfiles, resolveAgentRoute, TASK_POSTURE } from "../profiles.ts";
 import { projectContextPrompt } from "../project-context.ts";
-import { AGENT_TOOLBOX_MATRIX, resolveAgentDefinition } from "../registry.ts";
-import { SubagentAbortError, SubagentRunError, type SubagentRunner, type ToolLogEntry } from "../runner.ts";
-import { createShellCancelTool } from "../shell/cancel.ts";
-import { createShellCommandTool } from "../shell/command.ts";
-import { createShellStatusTool } from "../shell/status.ts";
+import { isSubagentAbortError, SubagentRunError, type SubagentRunner, type ToolLogEntry } from "../runner.ts";
+import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
 import { createChildSkillTool, discoverChildSkills } from "../skill/child.ts";
 import { buildDirective, extractSkillRefs } from "../skill/core.ts";
-import { createProgressSignal, createSubagentRenderer } from "../ui/subagent.ts";
-import { type TraceState, withTraceDetails } from "../ui/trace.ts";
 import { createFinderTool } from "./finder.ts";
 import { createLibrarianTool } from "./librarian.ts";
 import { createHarnessReadTool } from "./read.ts";
-
-const renderer = createSubagentRenderer<TaskInput>({
-	action: (args) => `task (${args.mode ?? "low"})`,
-	target: (args) => args.description,
-});
 
 export interface TaskInput {
 	prompt: string;
 	description: string;
 	mode?: Mode;
 }
-export interface TaskPromptParts {
+
+export interface TaskBasePrompts {
 	system: string;
 	appendSystem: string;
 	projectContext: string;
-	modePosture: string;
-	taskPosture: string;
 }
-export type TaskToolLogEntry = ToolLogEntry;
+
+function taskMode(params: TaskInput): Mode {
+	return params.mode ?? "low";
+}
 
 function cappedLines(value: string, cap: number): string {
 	return value.split("\n").slice(0, cap).join("\n");
 }
 
-export function buildCancellationReport(log: readonly TaskToolLogEntry[]): string {
+function buildCancellationReport(log: readonly ToolLogEntry[]): string {
 	const completed: string[] = [];
 	const pending: string[] = [];
 	for (const entry of log) {
@@ -68,7 +60,7 @@ export function buildCancellationReport(log: readonly TaskToolLogEntry[]): strin
 	].join("\n\n");
 }
 
-function readBasePrompts(cwd: string): Pick<TaskPromptParts, "system" | "appendSystem" | "projectContext"> {
+function readBasePrompts(cwd: string): TaskBasePrompts {
 	const agentDir = getAgentDir();
 	return {
 		system: readFileSync(join(agentDir, "SYSTEM.md"), "utf8"),
@@ -78,21 +70,53 @@ function readBasePrompts(cwd: string): Pick<TaskPromptParts, "system" | "appendS
 }
 
 export interface TaskDependencies {
-	basePrompts?: (
-		cwd: string,
-	) =>
-		| Pick<TaskPromptParts, "system" | "appendSystem" | "projectContext">
-		| Promise<Pick<TaskPromptParts, "system" | "appendSystem" | "projectContext">>;
+	basePrompts?: (cwd: string) => TaskBasePrompts | Promise<TaskBasePrompts>;
 }
+
+const SUMMARY_SYSTEM_PROMPT =
+	"Summarize a failed Task run from its tool log. Report accomplishments, files modified, findings, verification, and unfinished work. Do not invent facts.";
 
 export function createTaskTool(
 	runner: Pick<SubagentRunner, "run">,
 	profiles: ResolvedProfiles,
 	dependencies: TaskDependencies = {},
 ): ToolDefinition<any, any, any> {
-	return {
+	/** One cohesive recovery policy: cancellation report, else summary re-run with cancellation fallback. */
+	async function recover(
+		error: unknown,
+		{ params, cwd, signal }: { params: TaskInput; cwd: string; signal: AbortSignal | undefined },
+	): Promise<AgentToolRecovery> {
+		if (isSubagentAbortError(error)) {
+			return { content: buildCancellationReport(error.toolLog), outcome: "cancelled" };
+		}
+		if (!(error instanceof SubagentRunError)) throw error;
+		try {
+			const route = resolveAgentRoute(profiles, "task", taskMode(params));
+			const summary = await runner.run({
+				definition: {
+					key: "task",
+					allowMcp: false,
+					tools: [],
+					systemPrompt: SUMMARY_SYSTEM_PROMPT,
+					model: route.model,
+					reasoningEffort: route.reasoning,
+				},
+				cwd,
+				input: JSON.stringify({ error: error.message, toolLog: error.toolLog }),
+				mapInput: String,
+				wrapResult: (_sessionID, content) => content,
+				signal,
+			});
+			return { content: summary, outcome: "failed" };
+		} catch (summaryError) {
+			if (!isSubagentAbortError(summaryError) || !summaryError.sessionID) throw summaryError;
+			return { content: buildCancellationReport(error.toolLog), outcome: "cancelled" };
+		}
+	}
+
+	const spec: AgentToolSpec<TaskInput> = {
+		key: "task",
 		name: "task",
-		label: "task",
 		description:
 			"Delegate a bounded mutation. Specify verification steps; summarize the returned report for the user.",
 		parameters: Type.Object({
@@ -106,104 +130,44 @@ export function createTaskTool(
 				}),
 			),
 		}),
-		renderShell: "self",
-		async execute(_id, params: TaskInput, signal, onUpdate, ctx) {
-			const mode = params.mode ?? "low";
-			const recordAction = createProgressSignal(onUpdate, { mode, description: params.description });
+		mode: taskMode,
+		plan: async (params, ctx) => {
 			const base = await (dependencies.basePrompts ?? readBasePrompts)(ctx.cwd);
 			const skills = discoverChildSkills(ctx.cwd);
 			const refs = extractSkillRefs(
 				params.prompt,
 				skills.map((skill) => skill.name),
 			);
-			const systemPrompt = [
-				base.system,
-				base.appendSystem,
-				base.projectContext,
-				profiles.modes[mode].posture,
-				TASK_POSTURE,
-			]
-				.filter(Boolean)
-				.join("\n\n");
-			const definition = resolveAgentDefinition(
-				{
-					key: "task",
-					...AGENT_TOOLBOX_MATRIX.task,
-					systemPrompt,
-				},
-				resolveAgentRoute(profiles, "task", mode),
-			);
-			let envelope: string;
-			let outcome: TraceState = "success";
-			try {
-				envelope = await runner.run({
-					definition,
-					cwd: ctx.cwd,
-					input: params,
-					signal,
-					onAction: recordAction,
-					toolbox: (processes) => [
-						createShellCommandTool(processes),
-						createShellStatusTool(processes),
-						createShellCancelTool(processes),
-						createHarnessReadTool(),
-						createApplyPatchTool(),
-						createChildSkillTool(skills),
-						createFinderTool(runner, profiles),
-						createLibrarianTool(runner, profiles),
-					],
-					mapInput: (input) => (refs.length ? `${buildDirective(refs)}\n\n${input.prompt}` : input.prompt),
-					wrapResult: (sessionID, content) => buildEnvelope({ kind: "task", sessionID, content }),
-				});
-			} catch (error) {
-				if (error instanceof SubagentAbortError) {
-					if (!error.sessionID) throw error;
-					outcome = "cancelled";
-					envelope = buildEnvelope({
-						kind: "task_error",
-						sessionID: error.sessionID,
-						content: buildCancellationReport(error.toolLog),
-					});
-				} else {
-					if (!(error instanceof SubagentRunError)) throw error;
-					const failure = error;
-					outcome = "failed";
-					try {
-						const summary = await runner.run({
-							definition: resolveAgentDefinition(
-								{
-									key: "task",
-									allowMcp: false,
-									tools: [],
-									systemPrompt:
-										"Summarize a failed Task run from its tool log. Report accomplishments, files modified, findings, verification, and unfinished work. Do not invent facts.",
-								},
-								resolveAgentRoute(profiles, "task", mode),
-							),
-							cwd: ctx.cwd,
-							input: JSON.stringify({ error: failure.message, toolLog: failure.toolLog }),
-							mapInput: String,
-							wrapResult: (_sessionID, content) => content,
-							signal,
-						});
-						envelope = buildEnvelope({ kind: "task_error", sessionID: failure.sessionID, content: summary });
-					} catch (summaryError) {
-						if (!(summaryError instanceof SubagentAbortError) || !summaryError.sessionID) throw summaryError;
-						outcome = "cancelled";
-						envelope = buildEnvelope({
-							kind: "task_error",
-							sessionID: failure.sessionID,
-							content: buildCancellationReport(failure.toolLog),
-						});
-					}
-				}
-			}
 			return {
-				content: [{ type: "text", text: envelope }],
-				details: withTraceDetails({ mode, description: params.description }, outcome),
+				systemPrompt: [
+					base.system,
+					base.appendSystem,
+					base.projectContext,
+					profiles.modes[taskMode(params)].posture,
+					TASK_POSTURE,
+				]
+					.filter(Boolean)
+					.join("\n\n"),
+				message: refs.length ? `${buildDirective(refs)}\n\n${params.prompt}` : params.prompt,
+				toolbox: (processes) => [
+					...createShellToolbox(processes),
+					createHarnessReadTool(),
+					createApplyPatchTool(),
+					createChildSkillTool(skills),
+					createFinderTool(runner, profiles),
+					createLibrarianTool(runner, profiles),
+				],
+				traceDetails: { mode: taskMode(params), description: params.description },
 			};
 		},
-		renderCall: renderer.renderCall,
-		renderResult: renderer.renderResult,
-	} as ToolDefinition<any, any, any>;
+		finalize: (answer) => ({ content: answer }),
+		recover,
+		presentation: {
+			action: (params) => `task (${taskMode(params)})`,
+			target: (params) => params.description,
+		},
+		tools: [...SHELL_TOOLBOX_NAMES, "read", "apply_patch", "skill", "finder", "librarian"],
+		allowMcp: true,
+	};
+	return createAgentTool(spec, runner, profiles);
 }

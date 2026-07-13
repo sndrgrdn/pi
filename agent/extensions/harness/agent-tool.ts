@@ -24,6 +24,8 @@ export interface AgentToolPlan {
 	systemPrompt: string;
 	message: string;
 	toolbox?: ChildToolboxFactory;
+	/** Static per-call facts carried on every details emission (running, success, recover). */
+	traceDetails?: Record<string, unknown>;
 }
 
 /** A spec's reading of the child's final answer. May not be produced (finalize throws). */
@@ -37,6 +39,13 @@ export interface AgentToolResult {
 export interface AgentToolRecovery {
 	content: string;
 	outcome: Extract<TraceState, "failed" | "cancelled">;
+}
+
+/** The per-call state a `recover` hook may need to salvage a failed run. */
+export interface AgentToolRecoverContext<TParams> {
+	params: TParams;
+	cwd: string;
+	signal: AbortSignal | undefined;
 }
 
 export interface AgentToolPresentation<TParams> {
@@ -53,7 +62,7 @@ export interface AgentToolSpec<TParams> {
 	mode(params: TParams): Mode;
 	plan(params: TParams, ctx: { cwd: string }): AgentToolPlan | Promise<AgentToolPlan>;
 	finalize(answer: string): AgentToolResult;
-	recover?(error: unknown): AgentToolRecovery | Promise<AgentToolRecovery>;
+	recover?(error: unknown, ctx: AgentToolRecoverContext<TParams>): AgentToolRecovery | Promise<AgentToolRecovery>;
 	presentation: AgentToolPresentation<TParams>;
 	tools: readonly string[];
 	allowMcp: boolean;
@@ -62,12 +71,15 @@ export interface AgentToolSpec<TParams> {
 type ToolUpdate = (result: { content: { type: "text"; text: string }[]; details: unknown }) => void;
 
 /** Emit the running Trace View state, tallying child tool actions as they happen. */
-function createProgressSignal(onUpdate: ToolUpdate | undefined): (action: string) => void {
+function createProgressSignal(
+	onUpdate: ToolUpdate | undefined,
+	details: Record<string, unknown> | undefined,
+): (action: string) => void {
 	const actions = new Map<string, number>();
-	emitTraceRunning(onUpdate, { actions: {} });
+	emitTraceRunning(onUpdate, { ...details, actions: {} });
 	return (action) => {
 		actions.set(action, (actions.get(action) ?? 0) + 1);
-		emitTraceRunning(onUpdate, { actions: Object.fromEntries(actions) });
+		emitTraceRunning(onUpdate, { ...details, actions: Object.fromEntries(actions) });
 	};
 }
 
@@ -150,8 +162,8 @@ export function createAgentTool<TParams>(
 			onUpdate: ToolUpdate | undefined,
 			ctx: { cwd: string },
 		) {
-			const recordAction = createProgressSignal(onUpdate);
 			const planned = await spec.plan(params, { cwd: ctx.cwd });
+			const recordAction = createProgressSignal(onUpdate, planned.traceDetails);
 			const definition = resolveAgentDefinition(
 				{ key: spec.key, systemPrompt: planned.systemPrompt, tools: spec.tools, allowMcp: spec.allowMcp },
 				resolveAgentRoute(profiles, spec.key, spec.mode(params)),
@@ -176,20 +188,24 @@ export function createAgentTool<TParams>(
 				return {
 					content: [{ type: "text", text: buildEnvelope(envelopeInput(spec.key, child.sessionID, finalized)) }],
 					details: withTraceDetails(
-						{ ...(finalized.title !== undefined ? { title: finalized.title } : {}), ...finalized.traceDetails },
+						{
+							...(finalized.title !== undefined ? { title: finalized.title } : {}),
+							...planned.traceDetails,
+							...finalized.traceDetails,
+						},
 						"success",
 					),
 				};
 			} catch (error) {
 				if (!spec.recover) throw error;
-				const recovery = await spec.recover(error); // a rethrow here replaces the failure
+				const recovery = await spec.recover(error, { params, cwd: ctx.cwd, signal }); // a rethrow here replaces the failure
 				const sessionID = failureSessionID(error);
 				if (sessionID === undefined) throw error; // no child session — nothing to attribute the report to
 				return {
 					content: [
 						{ type: "text", text: buildEnvelope({ kind: "task_error", sessionID, content: recovery.content }) },
 					],
-					details: withTraceDetails(undefined, recovery.outcome),
+					details: withTraceDetails(planned.traceDetails, recovery.outcome),
 				};
 			}
 		},
