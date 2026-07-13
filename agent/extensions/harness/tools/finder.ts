@@ -3,29 +3,20 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { buildEnvelope, parseEnvelope } from "../envelopes.ts";
+import { type AgentToolSpec, createAgentTool } from "../agent-tool.ts";
 import type { ResolvedProfiles } from "../profiles.ts";
-import { resolveAgentRoute } from "../profiles.ts";
-import { AGENT_TOOLBOX_MATRIX, resolveAgentDefinition } from "../registry.ts";
 import type { SubagentRunner } from "../runner.ts";
-import { createProgressSignal, createSubagentRenderer } from "../ui/subagent.ts";
-import { withTraceDetails } from "../ui/trace.ts";
 
 const prompt = readFileSync(
 	join(dirname(fileURLToPath(import.meta.url)), "..", "agents", "prompts", "finder.md"),
 	"utf8",
 ).trim();
-const renderer = createSubagentRenderer<{ query: string }>({
-	action: "finder",
-	target: (args) => args.query,
-});
 
-export interface FinderAnswer {
-	title: string;
-	content: string;
+interface FinderParams {
+	query: string;
 }
 
-export function extractFinderAnswer(answer: string): FinderAnswer {
+function extractFinderAnswer(answer: string): { title: string; content: string } {
 	const lines = answer.trim().split(/\r?\n/);
 	if (!lines[0]) return { title: "Nothing matched", content: "Nothing matched." };
 	const title = lines.shift()?.trim() || "Finder result";
@@ -34,51 +25,23 @@ export function extractFinderAnswer(answer: string): FinderAnswer {
 	return { title, content };
 }
 
-export function finderEnvelopeTitle(envelope: string): string | undefined {
-	const parsed = parseEnvelope(envelope);
-	return parsed?.tag === "finder_result" ? parsed.title : undefined;
-}
+const spec: AgentToolSpec<FinderParams> = {
+	key: "finder",
+	name: "finder",
+	description:
+		"Delegate local codebase search to a read-only scout. Use parallel finder calls for independent queries.",
+	parameters: Type.Object({ query: Type.String({ description: "What to locate and the desired thoroughness." }) }),
+	mode: () => "medium",
+	plan: (params) => ({ systemPrompt: prompt, message: params.query }),
+	finalize: extractFinderAnswer,
+	presentation: { action: "finder", target: (params) => params.query },
+	tools: ["read", "grep", "find", "ls"],
+	allowMcp: false,
+};
 
 export function createFinderTool(
 	runner: Pick<SubagentRunner, "run">,
 	profiles: ResolvedProfiles,
 ): ToolDefinition<any, any, any> {
-	const toolbox = AGENT_TOOLBOX_MATRIX.finder;
-	const definition = resolveAgentDefinition(
-		{
-			key: "finder",
-			systemPrompt: prompt,
-			...toolbox,
-		},
-		resolveAgentRoute(profiles, "finder", "medium"),
-	);
-	return {
-		name: "finder",
-		label: "finder",
-		description:
-			"Delegate local codebase search to a read-only scout. Use parallel finder calls for independent queries.",
-		parameters: Type.Object({ query: Type.String({ description: "What to locate and the desired thoroughness." }) }),
-		renderShell: "self",
-		async execute(_id, params: { query: string }, signal, onUpdate, ctx) {
-			const recordAction = createProgressSignal(onUpdate);
-			const envelope = await runner.run({
-				definition,
-				cwd: ctx.cwd,
-				input: params,
-				signal,
-				onAction: recordAction,
-				mapInput: (input) => input.query,
-				wrapResult: (sessionID, answer) => {
-					const result = extractFinderAnswer(answer);
-					return buildEnvelope({ kind: "finder", sessionID, title: result.title, content: result.content });
-				},
-			});
-			return {
-				content: [{ type: "text", text: envelope }],
-				details: withTraceDetails({ title: finderEnvelopeTitle(envelope) }, "success"),
-			};
-		},
-		renderCall: renderer.renderCall,
-		renderResult: renderer.renderResult,
-	} as ToolDefinition<any, any, any>;
+	return createAgentTool(spec, runner, profiles);
 }
