@@ -29,20 +29,6 @@ describe("subagent registry", () => {
 describe("agent toolbox matrix", () => {
 	it("matches the admitted child surfaces", () => {
 		expect(AGENT_TOOLBOX_MATRIX).toEqual({
-			librarian: {
-				tools: [
-					"checkout",
-					"grep",
-					"find",
-					"read",
-					"shell_command",
-					"shell_command_status",
-					"shell_command_cancel",
-					"web_search_exa",
-					"web_fetch_exa",
-				],
-				allowMcp: false,
-			},
 			oracle: {
 				tools: ["shell_command", "shell_command_status", "shell_command_cancel", "finder", "librarian"],
 				allowMcp: false,
