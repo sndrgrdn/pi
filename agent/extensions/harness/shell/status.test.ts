@@ -87,7 +87,7 @@ describe("shell_command_status", () => {
 		const text = result.content[0].text;
 		expect(text).toContain("done");
 		expect(text).toContain("exited 0");
-		expect(result.details.trace).toEqual({ state: "success", qualifiers: ["exited 0"] });
+		expect(result.details.trace).toEqual({ state: "success" });
 		expect(registry.get(id)).toBeUndefined();
 		// Subsequent poll: unknown-id error listing live ids.
 		await expect(run(status, { id, timeout_ms: 0 })).rejects.toThrow(
@@ -99,6 +99,15 @@ describe("shell_command_status", () => {
 		const { registry, command, status } = makeTools();
 		const id = await background(command, "sleep 0.5; echo oops >&2; exit 7");
 		await expect(run(status, { id, timeout_ms: 5000 })).rejects.toThrow(/oops[\s\S]*exited 7/);
+		expect(registry.get(id)).toBeUndefined();
+	});
+
+	it("signal termination surfaces as a tool error on the completing read", async () => {
+		const { registry, command, status } = makeTools();
+		const id = await background(command, "sleep 30");
+		const record = registry.get(id)!;
+		process.kill(process.platform === "win32" ? record.pid! : -record.pid!, "SIGKILL");
+		await expect(run(status, { id, timeout_ms: 5000 })).rejects.toThrow(/exited \(signal\)/);
 		expect(registry.get(id)).toBeUndefined();
 	});
 

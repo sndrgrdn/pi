@@ -133,12 +133,12 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 
 				// Completing read: report exit exactly once, forget the record.
 				registry.completeRead(record.id);
-				if (record.exitCode !== 0 && record.exitCode !== null) {
+				if (record.exitCode !== 0) {
 					throw new Error(appendStatus(text, exitLabel(record)));
 				}
 				return {
 					content: [{ type: "text", text: appendStatus(text, exitLabel(record)) }],
-					details: withTraceDetails(details, "success", [exitLabel(record)]),
+					details: withTraceDetails(details, "success"),
 				};
 			} finally {
 				if (updateTimer) clearInterval(updateTimer);

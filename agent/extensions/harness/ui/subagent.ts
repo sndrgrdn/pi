@@ -2,7 +2,7 @@ import { parseEnvelope } from "../envelopes.ts";
 import { createTraceRenderer, type TraceInvocation } from "./trace.ts";
 
 interface SubagentRendererOptions<TArgs> {
-	action: string;
+	action: string | ((args: TArgs) => string);
 	target(args: TArgs): string | undefined;
 	qualifiers?(args: TArgs): string[];
 }
@@ -27,7 +27,7 @@ export function createSubagentRenderer<TArgs>(options: SubagentRendererOptions<T
 	return createTraceRenderer<TArgs>({
 		invocation(args): TraceInvocation {
 			return {
-				action: options.action,
+				action: typeof options.action === "function" ? options.action(args) : options.action,
 				target: options.target(args),
 				qualifiers: options.qualifiers?.(args),
 			};

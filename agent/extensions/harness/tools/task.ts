@@ -20,9 +20,8 @@ import { createLibrarianTool } from "./librarian.ts";
 import { createHarnessReadTool } from "./read.ts";
 
 const renderer = createSubagentRenderer<TaskInput>({
-	action: "task",
+	action: (args) => `task (${args.mode ?? "low"})`,
 	target: (args) => args.description,
-	qualifiers: (args) => [args.mode ?? "low"],
 });
 
 export interface TaskInput {

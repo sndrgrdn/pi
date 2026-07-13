@@ -105,7 +105,7 @@ describe("task tool", () => {
 			theme,
 			{ args, cwd: "/repo", isError: false } as any,
 		) as Text;
-		expect(row.render(100).map((line) => line.trimEnd())).toEqual([`✓ task fix renderer · ${mode ?? "low"}`]);
+		expect(row.render(100).map((line) => line.trimEnd())).toEqual([`✓ task (${mode ?? "low"}) fix renderer`]);
 	});
 
 	it("builds a capped mechanical cancellation report from a synthetic tool log", () => {
