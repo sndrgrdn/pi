@@ -24,6 +24,7 @@ function fakeChild(prompt: () => Promise<void>) {
 		finalMessage: () => "Final advice",
 		abort: vi.fn(async () => {}),
 		dispose: vi.fn(),
+		toolLog: () => [],
 	} satisfies ChildSession;
 }
 
@@ -70,7 +71,7 @@ describe("shared subagent runner", () => {
 		await Promise.resolve();
 		controller.abort();
 
-		await expect(running).rejects.toMatchObject({ name: "AbortError" });
+		await expect(running).rejects.toMatchObject({ name: "AbortError", sessionID: "child-7", toolLog: [] });
 		expect(child.abort).toHaveBeenCalledOnce();
 		expect(child.processes.killAll).toHaveBeenCalledOnce();
 	});

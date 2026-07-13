@@ -21,6 +21,17 @@ export interface ChildSession {
 	abort(): Promise<void>;
 	dispose(): void;
 	onAction?(listener: (toolName: string) => void): () => void;
+	toolLog(): ToolLogEntry[];
+}
+
+export interface ToolLogEntry { id: string; tool: string; input: Record<string, unknown>; output?: string; isError?: boolean }
+
+export class SubagentRunError extends Error {
+	readonly kind = "child_failure";
+	constructor(readonly sessionID: string, readonly toolLog: ToolLogEntry[], cause: unknown) {
+		super(cause instanceof Error ? cause.message : String(cause), { cause });
+		this.name = cause instanceof Error ? cause.name : "SubagentRunError";
+	}
 }
 
 export interface ChildSessionConfig {
@@ -49,6 +60,11 @@ function abortError(): Error {
 	return error;
 }
 
+function annotateFailure(error: unknown, child: ChildSession | undefined): Error {
+	if (!child) return error instanceof Error ? error : new Error(String(error));
+	return error instanceof SubagentRunError ? error : new SubagentRunError(child.sessionID, child.toolLog(), error);
+}
+
 export class SubagentRunner {
 	constructor(private readonly createChild: ChildSessionFactory = createSdkChildSession) {}
 
@@ -74,20 +90,20 @@ export class SubagentRunner {
 			if (parentAborted) {
 				abortPromise ??= child.abort();
 				await abortPromise;
-				throw abortError();
+				throw annotateFailure(abortError(), child);
 			}
 			await child.prompt(options.mapInput(options.input));
 			if (parentAborted) {
 				if (abortPromise) await abortPromise;
-				throw abortError();
+				throw annotateFailure(abortError(), child);
 			}
 			return options.wrapResult(child.sessionID, child.finalMessage());
 		} catch (error) {
 			if (parentAborted) {
 				if (abortPromise) await abortPromise;
-				throw abortError();
+				throw annotateFailure(abortError(), child);
 			}
-			throw error;
+			throw annotateFailure(error, child);
 		} finally {
 			unsubscribe?.();
 			options.signal?.removeEventListener("abort", onAbort);
@@ -131,6 +147,23 @@ export async function createSdkChildSession(config: ChildSessionConfig): Promise
 		throw error;
 	}
 	session.agent.state.systemPrompt = config.definition.systemPrompt;
+	const toolLog: ToolLogEntry[] = [];
+	const unsubscribeLog = session.subscribe((event) => {
+		if (event.type === "tool_execution_start") toolLog.push({ id: event.toolCallId, tool: event.toolName, input: event.args });
+		if (event.type === "tool_execution_end") {
+			const pending = toolLog.find((entry) => entry.id === event.toolCallId);
+			if (!pending) throw new Error(`tool log invariant failed: no start event for ${event.toolCallId}`);
+			{
+				const content = event.result?.content;
+				pending.output = typeof event.result === "string"
+					? event.result
+					: Array.isArray(content)
+						? content.filter((part): part is { type: "text"; text: string } => part.type === "text").map((part) => part.text).join("\n")
+						: "";
+				pending.isError = event.isError === true;
+			}
+		}
+	});
 	return {
 		sessionID: session.sessionId,
 		processes,
@@ -141,7 +174,8 @@ export async function createSdkChildSession(config: ChildSessionConfig): Promise
 			return message;
 		},
 		abort: () => session.abort(),
-		dispose: () => session.dispose(),
+		dispose: () => { unsubscribeLog(); session.dispose(); },
+		toolLog: () => structuredClone(toolLog),
 		onAction: (listener) => session.subscribe((event) => {
 			if (event.type === "tool_execution_start") listener(event.toolName);
 		}),

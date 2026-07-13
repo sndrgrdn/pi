@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { createReadToolDefinition, DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
@@ -15,14 +15,18 @@ const description = [
 	"Use offset/limit for large files; continue with offset until complete when needed."
 ].join(" ");
 
-export default function (pi: ExtensionAPI) {
+export function createHarnessReadTool(): ToolDefinition<any, any, any> {
 	const base = createReadToolDefinition(process.cwd());
-	pi.registerTool({
+	return {
 		...base,
 		description,
 		parameters: schema,
-		async execute(toolCallId, params, signal, onUpdate, ctx) {
+		async execute(toolCallId: string, params: any, signal: AbortSignal | undefined, onUpdate: any, ctx: any) {
 			return createReadToolDefinition(ctx.cwd).execute(toolCallId, params, signal, onUpdate, ctx);
 		},
-	});
+	} as ToolDefinition<any, any, any>;
+}
+
+export default function (pi: ExtensionAPI) {
+	pi.registerTool(createHarnessReadTool());
 }

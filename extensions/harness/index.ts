@@ -18,6 +18,7 @@ import { registerModes } from "./modes.ts";
 import { createFinderTool } from "./tools/finder.ts";
 import { createLibrarianTool } from "./tools/librarian.ts";
 import { createOracleTool } from "./tools/oracle.ts";
+import { createTaskTool } from "./tools/task.ts";
 import { SubagentRunner } from "./runner.ts";
 import registerRead from "./tools/read.ts";
 
@@ -46,4 +47,5 @@ export default function harness(pi: ExtensionAPI) {
 	pi.registerTool(createFinderTool(runner, profiles)); // Phase 6 (§6.2)
 	pi.registerTool(createLibrarianTool(runner, profiles)); // Phase 7 (§6.4)
 	pi.registerTool(createOracleTool(runner, profiles, modes.activeMode)); // Phase 8 (§6.3)
+	pi.registerTool(createTaskTool(runner, profiles)); // Phase 9 (§6.5)
 }

@@ -5,13 +5,15 @@ interface RenderContext { lastComponent?: unknown }
 interface RenderTheme { fg(color: string, value: string): string; bold(value: string): string }
 
 export interface SubagentRendererLabels {
-	running: string;
+	running: string | ((details: SubagentRunningDetails) => string);
 	complete: string;
 }
 
 export interface SubagentRunningDetails {
 	state: "running";
 	query?: string;
+	mode?: string;
+	description?: string;
 	actions?: Record<string, number>;
 }
 
@@ -29,14 +31,14 @@ function parseDetails(value: unknown): SubagentDetails | undefined {
 	const state = (value as { state?: unknown }).state;
 	if (state === "complete") return { state };
 	if (state !== "running") return undefined;
-	const raw = value as { query?: unknown; actions?: unknown };
+	const raw = value as { query?: unknown; mode?: unknown; description?: unknown; actions?: unknown };
 	const query = typeof raw.query === "string" ? raw.query : undefined;
-	let actions: Record<string, number> | undefined;
-	if (typeof raw.actions === "object" && raw.actions !== null && !Array.isArray(raw.actions)) {
-		const entries = Object.entries(raw.actions).filter((entry): entry is [string, number] => typeof entry[1] === "number");
-		actions = Object.fromEntries(entries);
-	}
-	return { state, query, actions };
+	const mode = typeof raw.mode === "string" ? raw.mode : undefined;
+	const description = typeof raw.description === "string" ? raw.description : undefined;
+	const actions = typeof raw.actions === "object" && raw.actions !== null && !Array.isArray(raw.actions)
+		? Object.fromEntries(Object.entries(raw.actions).filter((entry): entry is [string, number] => typeof entry[1] === "number"))
+		: undefined;
+	return { state, query, mode, description, actions };
 }
 
 /** One mutable Amp-style row: query/action tally while running, XML title on completion. */
@@ -54,8 +56,10 @@ export function createSubagentRenderer(labels: SubagentRendererLabels) {
 			const component = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
 			const details = parseDetails(result.details);
 			if (details?.state === "running") {
+				const running = typeof labels.running === "function" ? labels.running(details) : labels.running;
+				const detail = details.description ?? details.query;
 				const tally = Object.entries(details.actions ?? {}).map(([name, count]) => `${name} ×${count}`).join(", ");
-				component.setText(theme.fg("toolTitle", `◐ ${labels.running}${details.query ? ` — ${details.query}` : ""}${tally ? ` — ${tally}` : ""}`));
+				component.setText(theme.fg("toolTitle", `◐ ${running}${detail ? ` — ${detail}` : ""}${tally ? ` — ${tally}` : ""}`));
 				return component;
 			}
 			const item = result.content.find((entry) => entry.type === "text");

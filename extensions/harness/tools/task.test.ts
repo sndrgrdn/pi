@@ -1,0 +1,132 @@
+import { copyFileSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it, vi } from "vitest";
+import { BUILTIN_PROFILES, POSTURES, TASK_POSTURE } from "../profiles.ts";
+import { SubagentRunError, type RunOptions } from "../runner.ts";
+import { BackgroundShellRegistry } from "../shell/registry.ts";
+import { buildCancellationReport, createTaskTool, type TaskInput } from "./task.ts";
+
+describe("task tool", () => {
+	it.each([
+		[undefined, "openai-codex/gpt-5.6-sol", "low"],
+		["low", "openai-codex/gpt-5.6-sol", "low"],
+		["medium", "openai-codex/gpt-5.6-sol", "high"],
+		["high", "anthropic/claude-fable-5", "high"],
+	] as const)("routes mode %s independently and exposes the exact Task toolbox", async (mode, model, reasoning) => {
+		const run = vi.fn(async (options: RunOptions<{ prompt: string }>) =>
+			options.wrapResult("task-1", "Changed x.ts. Verification: tests pass."));
+		const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
+			basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),
+		});
+		const params = { prompt: "Implement it", description: "implementation", ...(mode ? { mode } : {}) };
+		const result = await tool.execute("call", params, undefined, undefined, { cwd: "/repo" } as any);
+		const options = run.mock.calls[0]![0];
+
+		expect(options.definition).toMatchObject({
+			key: "task", model, reasoningEffort: reasoning, allowMcp: true,
+			tools: ["shell_command", "shell_command_status", "shell_command_cancel", "read", "apply_patch", "skill", "finder", "librarian"],
+		});
+		expect(options.definition.systemPrompt).toBe(`S\n\nA\n\nC\n\n${POSTURES[mode ?? "low"]}\n\n${TASK_POSTURE}`);
+		expect(options.mapInput(params)).toBe("Implement it");
+		expect(options.toolbox!(new BackgroundShellRegistry()).map((entry) => entry.name)).toEqual([
+			"shell_command", "shell_command_status", "shell_command_cancel", "read", "apply_patch", "skill", "finder", "librarian",
+		]);
+		expect(result.content[0]).toEqual({
+			type: "text",
+			text: '<task_result sessionID="task-1">\nChanged x.ts. Verification: tests pass.\n</task_result>',
+		});
+	});
+
+	it("builds a capped mechanical cancellation report from a synthetic tool log", () => {
+		const report = buildCancellationReport([
+			{ id: "1", tool: "apply_patch", input: { patch: Array.from({ length: 25 }, (_, i) => `+line ${i}`).join("\n") }, output: "Success" },
+			{ id: "2", tool: "shell_command", input: { command: "x".repeat(100) }, output: Array.from({ length: 14 }, (_, i) => `output ${i}`).join("\n") },
+			{ id: "3", tool: "read", input: { path: "still-reading.png" } },
+		]);
+
+		expect(report).toContain("Task was cancelled.\n\n## Completed work");
+		expect(report).toContain("+line 19");
+		expect(report).not.toContain("+line 20");
+		expect(report).toContain("output 9");
+		expect(report).not.toContain("output 10");
+		expect(report).toContain(`Command: ${"x".repeat(80)}…`);
+		expect(report).toContain("## In progress when cancelled\n\n- read: still-reading.png");
+	});
+
+	it("returns cancellation failures in a task_error envelope", async () => {
+		const cause = Object.assign(new Error("Subagent run aborted"), { name: "AbortError" });
+		const error = new SubagentRunError("task-cancelled", [{ id: "1", tool: "shell_command", input: { command: "npm test" }, output: "2 tests passed" }], cause);
+		const tool = createTaskTool({ run: vi.fn().mockRejectedValue(error) } as any, BUILTIN_PROFILES, {
+			basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),
+		});
+		const result = await tool.execute("call", { prompt: "Work", description: "work" }, undefined, undefined, { cwd: "/repo" } as any);
+
+		expect(result.content[0]).toMatchObject({
+			type: "text",
+			text: expect.stringContaining('<task_error sessionID="task-cancelled">\nTask was cancelled.'),
+		});
+	});
+
+	it("summarizes a child hard error into a task_error payload", async () => {
+		const failure = new SubagentRunError("task-failed", [{ id: "1", tool: "apply_patch", input: { patch: "+change" }, output: "Success" }], new Error("context window exceeded"));
+		const controller = new AbortController();
+		const run = vi.fn()
+			.mockRejectedValueOnce(failure)
+			.mockImplementationOnce(async (options: RunOptions<string>) => options.wrapResult("summary-1", "Changed app.ts; verification did not run."));
+		const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
+			basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),
+		});
+		const result = await tool.execute("call", { prompt: "Work", description: "work" }, controller.signal, undefined, { cwd: "/repo" } as any);
+
+		expect(run).toHaveBeenCalledTimes(2);
+		expect(run.mock.calls[1]![0].signal).toBe(controller.signal);
+		expect(result.content[0]).toEqual({
+			type: "text",
+			text: '<task_error sessionID="task-failed">\nChanged app.ts; verification did not run.\n</task_error>',
+		});
+	});
+
+	it("returns the original mechanical report when summarization is cancelled", async () => {
+		const failure = new SubagentRunError("task-failed", [{ id: "1", tool: "apply_patch", input: { patch: "+change" }, output: "Success" }], new Error("provider failed"));
+		const abortCause = Object.assign(new Error("Subagent run aborted"), { name: "AbortError" });
+		const summaryAbort = new SubagentRunError("summary-failed", [], abortCause);
+		const run = vi.fn().mockRejectedValueOnce(failure).mockRejectedValueOnce(summaryAbort);
+		const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
+			basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),
+		});
+
+		const result = await tool.execute("call", { prompt: "Work", description: "work" }, undefined, undefined, { cwd: "/repo" } as any);
+
+		expect(result.content[0]).toMatchObject({
+			type: "text",
+			text: expect.stringContaining('<task_error sessionID="task-failed">\nTask was cancelled.'),
+		});
+	});
+
+	it("injects skill-trigger directives from the Task brief", async () => {
+		const run = vi.fn(async (options: RunOptions<TaskInput>) => {
+			expect(options.mapInput(options.input)).toMatch(/^<skill_directive>[\s\S]*<skill>tdd<\/skill>[\s\S]*<\/skill_directive>\n\nUse \$tdd/);
+			return options.wrapResult("task-skill", "Done");
+		});
+		const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
+			basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),
+		});
+		await tool.execute("call", { prompt: "Use $tdd", description: "skill" }, undefined, undefined, { cwd: "/repo" } as any);
+	});
+
+	it("provides image attachments through read inside the Task toolbox", async () => {
+		const cwd = mkdtempSync(join(tmpdir(), "task-image-"));
+		copyFileSync(join(process.cwd(), "node_modules/.pnpm/highlight.js@10.7.3/node_modules/highlight.js/styles/brown-papersq.png"), join(cwd, "pixel.png"));
+		const run = vi.fn(async (options: RunOptions<TaskInput>) => {
+			const read = options.toolbox!(new BackgroundShellRegistry()).find((entry) => entry.name === "read")!;
+			const result = await read.execute("read", { path: "pixel.png" }, undefined, undefined, { cwd } as any);
+			expect(result.content).toEqual(expect.arrayContaining([expect.objectContaining({ type: "image" })]));
+			return options.wrapResult("task-image", "Image inspected");
+		});
+		const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
+			basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),
+		});
+		await tool.execute("call", { prompt: "Inspect image", description: "image" }, undefined, undefined, { cwd } as any);
+	});
+});
