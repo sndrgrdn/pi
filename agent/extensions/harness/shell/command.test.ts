@@ -13,6 +13,19 @@ async function run(tool: any, params: object, signal?: AbortSignal) {
 }
 
 describe("shell_command", () => {
+	it("emits a running update immediately", async () => {
+		const { tool } = makeTool();
+		const updates: any[] = [];
+		await tool.execute(
+			"call-1",
+			{ command: "true" },
+			new AbortController().signal,
+			(update: any) => updates.push(update),
+			ctx,
+		);
+		expect(updates[0]).toEqual({ content: [{ type: "text", text: "" }], details: undefined });
+	});
+
 	it("returns output for a completed exit-0 command", async () => {
 		const { tool } = makeTool();
 		const result = await run(tool, { command: "echo hello" });

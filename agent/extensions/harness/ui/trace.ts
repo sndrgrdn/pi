@@ -1,0 +1,133 @@
+import { homedir } from "node:os";
+import { isAbsolute, relative, resolve } from "node:path";
+import { Text } from "@earendil-works/pi-tui";
+
+export type TraceState = "running" | "success" | "failed" | "cancelled";
+
+export interface TraceInvocation {
+	action: string;
+	target?: string;
+	qualifiers?: string[];
+}
+
+interface TraceDetails {
+	trace?: { state?: TraceState };
+}
+
+interface TraceResult {
+	content: readonly { type: string; text?: string }[];
+	details?: unknown;
+}
+
+interface TraceTheme {
+	fg(color: string, value: string): string;
+	bold(value: string): string;
+}
+
+interface TraceRenderContext<TArgs> {
+	args: TArgs;
+	cwd: string;
+	isError: boolean;
+	lastComponent?: unknown;
+}
+
+interface TraceRendererOptions<TArgs> {
+	invocation(args: TArgs, cwd: string): TraceInvocation;
+}
+
+const statePresentation: Record<TraceState, { glyph: string; color: string }> = {
+	running: { glyph: "◐", color: "accent" },
+	success: { glyph: "✓", color: "success" },
+	failed: { glyph: "✗", color: "error" },
+	cancelled: { glyph: "■", color: "warning" },
+};
+
+function explicitState(details: unknown): TraceState | undefined {
+	if (typeof details !== "object" || details === null) return undefined;
+	const state = (details as TraceDetails).trace?.state;
+	return state && state in statePresentation ? state : undefined;
+}
+
+function resultText(result: TraceResult): string {
+	return result.content
+		.filter((item): item is { type: string; text: string } => item.type === "text" && typeof item.text === "string")
+		.map((item) => item.text)
+		.filter(Boolean)
+		.join("\n");
+}
+
+/** Shared public-contract renderer for one-row Trace View entries. */
+export function createTraceRenderer<TArgs>(options: TraceRendererOptions<TArgs>) {
+	return {
+		renderCall(_args: TArgs, _theme: TraceTheme, context: { lastComponent?: unknown }): Text {
+			const component = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+			component.setText("");
+			return component;
+		},
+		renderResult(
+			result: TraceResult,
+			renderOptions: { expanded: boolean; isPartial: boolean },
+			theme: TraceTheme,
+			context: TraceRenderContext<TArgs>,
+		): Text {
+			const component = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+			const state =
+				explicitState(result.details) ??
+				(renderOptions.isPartial ? "running" : context.isError ? "failed" : "success");
+			const presentation = statePresentation[state];
+			const invocation = options.invocation(context.args, context.cwd);
+			const target = invocation.target ? ` ${invocation.target}` : "";
+			const qualifiers = (invocation.qualifiers ?? []).map((value) => ` · ${theme.fg("muted", value)}`).join("");
+			const row = `${theme.fg(presentation.color, presentation.glyph)} ${theme.bold(invocation.action)}${target}${qualifiers}`;
+			const evidence = renderOptions.expanded ? resultText(result) : "";
+			component.setText(
+				evidence
+					? `${row}\n${evidence
+							.split("\n")
+							.map((line) => theme.fg("toolOutput", line))
+							.join("\n")}`
+					: row,
+			);
+			return component;
+		},
+	};
+}
+
+function isInside(base: string, target: string): boolean {
+	const path = relative(base, target);
+	return path === "" || (!path.startsWith("..") && !isAbsolute(path));
+}
+
+/** Apply Trace View's cwd/home/absolute path policy. */
+export function formatTracePath(path: string, cwd: string, home = homedir()): string {
+	const absolute = isAbsolute(path) ? resolve(path) : resolve(cwd, path);
+	if (isInside(cwd, absolute)) {
+		const local = relative(cwd, absolute);
+		return local ? `./${local}` : "./";
+	}
+	if (isInside(home, absolute)) {
+		const local = relative(home, absolute);
+		return local ? `~/${local}` : "~";
+	}
+	return absolute;
+}
+
+export interface ShellTraceArgs {
+	command: string;
+	workdir?: string;
+}
+
+/** Mechanically format a shell invocation without parsing shell grammar or output. */
+export function shellTraceInvocation(args: ShellTraceArgs, cwd: string): TraceInvocation {
+	const firstLine = args.command
+		.split("\n")
+		.find((line) => line.trim().length > 0)
+		?.trim();
+	const target = `${firstLine ?? ""}${args.command.includes("\n") ? " …" : ""}`;
+	const workdir = args.workdir ? resolve(cwd, args.workdir) : cwd;
+	return {
+		action: "$",
+		target,
+		qualifiers: workdir === resolve(cwd) ? [] : [`in ${formatTracePath(workdir, cwd)}`],
+	};
+}

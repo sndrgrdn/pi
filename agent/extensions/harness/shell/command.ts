@@ -12,7 +12,8 @@ import { delimiter, isAbsolute, join, resolve } from "node:path";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { getAgentDir, getShellConfig } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { appendStatus, bashToolBase, formatShellOutput, UPDATE_THROTTLE_MS } from "./output.ts";
+import { createTraceRenderer, shellTraceInvocation } from "../ui/trace.ts";
+import { appendStatus, formatShellOutput, UPDATE_THROTTLE_MS } from "./output.ts";
 import {
 	type BackgroundShellRegistry,
 	clampTimeoutMs,
@@ -51,6 +52,8 @@ const description = [
 	"Output is truncated to the last 2000 lines or 50KB; full output is saved to a temp file whose path is included when truncated.",
 ].join(" ");
 
+const traceRenderer = createTraceRenderer<ShellCommandParams>({ invocation: shellTraceInvocation });
+
 /** Mirror pi's internal getShellEnv: prepend the agent bin dir to PATH. */
 function shellEnv(): NodeJS.ProcessEnv {
 	const binDir = join(getAgentDir(), "bin");
@@ -71,7 +74,9 @@ export function createShellCommandTool(registry: BackgroundShellRegistry): ToolD
 		label: "shell_command",
 		description,
 		parameters: schema,
+		renderShell: "self",
 		async execute(_toolCallId, params: ShellCommandParams, signal, onUpdate, ctx) {
+			onUpdate?.({ content: [{ type: "text", text: "" }], details: undefined });
 			const workdir = resolveWorkdir(ctx.cwd, params.workdir);
 			if (!existsSync(workdir)) {
 				throw new Error(`Working directory does not exist: ${workdir}`);
@@ -190,19 +195,8 @@ export function createShellCommandTool(registry: BackgroundShellRegistry): ToolD
 			const status = `backgrounded as ${record.id} · still running. Poll with shell_command_status({"id": "${record.id}"}).`;
 			return { content: [{ type: "text", text: appendStatus(text, status) }], details };
 		},
-		// Pi bash TUI verbatim: delegate to the builtin renderers, mapping args.
-		renderCall(args: ShellCommandParams | undefined, theme, context) {
-			const mapped = args
-				? {
-						command: args.command,
-						timeout: args.timeout_ms !== undefined ? clampTimeoutMs(args.timeout_ms) / 1000 : undefined,
-					}
-				: args;
-			return bashToolBase.renderCall?.(mapped as any, theme, context as any);
-		},
-		renderResult(result, options, theme, context) {
-			return bashToolBase.renderResult?.(result, options, theme, context as any);
-		},
+		renderCall: traceRenderer.renderCall,
+		renderResult: traceRenderer.renderResult,
 	} as ToolDefinition<any, any, any>;
 }
 
