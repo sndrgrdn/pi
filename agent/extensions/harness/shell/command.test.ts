@@ -25,7 +25,7 @@ describe("shell_command", () => {
 		);
 		expect(updates[0]).toEqual({
 			content: [{ type: "text", text: "" }],
-			details: { trace: { state: "running", qualifiers: undefined } },
+			details: { trace: { state: "running" } },
 		});
 	});
 
@@ -33,7 +33,7 @@ describe("shell_command", () => {
 		const { tool } = makeTool();
 		const result = await run(tool, { command: "echo hello" });
 		expect(result.content[0].text).toBe("hello");
-		expect(result.details.trace).toEqual({ state: "success", qualifiers: undefined });
+		expect(result.details.trace).toEqual({ state: "success" });
 	});
 
 	it("nonzero exit on a completed run is a tool error with output", async () => {
@@ -85,7 +85,7 @@ describe("shell_command", () => {
 		setTimeout(() => controller.abort(), 100);
 		await expect(pending).rejects.toThrow(/Command aborted/);
 		expect(resultHandler({ toolName: "shell_command", toolCallId: "call-1", details: undefined })).toEqual({
-			details: { trace: { state: "cancelled", qualifiers: undefined } },
+			details: { trace: { state: "cancelled" } },
 		});
 	});
 

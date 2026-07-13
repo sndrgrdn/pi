@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { createReadToolDefinition, DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { createTraceRenderer, formatTracePath, type TraceInvocation } from "../ui/trace.ts";
+import { createTraceRenderer, formatTracePath, type TraceInvocation, withTraceDetails } from "../ui/trace.ts";
 
 interface ReadParams {
 	path: string;
@@ -44,12 +44,7 @@ function readTraceInvocation(args: ReadParams, cwd: string): TraceInvocation {
 
 const traceRenderer = createTraceRenderer<ReadParams>({ invocation: readTraceInvocation });
 
-function withTrace(details: unknown, state: "running" | "success", qualifiers?: string[]) {
-	const base = typeof details === "object" && details !== null && !Array.isArray(details) ? details : {};
-	return { ...base, trace: { state, ...(qualifiers ? { qualifiers } : {}) } };
-}
-
-export function createHarnessReadTool(): ToolDefinition<any, any, any> {
+export function createHarnessReadTool(cancelledCalls = new Set<string>()): ToolDefinition<any, any, any> {
 	const base = createReadToolDefinition(process.cwd());
 	return {
 		...base,
@@ -57,17 +52,31 @@ export function createHarnessReadTool(): ToolDefinition<any, any, any> {
 		parameters: schema,
 		renderShell: "self",
 		async execute(toolCallId: string, params: any, signal: AbortSignal | undefined, onUpdate: any, ctx: any) {
-			onUpdate?.({ content: [{ type: "text", text: "" }], details: withTrace(undefined, "running") });
-			const result = await createReadToolDefinition(ctx.cwd).execute(toolCallId, params, signal, onUpdate, ctx);
-			const image = result.content.find((item) => item.type === "image");
-			const qualifiers = image?.mimeType ? [image.mimeType] : undefined;
-			return { ...result, details: withTrace(result.details, "success", qualifiers) };
+			onUpdate?.({ content: [{ type: "text", text: "" }], details: withTraceDetails(undefined, "running") });
+			try {
+				const result = await createReadToolDefinition(ctx.cwd).execute(toolCallId, params, signal, onUpdate, ctx);
+				const image = result.content.find((item) => item.type === "image");
+				const qualifiers = image?.mimeType ? [image.mimeType] : undefined;
+				return { ...result, details: withTraceDetails(result.details, "success", qualifiers) };
+			} catch (error) {
+				if (signal?.aborted) cancelledCalls.add(toolCallId);
+				throw error;
+			}
 		},
 		renderCall: traceRenderer.renderCall,
 		renderResult: traceRenderer.renderResult,
 	} as ToolDefinition<any, any, any>;
 }
 
+export function registerHarnessRead(pi: ExtensionAPI): void {
+	const cancelledCalls = new Set<string>();
+	pi.registerTool(createHarnessReadTool(cancelledCalls));
+	pi.on("tool_result", (event) => {
+		if (event.toolName !== "read" || !cancelledCalls.delete(event.toolCallId)) return undefined;
+		return { details: withTraceDetails(event.details, "cancelled") };
+	});
+}
+
 export default function (pi: ExtensionAPI) {
-	pi.registerTool(createHarnessReadTool());
+	registerHarnessRead(pi);
 }

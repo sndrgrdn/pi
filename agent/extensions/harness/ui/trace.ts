@@ -14,6 +14,12 @@ interface TraceDetails {
 	trace?: { state?: TraceState; qualifiers?: string[] };
 }
 
+/** Merge mechanical Trace View lifecycle facts into existing tool details. */
+export function withTraceDetails(details: unknown, state: TraceState, qualifiers?: string[]) {
+	const base = typeof details === "object" && details !== null && !Array.isArray(details) ? details : {};
+	return { ...base, trace: { state, ...(qualifiers ? { qualifiers } : {}) } };
+}
+
 interface TraceResult {
 	content: readonly { type: string; text?: string }[];
 	details?: unknown;

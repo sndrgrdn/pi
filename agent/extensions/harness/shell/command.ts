@@ -12,7 +12,7 @@ import { delimiter, isAbsolute, join, resolve } from "node:path";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { getAgentDir, getShellConfig } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { createTraceRenderer, shellTraceInvocation } from "../ui/trace.ts";
+import { createTraceRenderer, shellTraceInvocation, withTraceDetails } from "../ui/trace.ts";
 import { appendStatus, formatShellOutput, UPDATE_THROTTLE_MS } from "./output.ts";
 import {
 	type BackgroundShellRegistry,
@@ -22,21 +22,6 @@ import {
 	MAX_TIMEOUT_MS,
 	ShellOutputFile,
 } from "./registry.ts";
-
-type ShellTraceState = "running" | "success" | "cancelled";
-
-interface ShellTraceDetails {
-	trace: { state: ShellTraceState; qualifiers?: string[] };
-}
-
-function traceDetails(
-	details: unknown,
-	state: ShellTraceState,
-	qualifiers?: string[],
-): Record<string, unknown> & ShellTraceDetails {
-	const base = typeof details === "object" && details !== null && !Array.isArray(details) ? details : {};
-	return { ...base, trace: { state, qualifiers } };
-}
 
 const schema = Type.Object({
 	command: Type.String({
@@ -94,7 +79,7 @@ export function createShellCommandTool(
 		parameters: schema,
 		renderShell: "self",
 		async execute(toolCallId, params: ShellCommandParams, signal, onUpdate, ctx) {
-			onUpdate?.({ content: [{ type: "text", text: "" }], details: traceDetails(undefined, "running") });
+			onUpdate?.({ content: [{ type: "text", text: "" }], details: withTraceDetails(undefined, "running") });
 			const workdir = resolveWorkdir(ctx.cwd, params.workdir);
 			if (!existsSync(workdir)) {
 				throw new Error(`Working directory does not exist: ${workdir}`);
@@ -207,7 +192,7 @@ export function createShellCommandTool(
 				}
 				return {
 					content: [{ type: "text", text: text || "(no output)" }],
-					details: traceDetails(details, "success"),
+					details: withTraceDetails(details, "success"),
 				};
 			}
 
@@ -220,7 +205,7 @@ export function createShellCommandTool(
 			const status = `backgrounded as ${record.id} · still running. Poll with shell_command_status({"id": "${record.id}"}).`;
 			return {
 				content: [{ type: "text", text: appendStatus(text, status) }],
-				details: traceDetails(details, "success", [record.id, "backgrounded"]),
+				details: withTraceDetails(details, "success", [record.id, "backgrounded"]),
 			};
 		},
 		renderCall: traceRenderer.renderCall,
@@ -233,6 +218,6 @@ export function registerShellCommand(pi: ExtensionAPI, registry: BackgroundShell
 	pi.registerTool(createShellCommandTool(registry, cancelledCalls));
 	pi.on("tool_result", (event) => {
 		if (event.toolName !== "shell_command" || !cancelledCalls.delete(event.toolCallId)) return undefined;
-		return { details: traceDetails(event.details, "cancelled") };
+		return { details: withTraceDetails(event.details, "cancelled") };
 	});
 }

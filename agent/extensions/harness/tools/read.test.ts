@@ -2,18 +2,18 @@ import { copyFileSync, mkdtempSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createHarnessReadTool } from "./read.ts";
+import { createHarnessReadTool, registerHarnessRead } from "./read.ts";
 
 const theme = {
 	fg: (color: string, value: string) => `<${color}>${value}</${color}>`,
 	bold: (value: string) => `<b>${value}</b>`,
 } as any;
 
-function lines(component: { render(width: number): string[] }): string[] {
+function renderedLines(component: { render(width: number): string[] }): string[] {
 	return component.render(200).map((line) => line.trimEnd());
 }
 
-describe("read Trace renderer", () => {
+describe("read Trace View renderer", () => {
 	it("shows the path and requested range while keeping text behind expansion", () => {
 		const tool = createHarnessReadTool();
 		const result = { content: [{ type: "text", text: "second\nthird" }] } as any;
@@ -23,10 +23,10 @@ describe("read Trace renderer", () => {
 			isError: false,
 		} as any;
 
-		expect(lines(tool.renderResult!(result, { expanded: false, isPartial: false }, theme, context))).toEqual([
+		expect(renderedLines(tool.renderResult!(result, { expanded: false, isPartial: false }, theme, context))).toEqual([
 			"<success>✓</success> <b>read</b> ./src/file.ts · <muted>lines 2-3</muted>",
 		]);
-		expect(lines(tool.renderResult!(result, { expanded: true, isPartial: false }, theme, context))).toEqual([
+		expect(renderedLines(tool.renderResult!(result, { expanded: true, isPartial: false }, theme, context))).toEqual([
 			"<success>✓</success> <b>read</b> ./src/file.ts · <muted>lines 2-3</muted>",
 			"<toolOutput>second</toolOutput>",
 			"<toolOutput>third</toolOutput>",
@@ -56,7 +56,7 @@ describe("read Trace renderer", () => {
 		expect(result.content).toEqual(expect.arrayContaining([expect.objectContaining({ type: "image" })]));
 		expect(result.details).toEqual({ trace: { state: "success", qualifiers: ["image/png"] } });
 		expect(
-			lines(
+			renderedLines(
 				tool.renderResult!(result, { expanded: false, isPartial: false }, theme, {
 					args: { path: "pixel.png" },
 					cwd,
@@ -65,6 +65,25 @@ describe("read Trace renderer", () => {
 			),
 		).toEqual(["<success>✓</success> <b>read</b> ./pixel.png · <muted>image/png</muted>"]);
 	});
+
+	it.each(["image/jpeg", "image/png", "image/gif", "image/webp"])(
+		"renders the supported %s qualifier while collapsed",
+		(mimeType) => {
+			const tool = createHarnessReadTool();
+			const component = tool.renderResult!(
+				{
+					content: [{ type: "image", data: "base64", mimeType }],
+					details: { trace: { state: "success", qualifiers: [mimeType] } },
+				} as any,
+				{ expanded: false, isPartial: false },
+				theme,
+				{ args: { path: "image.bin" }, cwd: "/work", isError: false } as any,
+			);
+			expect(renderedLines(component)).toEqual([
+				`<success>✓</success> <b>read</b> ./image.bin · <muted>${mimeType}</muted>`,
+			]);
+		},
+	);
 
 	it.each([
 		["inside cwd", "/work/src/file.ts", "/work", "./src/file.ts"],
@@ -78,7 +97,7 @@ describe("read Trace renderer", () => {
 			theme,
 			{ args: { path }, cwd, isError: false } as any,
 		);
-		expect(lines(component)).toEqual([`<success>✓</success> <b>read</b> ${expectedPath}`]);
+		expect(renderedLines(component)).toEqual([`<success>✓</success> <b>read</b> ${expectedPath}`]);
 	});
 
 	it.each([
@@ -92,7 +111,9 @@ describe("read Trace renderer", () => {
 			theme,
 			{ args: { path: "file.ts", ...range }, cwd: "/work", isError: false } as any,
 		);
-		expect(lines(component)).toEqual([`<success>✓</success> <b>read</b> ./file.ts · <muted>${expected}</muted>`]);
+		expect(renderedLines(component)).toEqual([
+			`<success>✓</success> <b>read</b> ./file.ts · <muted>${expected}</muted>`,
+		]);
 	});
 
 	it("renders a missing file as one failed row with expandable evidence", async () => {
@@ -104,12 +125,34 @@ describe("read Trace renderer", () => {
 		const result = { content: [{ type: "text", text: "ENOENT: no such file or directory" }] } as any;
 		const context = { args: { path: "missing.txt" }, cwd, isError: true } as any;
 
-		expect(lines(tool.renderResult!(result, { expanded: false, isPartial: false }, theme, context))).toEqual([
+		expect(renderedLines(tool.renderResult!(result, { expanded: false, isPartial: false }, theme, context))).toEqual([
 			"<error>✗</error> <b>read</b> ./missing.txt",
 		]);
-		expect(lines(tool.renderResult!(result, { expanded: true, isPartial: false }, theme, context))).toEqual([
+		expect(renderedLines(tool.renderResult!(result, { expanded: true, isPartial: false }, theme, context))).toEqual([
 			"<error>✗</error> <b>read</b> ./missing.txt",
 			"<toolOutput>ENOENT: no such file or directory</toolOutput>",
 		]);
+	});
+
+	it("preserves cancellation as structured lifecycle state", async () => {
+		let tool: any;
+		let resultHandler: any;
+		registerHarnessRead({
+			registerTool: (definition: any) => {
+				tool = definition;
+			},
+			on: (event: string, handler: any) => {
+				if (event === "tool_result") resultHandler = handler;
+			},
+		} as any);
+		const controller = new AbortController();
+		controller.abort();
+
+		await expect(
+			tool.execute("read-1", { path: "file.txt" }, controller.signal, undefined, { cwd: "/work" }),
+		).rejects.toThrow(/aborted/);
+		expect(resultHandler({ toolName: "read", toolCallId: "read-1", details: undefined })).toEqual({
+			details: { trace: { state: "cancelled" } },
+		});
 	});
 });
