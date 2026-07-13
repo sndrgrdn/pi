@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAgentDir, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { type AgentToolRecovery, type AgentToolSpec, createAgentTool } from "../agent-tool.ts";
+import {
+	type AgentToolRecoverContext,
+	type AgentToolRecovery,
+	type AgentToolSpec,
+	createAgentTool,
+} from "../agent-tool.ts";
 import { createApplyPatchTool } from "../patch/tool.ts";
 import { type Mode, type ResolvedProfiles, resolveAgentRoute, TASK_POSTURE } from "../profiles.ts";
 import { projectContextPrompt } from "../project-context.ts";
@@ -84,7 +89,7 @@ export function createTaskTool(
 	/** One cohesive recovery policy: cancellation report, else summary re-run with cancellation fallback. */
 	async function recover(
 		error: unknown,
-		{ params, cwd, signal }: { params: TaskInput; cwd: string; signal: AbortSignal | undefined },
+		{ params, cwd, signal }: AgentToolRecoverContext<TaskInput>,
 	): Promise<AgentToolRecovery> {
 		if (isSubagentAbortError(error)) {
 			return { content: buildCancellationReport(error.toolLog), outcome: "cancelled" };

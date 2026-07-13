@@ -73,13 +73,13 @@ type ToolUpdate = (result: { content: { type: "text"; text: string }[]; details:
 /** Emit the running Trace View state, tallying child tool actions as they happen. */
 function createProgressSignal(
 	onUpdate: ToolUpdate | undefined,
-	details: Record<string, unknown> | undefined,
+	traceDetails: Record<string, unknown> | undefined,
 ): (action: string) => void {
 	const actions = new Map<string, number>();
-	emitTraceRunning(onUpdate, { ...details, actions: {} });
+	emitTraceRunning(onUpdate, { ...traceDetails, actions: {} });
 	return (action) => {
 		actions.set(action, (actions.get(action) ?? 0) + 1);
-		emitTraceRunning(onUpdate, { ...details, actions: Object.fromEntries(actions) });
+		emitTraceRunning(onUpdate, { ...traceDetails, actions: Object.fromEntries(actions) });
 	};
 }
 
