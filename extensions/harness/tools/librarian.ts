@@ -7,7 +7,7 @@ import { buildEnvelope } from "../envelopes.ts";
 import type { ResolvedProfiles } from "../profiles.ts";
 import { resolveAgentRoute } from "../profiles.ts";
 import { resolveAgentDefinition } from "../registry.ts";
-import { SubagentRunner } from "../runner.ts";
+import type { SubagentRunner } from "../runner.ts";
 import { createSubagentRenderer } from "../ui/subagent.ts";
 import { createCheckoutTool } from "./checkout.ts";
 import { createShellCommandTool } from "../shell/command.ts";

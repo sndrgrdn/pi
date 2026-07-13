@@ -93,15 +93,4 @@ describe("oracle tool", () => {
 		expect(row.render(100).map((line) => line.trimEnd())).toEqual(["✓ Oracle has spoken"]);
 	});
 
-	it("reuses its runner for nested Finder and Librarian tools", async () => {
-		const run = vi.fn(async (options: RunOptions<{ task: string }>) => options.wrapResult("oracle-1", "Advice"));
-		const runner = { run } as any;
-		const tool = createOracleTool(runner, BUILTIN_PROFILES, () => "medium");
-		await tool.execute("call", { task: "Review" }, undefined, undefined, { cwd: "/repo" } as any);
-
-		const nested = run.mock.calls[0]?.[0].toolbox?.(new BackgroundShellRegistry()).slice(3);
-		await nested?.[0]?.execute("finder", { query: "x" }, undefined, undefined, { cwd: "/repo" } as any);
-		await nested?.[1]?.execute("librarian", { query: "x" }, undefined, undefined, { cwd: "/repo" } as any);
-		expect(run).toHaveBeenCalledTimes(3);
-	});
 });

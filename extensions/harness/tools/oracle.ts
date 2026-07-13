@@ -6,7 +6,7 @@ import { Type } from "typebox";
 import { buildEnvelope } from "../envelopes.ts";
 import { DEFAULT_MODE, type Mode, type ResolvedProfiles, resolveAgentRoute } from "../profiles.ts";
 import { resolveAgentDefinition } from "../registry.ts";
-import { SubagentRunner } from "../runner.ts";
+import type { SubagentRunner } from "../runner.ts";
 import { createSubagentRenderer } from "../ui/subagent.ts";
 import { createFinderTool } from "./finder.ts";
 import { createLibrarianTool } from "./librarian.ts";
