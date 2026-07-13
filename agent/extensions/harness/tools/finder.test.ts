@@ -1,7 +1,7 @@
 import type { Text } from "@earendil-works/pi-tui";
 import { describe, expect, it, vi } from "vitest";
 import { BUILTIN_PROFILES } from "../profiles.ts";
-import type { RunOptions } from "../runner.ts";
+import { type RunOptions, SubagentRunError } from "../runner.ts";
 import { createFinderTool, extractFinderAnswer, finderEnvelopeTitle } from "./finder.ts";
 
 describe("finder tool", () => {
@@ -10,7 +10,18 @@ describe("finder tool", () => {
 			options.wrapResult("finder-session", "Authentication entry points\n/abs/auth.ts:12 — login route"),
 		);
 		const tool = createFinderTool({ run } as any, BUILTIN_PROFILES);
-		const result = await tool.execute("call", { query: "find auth" }, undefined, undefined, { cwd: "/repo" } as any);
+		const updates: any[] = [];
+		const result = await tool.execute(
+			"call",
+			{ query: "find auth" },
+			undefined,
+			(update: any) => updates.push(update),
+			{
+				cwd: "/repo",
+			} as any,
+		);
+		expect(updates[0]?.details).toEqual({ trace: { state: "running" }, actions: {} });
+		expect(result.details).toMatchObject({ trace: { state: "success" } });
 		expect(result.content[0]).toEqual({
 			type: "text",
 			text: '<finder_result title="Authentication entry points" sessionID="finder-session">\n/abs/auth.ts:12 — login route\n</finder_result>',
@@ -36,7 +47,22 @@ describe("finder tool", () => {
 		).toBe("Auth & sessions");
 	});
 
-	it("replaces the running row with the completion title", () => {
+	it("records an aborted child call for mechanical cancellation rendering", async () => {
+		const cause = Object.assign(new Error("Subagent run aborted"), { name: "AbortError" });
+		const cancelledCalls = new Set<string>();
+		const tool = createFinderTool(
+			{ run: vi.fn().mockRejectedValue(new SubagentRunError("finder-1", [], cause)) } as any,
+			BUILTIN_PROFILES,
+			cancelledCalls,
+		);
+
+		await expect(
+			tool.execute("call-1", { query: "find auth" }, undefined, undefined, { cwd: "/repo" } as any),
+		).rejects.toThrow("Subagent run aborted");
+		expect(cancelledCalls).toEqual(new Set(["call-1"]));
+	});
+
+	it("retains the original query after completion", () => {
 		const tool = createFinderTool({ run: vi.fn() } as any, BUILTIN_PROFILES);
 		const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
 		const row = tool.renderCall?.({ query: "find auth" }, theme, { lastComponent: undefined } as any) as Text;
@@ -45,13 +71,13 @@ describe("finder tool", () => {
 				content: [
 					{ type: "text", text: '<finder_result title="Auth files" sessionID="one">\nx\n</finder_result>' },
 				],
-				details: {},
+				details: { trace: { state: "success" } },
 			},
 			{ expanded: false, isPartial: false },
 			theme,
-			{ lastComponent: row } as any,
+			{ args: { query: "find auth" }, cwd: "/repo", isError: false, lastComponent: row } as any,
 		);
 		expect(completed).toBe(row);
-		expect(row.render(100).map((line) => line.trimEnd())).toEqual(["✓ Auth files"]);
+		expect(row.render(100).map((line) => line.trimEnd())).toEqual(["✓ finder find auth"]);
 	});
 });

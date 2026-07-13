@@ -21,6 +21,7 @@ import { createLibrarianTool } from "./tools/librarian.ts";
 import { createOracleTool } from "./tools/oracle.ts";
 import registerRead from "./tools/read.ts";
 import { createTaskTool } from "./tools/task.ts";
+import { withTraceDetails } from "./ui/trace.ts";
 
 export const MAIN_TOOL_NAMES = [
 	"shell_command",
@@ -35,6 +36,15 @@ export const MAIN_TOOL_NAMES = [
 	"task",
 	"mcp",
 ] as const;
+
+const DELEGATION_TOOL_NAMES = new Set(["finder", "librarian", "oracle"]);
+
+export function registerDelegationCancellation(pi: ExtensionAPI, cancelledCalls: Set<string>): void {
+	pi.on("tool_result", (event) => {
+		if (!DELEGATION_TOOL_NAMES.has(event.toolName) || !cancelledCalls.delete(event.toolCallId)) return undefined;
+		return { details: withTraceDetails(event.details, "cancelled") };
+	});
+}
 
 export default function harness(pi: ExtensionAPI) {
 	// Per-session background-process registry (spec §3.3), shared by the
@@ -57,11 +67,13 @@ export default function harness(pi: ExtensionAPI) {
 	const modes = registerModes(pi);
 	const { profiles } = modes;
 	const runner = new SubagentRunner();
+	const cancelledDelegations = new Set<string>();
 
-	pi.registerTool(createFinderTool(runner, profiles)); // Phase 6 (§6.2)
-	pi.registerTool(createLibrarianTool(runner, profiles)); // Phase 7 (§6.4)
-	pi.registerTool(createOracleTool(runner, profiles, modes.activeMode)); // Phase 8 (§6.3)
+	pi.registerTool(createFinderTool(runner, profiles, cancelledDelegations)); // Phase 6 (§6.2)
+	pi.registerTool(createLibrarianTool(runner, profiles, cancelledDelegations)); // Phase 7 (§6.4)
+	pi.registerTool(createOracleTool(runner, profiles, modes.activeMode, cancelledDelegations)); // Phase 8 (§6.3)
 	pi.registerTool(createTaskTool(runner, profiles)); // Phase 9 (§6.5)
+	registerDelegationCancellation(pi, cancelledDelegations);
 
 	// Phase 10 (§4): action methods become available only after pi binds the
 	// extension runtime. Lock every started/reloaded session at that seam.

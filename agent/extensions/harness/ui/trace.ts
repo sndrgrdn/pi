@@ -39,6 +39,7 @@ interface TraceRenderContext<TArgs> {
 
 interface TraceRendererOptions<TArgs> {
 	invocation(args: TArgs, cwd: string): TraceInvocation;
+	progress?(result: TraceResult): string[];
 	evidence?(result: TraceResult, theme: TraceTheme, context: TraceRenderContext<TArgs>): string | undefined;
 }
 
@@ -108,7 +109,8 @@ export function createTraceRenderer<TArgs>(options: TraceRendererOptions<TArgs>)
 			const presentation = statePresentation[state];
 			const invocation = options.invocation(context.args, context.cwd);
 			const target = invocation.target ? ` ${invocation.target}` : "";
-			const qualifiers = [...(invocation.qualifiers ?? []), ...detailQualifiers(result.details)]
+			const progress = state === "running" ? (options.progress?.(result) ?? []) : [];
+			const qualifiers = [...(invocation.qualifiers ?? []), ...detailQualifiers(result.details), ...progress]
 				.map((value) => ` · ${theme.fg("muted", value)}`)
 				.join("");
 			const row = `${theme.fg(presentation.color, presentation.glyph)} ${theme.bold(invocation.action)}${target}${qualifiers}`;

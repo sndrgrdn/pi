@@ -6,13 +6,22 @@ import { createLibrarianTool, librarianMessage, mapLibrarianError } from "./libr
 
 describe("librarian tool", () => {
 	it("prepends optional context and returns the final answer envelope", async () => {
-		const run = vi.fn(async (options: RunOptions<{ query: string; context?: string }>) =>
-			options.wrapResult("library-1", "Use [the source](https://example.com)."),
-		);
+		const run = vi.fn(async (options: RunOptions<{ query: string; context?: string }>) => {
+			options.onAction?.("checkout");
+			options.onAction?.("checkout");
+			return options.wrapResult("library-1", "Use [the source](https://example.com).");
+		});
 		const tool = createLibrarianTool({ run } as any, BUILTIN_PROFILES);
-		const result = await tool.execute("call", { query: "How?", context: "Ruby 3.4" }, undefined, undefined, {
-			cwd: "/repo",
-		} as any);
+		const updates: any[] = [];
+		const result = await tool.execute(
+			"call",
+			{ query: "How?", context: "Ruby 3.4" },
+			undefined,
+			(update: any) => updates.push(update),
+			{ cwd: "/repo" } as any,
+		);
+		expect(updates.at(-1)?.details).toEqual({ trace: { state: "running" }, actions: { checkout: 2 } });
+		expect(result.details).toEqual({ trace: { state: "success" } });
 		expect(result.content[0]).toMatchObject({
 			type: "text",
 			text: expect.stringContaining('<librarian_result sessionID="library-1">'),

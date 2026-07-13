@@ -80,10 +80,24 @@ describe("oracle tool", () => {
 	});
 
 	it("uses the medium route when no named parent Mode is active", async () => {
-		const run = vi.fn(async (options: RunOptions<{ task: string }>) => options.wrapResult("oracle-1", "Advice"));
+		const run = vi.fn(async (options: RunOptions<{ task: string }>) => {
+			options.onAction?.("finder");
+			return options.wrapResult("oracle-1", "Advice");
+		});
 		const tool = createOracleTool({ run } as any, BUILTIN_PROFILES, () => null);
-		await tool.execute("call", { task: "Review it" }, undefined, undefined, { cwd: "/repo" } as any);
+		const updates: any[] = [];
+		const result = await tool.execute(
+			"call",
+			{ task: "Review it" },
+			undefined,
+			(update: any) => updates.push(update),
+			{
+				cwd: "/repo",
+			} as any,
+		);
 		expect(run.mock.calls[0]?.[0].definition.model).toBe("openai-codex/gpt-5.6-sol");
+		expect(updates.at(-1)?.details).toEqual({ trace: { state: "running" }, actions: { finder: 1 } });
+		expect(result.details).toEqual({ trace: { state: "success" } });
 	});
 
 	it("rejects an empty final message explicitly", async () => {
@@ -94,19 +108,19 @@ describe("oracle tool", () => {
 		).rejects.toThrow("Oracle child returned an empty final message");
 	});
 
-	it("replaces the exploring row with the completion label", () => {
+	it("retains the original task after completion", () => {
 		const tool = createOracleTool({ run: vi.fn() } as any, BUILTIN_PROFILES, () => "medium");
 		const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
 		const row = tool.renderCall?.({ task: "Review routing" }, theme, { lastComponent: undefined } as any) as Text;
 		tool.renderResult?.(
 			{
 				content: [{ type: "text", text: '<oracle_result sessionID="one">\nAdvice\n</oracle_result>' }],
-				details: { state: "complete" },
+				details: { trace: { state: "success" } },
 			},
 			{ expanded: false, isPartial: false },
 			theme,
-			{ lastComponent: row } as any,
+			{ args: { task: "Review routing" }, cwd: "/repo", isError: false, lastComponent: row } as any,
 		);
-		expect(row.render(100).map((line) => line.trimEnd())).toEqual(["✓ Oracle has spoken"]);
+		expect(row.render(100).map((line) => line.trimEnd())).toEqual(["✓ oracle Review routing"]);
 	});
 });

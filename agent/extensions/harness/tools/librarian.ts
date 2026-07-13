@@ -7,18 +7,22 @@ import { buildEnvelope } from "../envelopes.ts";
 import type { ResolvedProfiles } from "../profiles.ts";
 import { resolveAgentRoute } from "../profiles.ts";
 import { AGENT_TOOLBOX_MATRIX, resolveAgentDefinition } from "../registry.ts";
-import type { SubagentRunner } from "../runner.ts";
+import { SubagentRunError, type SubagentRunner } from "../runner.ts";
 import { createShellCancelTool } from "../shell/cancel.ts";
 import { createShellCommandTool } from "../shell/command.ts";
 import { createShellStatusTool } from "../shell/status.ts";
 import { createSubagentRenderer } from "../ui/subagent.ts";
+import { withTraceDetails } from "../ui/trace.ts";
 import { createCheckoutTool } from "./checkout.ts";
 
 const prompt = readFileSync(
 	join(dirname(fileURLToPath(import.meta.url)), "..", "agents", "prompts", "librarian.md"),
 	"utf8",
 ).trim();
-const renderer = createSubagentRenderer({ running: "Librarian researching", complete: "Librarian researched" });
+const renderer = createSubagentRenderer<LibrarianInput>({
+	action: "librarian",
+	target: (args) => args.query,
+});
 
 export interface LibrarianInput {
 	query: string;
@@ -40,6 +44,7 @@ export function mapLibrarianError(error: unknown): Error {
 export function createLibrarianTool(
 	runner: Pick<SubagentRunner, "run">,
 	profiles: ResolvedProfiles,
+	cancelledCalls = new Set<string>(),
 ): ToolDefinition<any, any, any> {
 	const toolbox = AGENT_TOOLBOX_MATRIX.librarian;
 	const definition = resolveAgentDefinition(
@@ -58,17 +63,24 @@ export function createLibrarianTool(
 			query: Type.String({ description: "The external research question." }),
 			context: Type.Optional(Type.String({ description: "Relevant context prepended to the research query." })),
 		}),
-		async execute(_id, params: LibrarianInput, signal, onUpdate, ctx) {
-			onUpdate?.({
-				content: [{ type: "text", text: `Librarian researching — ${params.query}` }],
-				details: { state: "running", query: params.query },
-			});
+		async execute(id, params: LibrarianInput, signal, onUpdate, ctx) {
+			const actions = new Map<string, number>();
+			const update = () =>
+				onUpdate?.({
+					content: [{ type: "text", text: `Librarian researching — ${params.query}` }],
+					details: withTraceDetails({ actions: Object.fromEntries(actions) }, "running"),
+				});
+			update();
 			try {
 				const envelope = await runner.run({
 					definition,
 					cwd: ctx.cwd,
 					input: params,
 					signal,
+					onAction: (name) => {
+						actions.set(name, (actions.get(name) ?? 0) + 1);
+						update();
+					},
 					toolbox: (processes) => [
 						createCheckoutTool(),
 						createShellCommandTool(processes),
@@ -78,16 +90,14 @@ export function createLibrarianTool(
 					mapInput: librarianMessage,
 					wrapResult: (sessionID, content) => buildEnvelope({ kind: "librarian", sessionID, content }),
 				});
-				return { content: [{ type: "text", text: envelope }], details: { state: "complete" } };
+				return { content: [{ type: "text", text: envelope }], details: withTraceDetails(undefined, "success") };
 			} catch (error) {
+				if (signal?.aborted || (error instanceof SubagentRunError && error.name === "AbortError"))
+					cancelledCalls.add(id);
 				throw mapLibrarianError(error);
 			}
 		},
-		renderCall(args: LibrarianInput | undefined, theme, context) {
-			return renderer.renderCall({ detail: args?.query }, theme, context);
-		},
-		renderResult(result, options, theme, context) {
-			return renderer.renderResult(result, options, theme, context);
-		},
+		renderCall: renderer.renderCall,
+		renderResult: renderer.renderResult,
 	} as ToolDefinition<any, any, any>;
 }

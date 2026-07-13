@@ -1,6 +1,7 @@
 import { copyFileSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Text } from "@earendil-works/pi-tui";
 import { describe, expect, it, vi } from "vitest";
 import { BUILTIN_PROFILES, POSTURES, TASK_POSTURE } from "../profiles.ts";
 import { type RunOptions, SubagentRunError } from "../runner.ts";
@@ -41,14 +42,18 @@ describe("task tool", () => {
 		["medium", "openai-codex/gpt-5.6-sol", "high"],
 		["high", "anthropic/claude-fable-5", "high"],
 	] as const)("routes mode %s independently and exposes the exact Task toolbox", async (mode, model, reasoning) => {
-		const run = vi.fn(async (options: RunOptions<{ prompt: string }>) =>
-			options.wrapResult("task-1", "Changed x.ts. Verification: tests pass."),
-		);
+		const run = vi.fn(async (options: RunOptions<{ prompt: string }>) => {
+			options.onAction?.("apply_patch");
+			return options.wrapResult("task-1", "Changed x.ts. Verification: tests pass.");
+		});
 		const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
 			basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),
 		});
 		const params = { prompt: "Implement it", description: "implementation", ...(mode ? { mode } : {}) };
-		const result = await tool.execute("call", params, undefined, undefined, { cwd: "/repo" } as any);
+		const updates: any[] = [];
+		const result = await tool.execute("call", params, undefined, (update: any) => updates.push(update), {
+			cwd: "/repo",
+		} as any);
 		const options = run.mock.calls[0]![0];
 
 		expect(options.definition).toMatchObject({
@@ -83,6 +88,24 @@ describe("task tool", () => {
 			type: "text",
 			text: '<task_result sessionID="task-1">\nChanged x.ts. Verification: tests pass.\n</task_result>',
 		});
+		expect(updates.at(-1)?.details).toMatchObject({
+			trace: { state: "running" },
+			actions: { apply_patch: 1 },
+		});
+		expect(result.details).toMatchObject({ trace: { state: "success" }, mode: mode ?? "low" });
+	});
+
+	it.each([undefined, "low", "medium", "high"] as const)("always renders selected Mode %s", (mode) => {
+		const tool = createTaskTool({ run: vi.fn() } as any, BUILTIN_PROFILES);
+		const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
+		const args = { prompt: "Work", description: "fix renderer", ...(mode ? { mode } : {}) };
+		const row = tool.renderResult?.(
+			{ content: [{ type: "text", text: '<task_result sessionID="one">\nDone\n</task_result>' }], details: {} },
+			{ expanded: false, isPartial: false },
+			theme,
+			{ args, cwd: "/repo", isError: false } as any,
+		) as Text;
+		expect(row.render(100).map((line) => line.trimEnd())).toEqual([`✓ task fix renderer · ${mode ?? "low"}`]);
 	});
 
 	it("builds a capped mechanical cancellation report from a synthetic tool log", () => {
@@ -129,6 +152,7 @@ describe("task tool", () => {
 			type: "text",
 			text: expect.stringContaining('<task_error sessionID="task-cancelled">\nTask was cancelled.'),
 		});
+		expect(result.details).toMatchObject({ trace: { state: "cancelled" } });
 	});
 
 	it("summarizes a child hard error into a task_error payload", async () => {
@@ -157,6 +181,7 @@ describe("task tool", () => {
 			type: "text",
 			text: '<task_error sessionID="task-failed">\nChanged app.ts; verification did not run.\n</task_error>',
 		});
+		expect(result.details).toMatchObject({ trace: { state: "failed" } });
 	});
 
 	it("returns the original mechanical report when summarization is cancelled", async () => {

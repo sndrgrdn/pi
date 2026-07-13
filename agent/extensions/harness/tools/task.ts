@@ -14,13 +14,15 @@ import { createShellStatusTool } from "../shell/status.ts";
 import { createChildSkillTool, discoverChildSkills } from "../skill/child.ts";
 import { buildDirective, extractSkillRefs } from "../skill/core.ts";
 import { createSubagentRenderer } from "../ui/subagent.ts";
+import { type TraceState, withTraceDetails } from "../ui/trace.ts";
 import { createFinderTool } from "./finder.ts";
 import { createLibrarianTool } from "./librarian.ts";
 import { createHarnessReadTool } from "./read.ts";
 
-const renderer = createSubagentRenderer({
-	running: ({ mode }) => `Subagent (${mode ?? "low"}) working`,
-	complete: "Subagent finished",
+const renderer = createSubagentRenderer<TaskInput>({
+	action: "task",
+	target: (args) => args.description,
+	qualifiers: (args) => [args.mode ?? "low"],
 });
 
 export interface TaskInput {
@@ -107,10 +109,16 @@ export function createTaskTool(
 		}),
 		async execute(_id, params: TaskInput, signal, onUpdate, ctx) {
 			const mode = params.mode ?? "low";
-			onUpdate?.({
-				content: [{ type: "text", text: "working" }],
-				details: { state: "running", mode, description: params.description },
-			});
+			const actions = new Map<string, number>();
+			const update = () =>
+				onUpdate?.({
+					content: [{ type: "text", text: "working" }],
+					details: withTraceDetails(
+						{ mode, description: params.description, actions: Object.fromEntries(actions) },
+						"running",
+					),
+				});
+			update();
 			const base = await (dependencies.basePrompts ?? readBasePrompts)(ctx.cwd);
 			const skills = discoverChildSkills(ctx.cwd);
 			const refs = extractSkillRefs(
@@ -135,12 +143,17 @@ export function createTaskTool(
 				resolveAgentRoute(profiles, "task", mode),
 			);
 			let envelope: string;
+			let outcome: TraceState = "success";
 			try {
 				envelope = await runner.run({
 					definition,
 					cwd: ctx.cwd,
 					input: params,
 					signal,
+					onAction: (name) => {
+						actions.set(name, (actions.get(name) ?? 0) + 1);
+						update();
+					},
 					toolbox: (processes) => [
 						createShellCommandTool(processes),
 						createShellStatusTool(processes),
@@ -158,12 +171,14 @@ export function createTaskTool(
 				if (!(error instanceof SubagentRunError)) throw error;
 				const failure = error;
 				if (failure.name === "AbortError") {
+					outcome = "cancelled";
 					envelope = buildEnvelope({
 						kind: "task_error",
 						sessionID: failure.sessionID,
 						content: buildCancellationReport(failure.toolLog),
 					});
 				} else {
+					outcome = "failed";
 					try {
 						const summary = await runner.run({
 							definition: resolveAgentDefinition(
@@ -186,6 +201,7 @@ export function createTaskTool(
 					} catch (summaryError) {
 						if (!(summaryError instanceof SubagentRunError) || summaryError.name !== "AbortError")
 							throw summaryError;
+						outcome = "cancelled";
 						envelope = buildEnvelope({
 							kind: "task_error",
 							sessionID: failure.sessionID,
@@ -196,14 +212,10 @@ export function createTaskTool(
 			}
 			return {
 				content: [{ type: "text", text: envelope }],
-				details: { state: "complete", mode, description: params.description },
+				details: withTraceDetails({ mode, description: params.description }, outcome),
 			};
 		},
-		renderCall(args: TaskInput | undefined, theme, context) {
-			return renderer.renderCall({ detail: args?.description }, theme, context);
-		},
-		renderResult(result, options, theme, context) {
-			return renderer.renderResult(result, options, theme, context);
-		},
+		renderCall: renderer.renderCall,
+		renderResult: renderer.renderResult,
 	} as ToolDefinition<any, any, any>;
 }
