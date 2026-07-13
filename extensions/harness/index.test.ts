@@ -9,8 +9,10 @@ describe("harness extension entry", () => {
 
 	it("locks Main to the eleven admitted tools", () => {
 		const setActiveTools = vi.fn();
+		const handlers = new Map<string, (...args: any[]) => unknown>();
 		const pi = new Proxy({
 			setActiveTools,
+			on: vi.fn((event: string, handler: (...args: any[]) => unknown) => handlers.set(event, handler)),
 			events: { emit: vi.fn(), on: vi.fn() },
 			getCommands: () => [],
 		}, {
@@ -22,6 +24,9 @@ describe("harness extension entry", () => {
 		}) as unknown as ExtensionAPI;
 
 		harness(pi);
+		expect(setActiveTools).not.toHaveBeenCalled();
+
+		handlers.get("session_start")?.({}, {});
 
 		expect(setActiveTools).toHaveBeenCalledOnce();
 		expect(setActiveTools).toHaveBeenCalledWith([

@@ -63,7 +63,7 @@ export default function harness(pi: ExtensionAPI) {
 	pi.registerTool(createOracleTool(runner, profiles, modes.activeMode)); // Phase 8 (§6.3)
 	pi.registerTool(createTaskTool(runner, profiles)); // Phase 9 (§6.5)
 
-	// Phase 10 (§4): start from an empty builtin baseline and admit only the
-	// designed Main Agent Tool Surface. `mcp` remains adapter-owned.
-	pi.setActiveTools([...MAIN_TOOL_NAMES]);
+	// Phase 10 (§4): action methods become available only after pi binds the
+	// extension runtime. Lock every started/reloaded session at that seam.
+	pi.on("session_start", () => pi.setActiveTools([...MAIN_TOOL_NAMES]));
 }
