@@ -12,10 +12,6 @@ import { join } from "node:path";
 import type { AgentDefinition } from "./registry.ts";
 import { BackgroundShellRegistry } from "./shell/registry.ts";
 import { withShellRegistry } from "./shell/session-registry.ts";
-import { createShellCommandTool } from "./shell/command.ts";
-import { createShellStatusTool } from "./shell/status.ts";
-import { createShellCancelTool } from "./shell/cancel.ts";
-import { createCheckoutTool } from "./tools/checkout.ts";
 
 export interface ChildSession {
 	sessionID: string;
@@ -114,11 +110,6 @@ export function resolveConfiguredModel(registry: Pick<ModelRegistry, "find">, mo
 /** Production adapter: a fresh in-memory pi SDK session, never a fork/resume. */
 export async function createSdkChildSession(config: ChildSessionConfig): Promise<ChildSession> {
 	const processes = new BackgroundShellRegistry();
-	const shellTools = [
-		createShellCommandTool(processes),
-		createShellStatusTool(processes),
-		createShellCancelTool(processes),
-	];
 	const agentDir = getAgentDir();
 	const authStorage = AuthStorage.create(join(agentDir, "auth.json"));
 	const modelRegistry = ModelRegistry.create(authStorage, join(agentDir, "models.json"));
@@ -129,10 +120,7 @@ export async function createSdkChildSession(config: ChildSessionConfig): Promise
 		model: resolveConfiguredModel(modelRegistry, config.definition.model),
 		thinkingLevel: config.definition.reasoningEffort,
 		tools: [...config.definition.tools, ...(config.definition.allowMcp ? ["mcp"] : [])],
-		customTools: [
-			...(config.toolbox?.(processes) ?? []),
-			...(config.definition.key === "librarian" ? [createCheckoutTool(), ...shellTools] : []),
-		],
+		customTools: config.toolbox?.(processes) ?? [],
 		sessionManager: SessionManager.inMemory(config.cwd),
 	};
 	let session: Awaited<ReturnType<typeof createAgentSession>>["session"];

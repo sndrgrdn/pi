@@ -15,8 +15,8 @@ import { currentShellRegistry } from "./shell/session-registry.ts";
 import { registerShellStatus } from "./shell/status.ts";
 import skillTool from "./skill/index.ts";
 import { registerModes } from "./modes.ts";
-import { registerFinder } from "./tools/finder.ts";
-import { registerLibrarian } from "./tools/librarian.ts";
+import { createFinderTool } from "./tools/finder.ts";
+import { createLibrarianTool } from "./tools/librarian.ts";
 import { createOracleTool } from "./tools/oracle.ts";
 import { SubagentRunner } from "./runner.ts";
 import registerRead from "./tools/read.ts";
@@ -41,8 +41,9 @@ export default function harness(pi: ExtensionAPI) {
 	// ~/.pi/agent/profiles.json — an invalid file fails startup loudly.
 	const modes = registerModes(pi);
 	const { profiles } = modes;
+	const runner = new SubagentRunner();
 
-	registerFinder(pi, profiles); // Phase 6 (§6.2)
-	registerLibrarian(pi, profiles); // Phase 7 (§6.4)
-	pi.registerTool(createOracleTool(new SubagentRunner(), profiles, modes.activeMode)); // Phase 8 (§6.3)
+	pi.registerTool(createFinderTool(runner, profiles)); // Phase 6 (§6.2)
+	pi.registerTool(createLibrarianTool(runner, profiles)); // Phase 7 (§6.4)
+	pi.registerTool(createOracleTool(runner, profiles, modes.activeMode)); // Phase 8 (§6.3)
 }

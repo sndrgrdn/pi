@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { buildEnvelope, parseEnvelope } from "../envelopes.ts";
 import type { ResolvedProfiles } from "../profiles.ts";
@@ -62,8 +62,4 @@ export function createFinderTool(runner: Pick<SubagentRunner, "run">, profiles: 
 			return renderer.renderResult(result, options, theme, context);
 		},
 	} as ToolDefinition<any, any, any>;
-}
-
-export function registerFinder(pi: ExtensionAPI, profiles: ResolvedProfiles): void {
-	pi.registerTool(createFinderTool(new SubagentRunner(), profiles));
 }

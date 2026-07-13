@@ -95,6 +95,26 @@ describe("shared subagent runner", () => {
 		expect(child.prompt).not.toHaveBeenCalled();
 		expect(child.processes.killAll).toHaveBeenCalledOnce();
 	});
+
+	it("keeps concurrent calls isolated on one runner instance", async () => {
+		const children = [
+			fakeChild(vi.fn(async () => {})),
+			fakeChild(vi.fn(async () => {})),
+		];
+		children[0]!.sessionID = "child-a";
+		children[1]!.sessionID = "child-b";
+		const allChildren = [...children];
+		const runner = new SubagentRunner(vi.fn(async () => children.shift()!));
+		const run = (input: string) => runner.run({
+			definition, cwd: "/tmp", input, mapInput: String,
+			wrapResult: (sessionID, content) => `${sessionID}:${content}`,
+		});
+
+		await expect(Promise.all([run("a"), run("b")])).resolves.toEqual([
+			"child-a:Final advice", "child-b:Final advice",
+		]);
+		for (const child of allChildren) expect(child.processes.killAll).toHaveBeenCalledOnce();
+	});
 });
 
 describe("resolved child model", () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { BUILTIN_PROFILES } from "../profiles.ts";
 import type { RunOptions } from "../runner.ts";
+import { BackgroundShellRegistry } from "../shell/registry.ts";
 import { createLibrarianTool, librarianMessage, mapLibrarianError } from "./librarian.ts";
 
 describe("librarian tool", () => {
@@ -16,6 +17,9 @@ describe("librarian tool", () => {
 			key: "librarian", model: "openai-codex/gpt-5.6-sol", reasoningEffort: "off", allowMcp: false,
 			tools: ["checkout", "grep", "find", "read", "shell_command", "shell_command_status", "shell_command_cancel", "web_search_exa", "web_fetch_exa"],
 		});
+		expect(options?.toolbox?.(new BackgroundShellRegistry()).map((tool) => tool.name)).toEqual([
+			"checkout", "shell_command", "shell_command_status", "shell_command_cancel",
+		]);
 	});
 
 	it("formats a query without context", () => {

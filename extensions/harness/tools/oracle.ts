@@ -71,8 +71,8 @@ export function createOracleTool(
 					createShellCommandTool(processes),
 					createShellStatusTool(processes),
 					createShellCancelTool(processes),
-					createFinderTool(new SubagentRunner(), profiles),
-					createLibrarianTool(new SubagentRunner(), profiles),
+					createFinderTool(runner, profiles),
+					createLibrarianTool(runner, profiles),
 				],
 				mapInput: (input) => oracleMessage(input, ctx.cwd),
 				wrapResult: (sessionID, content) => {
