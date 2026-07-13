@@ -3,15 +3,12 @@ import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { buildEnvelope } from "../envelopes.ts";
-import { DEFAULT_MODE, type Mode, type ResolvedProfiles, resolveAgentRoute } from "../profiles.ts";
-import { AGENT_TOOLBOX_MATRIX, resolveAgentDefinition } from "../registry.ts";
+import { type AgentToolSpec, createAgentTool } from "../agent-tool.ts";
+import { DEFAULT_MODE, type Mode, type ResolvedProfiles } from "../profiles.ts";
 import type { SubagentRunner } from "../runner.ts";
 import { createShellCancelTool } from "../shell/cancel.ts";
 import { createShellCommandTool } from "../shell/command.ts";
 import { createShellStatusTool } from "../shell/status.ts";
-import { createProgressSignal, createSubagentRenderer } from "../ui/subagent.ts";
-import { withTraceDetails } from "../ui/trace.ts";
 import { createFinderTool } from "./finder.ts";
 import { createLibrarianTool } from "./librarian.ts";
 
@@ -19,21 +16,17 @@ const prompt = readFileSync(
 	join(dirname(fileURLToPath(import.meta.url)), "..", "agents", "prompts", "oracle.md"),
 	"utf8",
 ).trim();
-const renderer = createSubagentRenderer<OracleInput>({
-	action: "oracle",
-	target: (args) => args.task,
-});
 
-export interface OracleInput {
+interface OracleParams {
 	task: string;
 	context?: string;
 	files?: string[];
 }
 
-export function oracleMessage(input: OracleInput, cwd: string): string {
-	const sections = [`Task: ${input.task}`];
-	if (input.context) sections.push(`Context: ${input.context}`);
-	for (const path of input.files ?? []) {
+function oracleMessage(params: OracleParams, cwd: string): string {
+	const sections = [`Task: ${params.task}`];
+	if (params.context) sections.push(`Context: ${params.context}`);
+	for (const path of params.files ?? []) {
 		try {
 			const content = readFileSync(resolve(cwd, path), "utf8").replace(/\n$/, "");
 			let longestRun = 0;
@@ -54,9 +47,9 @@ export function createOracleTool(
 	profiles: ResolvedProfiles,
 	activeMode: ActiveMode,
 ): ToolDefinition<any, any, any> {
-	return {
+	const spec: AgentToolSpec<OracleParams> = {
+		key: "oracle",
 		name: "oracle",
-		label: "oracle",
 		description: "Get a read-only senior advisor's second opinion on a bounded technical question.",
 		parameters: Type.Object({
 			task: Type.String({ description: "The review, debugging, architecture, or design question." }),
@@ -65,39 +58,25 @@ export function createOracleTool(
 				Type.Array(Type.String(), { description: "Files whose readable contents should be supplied." }),
 			),
 		}),
-		renderShell: "self",
-		async execute(_id, params: OracleInput, signal, onUpdate, ctx) {
-			const recordAction = createProgressSignal(onUpdate);
-			const definition = resolveAgentDefinition(
-				{
-					key: "oracle",
-					systemPrompt: `${prompt}\n\nWorking directory: ${ctx.cwd}\nCurrent date: ${new Date().toISOString().slice(0, 10)}`,
-					...AGENT_TOOLBOX_MATRIX.oracle,
-				},
-				resolveAgentRoute(profiles, "oracle", activeMode() ?? DEFAULT_MODE),
-			);
-			const envelope = await runner.run({
-				definition,
-				cwd: ctx.cwd,
-				input: params,
-				signal,
-				onAction: recordAction,
-				toolbox: (processes) => [
-					createShellCommandTool(processes),
-					createShellStatusTool(processes),
-					createShellCancelTool(processes),
-					createFinderTool(runner, profiles),
-					createLibrarianTool(runner, profiles),
-				],
-				mapInput: (input) => oracleMessage(input, ctx.cwd),
-				wrapResult: (sessionID, content) => {
-					if (!content.trim()) throw new Error("Oracle child returned an empty final message");
-					return buildEnvelope({ kind: "oracle", sessionID, content });
-				},
-			});
-			return { content: [{ type: "text", text: envelope }], details: withTraceDetails(undefined, "success") };
+		mode: () => activeMode() ?? DEFAULT_MODE,
+		plan: (params, ctx) => ({
+			systemPrompt: `${prompt}\n\nWorking directory: ${ctx.cwd}\nCurrent date: ${new Date().toISOString().slice(0, 10)}`,
+			message: oracleMessage(params, ctx.cwd),
+			toolbox: (processes) => [
+				createShellCommandTool(processes),
+				createShellStatusTool(processes),
+				createShellCancelTool(processes),
+				createFinderTool(runner, profiles),
+				createLibrarianTool(runner, profiles),
+			],
+		}),
+		finalize: (answer) => {
+			if (!answer.trim()) throw new Error("Oracle child returned an empty final message");
+			return { content: answer };
 		},
-		renderCall: renderer.renderCall,
-		renderResult: renderer.renderResult,
-	} as ToolDefinition<any, any, any>;
+		presentation: { action: "oracle", target: (params) => params.task },
+		tools: ["shell_command", "shell_command_status", "shell_command_cancel", "finder", "librarian"],
+		allowMcp: false,
+	};
+	return createAgentTool(spec, runner, profiles);
 }

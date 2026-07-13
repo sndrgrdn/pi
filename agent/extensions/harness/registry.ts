@@ -13,10 +13,6 @@ export interface AgentToolboxDefinition {
  * their own spec; their entries leave this record with the migration.
  */
 export const AGENT_TOOLBOX_MATRIX = {
-	oracle: {
-		tools: ["shell_command", "shell_command_status", "shell_command_cancel", "finder", "librarian"],
-		allowMcp: false,
-	},
 	task: {
 		tools: [
 			"shell_command",
@@ -30,7 +26,7 @@ export const AGENT_TOOLBOX_MATRIX = {
 		],
 		allowMcp: true,
 	},
-} as const satisfies Record<Exclude<AgentKey, "finder" | "librarian">, AgentToolboxDefinition>;
+} as const satisfies Record<Exclude<AgentKey, "finder" | "librarian" | "oracle">, AgentToolboxDefinition>;
 
 export interface AgentBaseDefinition {
 	key: AgentKey;
