@@ -29,8 +29,16 @@ function fakeRun(answer: string) {
 	return vi.fn(async (_options: RunOptions) => ({ sessionID: "probe-session", answer, toolLog: [] }));
 }
 
+function deferred<T>() {
+	let resolve!: (value: T | PromiseLike<T>) => void;
+	const promise = new Promise<T>((resolvePromise) => {
+		resolve = resolvePromise;
+	});
+	return { promise, resolve };
+}
+
 describe("agent tool factory", () => {
-	it("dispatches mode to a per-call route and wraps the finalized answer in the envelope", async () => {
+	it("wraps the finalized answer in a session-attributed envelope", async () => {
 		const run = fakeRun("all done");
 		const tool = createAgentTool(probeSpec(), { run } as any, BUILTIN_PROFILES);
 
@@ -43,6 +51,14 @@ describe("agent tool factory", () => {
 			text: '<task_result sessionID="probe-session">\nALL DONE\n</task_result>',
 		});
 		expect(result.details).toEqual({ trace: { state: "success" } });
+	});
+
+	it("runs the planned assignment on the low route by default", async () => {
+		const run = fakeRun("all done");
+		const tool = createAgentTool(probeSpec(), { run } as any, BUILTIN_PROFILES);
+
+		await tool.execute("call", { assignment: "probe it" }, undefined, undefined, { cwd: "/repo" } as any);
+
 		const options = run.mock.calls[0]?.[0];
 		expect(options?.definition).toEqual({
 			key: "task",
@@ -54,11 +70,17 @@ describe("agent tool factory", () => {
 		});
 		expect(options?.message).toBe("Do: probe it");
 		expect(options?.cwd).toBe("/repo");
+	});
 
-		await tool.execute("call-2", { assignment: "probe it", mode: "high" }, undefined, undefined, {
+	it("runs high-mode assignments on the high route", async () => {
+		const run = fakeRun("all done");
+		const tool = createAgentTool(probeSpec(), { run } as any, BUILTIN_PROFILES);
+
+		await tool.execute("call", { assignment: "probe it", mode: "high" }, undefined, undefined, {
 			cwd: "/repo",
 		} as any);
-		expect(run.mock.calls[1]?.[0]?.definition).toMatchObject({
+
+		expect(run.mock.calls[0]?.[0]?.definition).toMatchObject({
 			model: "anthropic/claude-fable-5",
 			reasoningEffort: "high",
 		});
@@ -85,12 +107,9 @@ describe("agent tool factory", () => {
 	});
 
 	it("emits the running state before planning completes", async () => {
-		let resolvePlan!: (plan: { systemPrompt: string; message: string }) => void;
+		const pendingPlan = deferred<{ systemPrompt: string; message: string }>();
 		const spec = probeSpec({
-			plan: () =>
-				new Promise((resolve) => {
-					resolvePlan = resolve;
-				}),
+			plan: () => pendingPlan.promise,
 		});
 		const updates: any[] = [];
 		const tool = createAgentTool(spec, { run: fakeRun("done") } as any, BUILTIN_PROFILES);
@@ -103,7 +122,7 @@ describe("agent tool factory", () => {
 			{ cwd: "/repo" } as any,
 		);
 		expect(updates.map((update) => update.details)).toEqual([{ trace: { state: "running" }, actions: {} }]);
-		resolvePlan({ systemPrompt: "You are a probe.", message: "Do: probe it" });
+		pendingPlan.resolve({ systemPrompt: "You are a probe.", message: "Do: probe it" });
 		await running;
 	});
 
@@ -121,7 +140,7 @@ describe("agent tool factory", () => {
 		expect(run).not.toHaveBeenCalled();
 	});
 
-	it("threads spec traceDetails through running, success, and recover details", async () => {
+	it("includes spec trace details in progress and success updates", async () => {
 		const spec = probeSpec({
 			traceDetails: () => ({ flavor: "salty" }),
 		});
@@ -144,16 +163,21 @@ describe("agent tool factory", () => {
 			{ trace: { state: "running" }, flavor: "salty", actions: { read: 1 } },
 		]);
 		expect(result.details).toEqual({ trace: { state: "success" }, flavor: "salty" });
+	});
+
+	it("includes spec trace details in recovered failures", async () => {
+		const spec = probeSpec({
+			traceDetails: () => ({ flavor: "salty" }),
+			recover: () => ({ content: "salvaged", outcome: "cancelled" as const }),
+		});
 
 		const failure = new SubagentRunError("probe-session", [], new Error("boom"));
-		const recovering = createAgentTool(
-			{ ...spec, recover: () => ({ content: "salvaged", outcome: "cancelled" as const }) },
-			{ run: vi.fn().mockRejectedValue(failure) } as any,
-			BUILTIN_PROFILES,
-		);
-		const recovered = await recovering.execute("call", { assignment: "probe it" }, undefined, undefined, {
+		const tool = createAgentTool(spec, { run: vi.fn().mockRejectedValue(failure) } as any, BUILTIN_PROFILES);
+
+		const recovered = await tool.execute("call", { assignment: "probe it" }, undefined, undefined, {
 			cwd: "/repo",
 		} as any);
+
 		expect(recovered.details).toEqual({ trace: { state: "cancelled" }, flavor: "salty" });
 	});
 
@@ -230,7 +254,7 @@ describe("agent tool factory", () => {
 		).rejects.toThrow("friendlier message");
 	});
 
-	it("renders the presentation row with running tallies and envelope evidence", () => {
+	it("renders running action tallies in the presentation row", () => {
 		const tool = createAgentTool(probeSpec(), { run: vi.fn() } as any, BUILTIN_PROFILES);
 		const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
 		const row = tool.renderCall?.({ assignment: "probe it" }, theme, { lastComponent: undefined } as any) as any;
@@ -242,6 +266,12 @@ describe("agent tool factory", () => {
 			{ args: { assignment: "probe it" }, cwd: "/repo", isError: false, lastComponent: row } as any,
 		) as any;
 		expect(running.render(100).map((line: string) => line.trimEnd())).toEqual(["◐ probe probe it · read ×2"]);
+	});
+
+	it("renders completed envelope evidence below the presentation row", () => {
+		const tool = createAgentTool(probeSpec(), { run: vi.fn() } as any, BUILTIN_PROFILES);
+		const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
+		const row = tool.renderCall?.({ assignment: "probe it" }, theme, { lastComponent: undefined } as any) as any;
 
 		const completed = tool.renderResult?.(
 			{

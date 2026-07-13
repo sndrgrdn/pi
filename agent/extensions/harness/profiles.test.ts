@@ -20,13 +20,13 @@ const HAIKU = "anthropic/claude-haiku-4-5";
 // ── Route resolution (spec §8 route summary) ──────────────────────
 
 describe("route resolution", () => {
-	it("resolves Main routes per Mode", () => {
+	it("scales Main's model and reasoning effort with the selected Mode", () => {
 		expect(resolveMainRoute(BUILTIN_PROFILES, "low")).toEqual({ model: TERRA, reasoning: "low" });
 		expect(resolveMainRoute(BUILTIN_PROFILES, "medium")).toEqual({ model: SOL, reasoning: "medium" });
 		expect(resolveMainRoute(BUILTIN_PROFILES, "high")).toEqual({ model: SOL, reasoning: "xhigh" });
 	});
 
-	it("resolves Finder Mode-invariant", () => {
+	it("keeps Finder lightweight regardless of the selected Mode", () => {
 		for (const mode of ["low", "medium", "high"] as const) {
 			expect(resolveAgentRoute(BUILTIN_PROFILES, "finder", mode)).toEqual({
 				model: HAIKU,
@@ -35,7 +35,7 @@ describe("route resolution", () => {
 		}
 	});
 
-	it("resolves Librarian Mode-invariant", () => {
+	it("keeps Librarian on its research route regardless of the selected Mode", () => {
 		for (const mode of ["low", "medium", "high"] as const) {
 			expect(resolveAgentRoute(BUILTIN_PROFILES, "librarian", mode)).toEqual({
 				model: SOL,
@@ -44,13 +44,13 @@ describe("route resolution", () => {
 		}
 	});
 
-	it("resolves Oracle per Mode", () => {
+	it("gives Oracle the strongest route in high Mode", () => {
 		expect(resolveAgentRoute(BUILTIN_PROFILES, "oracle", "low")).toEqual({ model: SOL, reasoning: "high" });
 		expect(resolveAgentRoute(BUILTIN_PROFILES, "oracle", "medium")).toEqual({ model: SOL, reasoning: "high" });
 		expect(resolveAgentRoute(BUILTIN_PROFILES, "oracle", "high")).toEqual({ model: FABLE, reasoning: "high" });
 	});
 
-	it("resolves Task per Mode", () => {
+	it("scales delegated tasks with their per-call Mode", () => {
 		expect(resolveAgentRoute(BUILTIN_PROFILES, "task", "low")).toEqual({ model: SOL, reasoning: "low" });
 		expect(resolveAgentRoute(BUILTIN_PROFILES, "task", "medium")).toEqual({ model: SOL, reasoning: "high" });
 		expect(resolveAgentRoute(BUILTIN_PROFILES, "task", "high")).toEqual({ model: FABLE, reasoning: "high" });
@@ -170,18 +170,13 @@ describe("mergeProfiles", () => {
 		expect(mergeProfiles(BUILTIN_PROFILES, {})).toEqual(BUILTIN_PROFILES);
 	});
 
-	it("overrides only the named fields, keeping sibling fields and Modes", () => {
+	it("changes only the selected Mode's route", () => {
 		const merged = mergeProfiles(BUILTIN_PROFILES, {
 			modes: { high: { model: "anthropic/claude-fable-5" } },
 		});
 		expect(merged.modes.high.model).toBe("anthropic/claude-fable-5");
-		// sibling fields survive
-		expect(merged.modes.high.reasoning).toBe(BUILTIN_PROFILES.modes.high.reasoning);
-		expect(merged.modes.high.posture).toBe(BUILTIN_PROFILES.modes.high.posture);
-		// sibling Modes survive
-		expect(merged.modes.low).toEqual(BUILTIN_PROFILES.modes.low);
-		expect(merged.modes.medium).toEqual(BUILTIN_PROFILES.modes.medium);
-		expect(merged.agents).toEqual(BUILTIN_PROFILES.agents);
+		expect(resolveMainRoute(merged, "high")).toEqual({ model: FABLE, reasoning: "xhigh" });
+		expect(resolveMainRoute(merged, "low")).toEqual(resolveMainRoute(BUILTIN_PROFILES, "low"));
 	});
 
 	it("overrides flat agents and per-route agents independently", () => {

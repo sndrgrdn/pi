@@ -40,9 +40,15 @@ describe("subagent result envelopes", () => {
 		expect(parseEnvelope(envelope)?.content).toBe("  indented\ntrailing  ");
 	});
 
-	it("rejects unknown tags and illegal title combinations", () => {
+	it("rejects envelopes with unknown tags", () => {
 		expect(parseEnvelope('<unknown_result sessionID="one">\nx\n</unknown_result>')).toBeUndefined();
+	});
+
+	it("rejects finder envelopes without a title", () => {
 		expect(parseEnvelope('<finder_result sessionID="one">\nx\n</finder_result>')).toBeUndefined();
+	});
+
+	it("rejects titles on non-finder envelopes", () => {
 		expect(parseEnvelope('<oracle_result title="Nope" sessionID="one">\nx\n</oracle_result>')).toBeUndefined();
 	});
 });

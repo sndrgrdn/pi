@@ -12,11 +12,21 @@ const definition: AgentDefinition = {
 	allowMcp: false,
 };
 
-function fakeChild(prompt: () => Promise<void>) {
+function deferred<T>() {
+	let resolve!: (value: T | PromiseLike<T>) => void;
+	let reject!: (reason?: unknown) => void;
+	const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+		resolve = resolvePromise;
+		reject = rejectPromise;
+	});
+	return { promise, resolve, reject };
+}
+
+function fakeChild(prompt: () => Promise<void>, sessionID = "child-7") {
 	const processes = new BackgroundShellRegistry();
 	vi.spyOn(processes, "killAll");
 	return {
-		sessionID: "child-7",
+		sessionID,
 		processes,
 		prompt,
 		finalMessage: () => "Final advice",
@@ -57,14 +67,13 @@ describe("shared subagent runner", () => {
 
 	it("cascades parent abort without returning a partial envelope", async () => {
 		const controller = new AbortController();
-		let rejectPrompt!: (error: Error) => void;
-		const child = fakeChild(
-			() =>
-				new Promise<void>((_, reject) => {
-					rejectPrompt = reject;
-				}),
-		);
-		vi.mocked(child.abort).mockImplementation(async () => rejectPrompt(new Error("aborted")));
+		const promptStarted = deferred<void>();
+		const pendingPrompt = deferred<void>();
+		const child = fakeChild(() => {
+			promptStarted.resolve();
+			return pendingPrompt.promise;
+		});
+		vi.mocked(child.abort).mockImplementation(async () => pendingPrompt.reject(new Error("aborted")));
 		const runner = new SubagentRunner(async () => child);
 
 		const running = runner.run({
@@ -73,7 +82,7 @@ describe("shared subagent runner", () => {
 			message: "x",
 			signal: controller.signal,
 		});
-		await Promise.resolve();
+		await promptStarted.promise;
 		controller.abort();
 
 		await expect(running).rejects.toMatchObject({ name: "AbortError", sessionID: "child-7", toolLog: [] });
@@ -84,11 +93,8 @@ describe("shared subagent runner", () => {
 	it("honors an abort that arrives while the child session is being created", async () => {
 		const controller = new AbortController();
 		const child = fakeChild(vi.fn(async () => {}));
-		let finishCreate!: () => void;
-		const create = () =>
-			new Promise<ChildSession>((resolve) => {
-				finishCreate = () => resolve(child);
-			});
+		const pendingChild = deferred<ChildSession>();
+		const create = () => pendingChild.promise;
 		const runner = new SubagentRunner(create);
 
 		const running = runner.run({
@@ -98,7 +104,7 @@ describe("shared subagent runner", () => {
 			signal: controller.signal,
 		});
 		controller.abort();
-		finishCreate();
+		pendingChild.resolve(child);
 
 		await expect(running).rejects.toMatchObject({ name: "AbortError" });
 		expect(child.abort).toHaveBeenCalledOnce();
@@ -107,18 +113,25 @@ describe("shared subagent runner", () => {
 	});
 
 	it("keeps concurrent calls isolated on one runner instance", async () => {
-		const children = [fakeChild(vi.fn(async () => {})), fakeChild(vi.fn(async () => {}))];
-		children[0]!.sessionID = "child-a";
-		children[1]!.sessionID = "child-b";
-		const allChildren = [...children];
-		const runner = new SubagentRunner(vi.fn(async () => children.shift()!));
-		const run = (message: string) => runner.run({ definition, cwd: "/tmp", message });
+		const children = {
+			a: fakeChild(
+				vi.fn(async () => {}),
+				"child-a",
+			),
+			b: fakeChild(
+				vi.fn(async () => {}),
+				"child-b",
+			),
+		};
+		const runner = new SubagentRunner(vi.fn(async ({ definition: _definition, cwd }) => children[cwd as "a" | "b"]));
+		const run = (message: "a" | "b") => runner.run({ definition, cwd: message, message });
 
-		await expect(Promise.all([run("a"), run("b")])).resolves.toEqual([
+		const results = await Promise.all([run("a"), run("b")]);
+		expect(results).toEqual([
 			{ sessionID: "child-a", answer: "Final advice", toolLog: [] },
 			{ sessionID: "child-b", answer: "Final advice", toolLog: [] },
 		]);
-		for (const child of allChildren) expect(child.processes.killAll).toHaveBeenCalledOnce();
+		for (const child of Object.values(children)) expect(child.processes.killAll).toHaveBeenCalledOnce();
 	});
 });
 

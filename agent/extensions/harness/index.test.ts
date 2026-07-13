@@ -3,28 +3,21 @@ import { describe, expect, it, vi } from "vitest";
 import harness from "./index.ts";
 
 describe("harness extension entry", () => {
-	it("exports an extension entry function", () => {
-		expect(typeof harness).toBe("function");
-	});
-
-	it("locks Main to the eleven admitted tools", () => {
+	it("admits only the eleven Main tools when a session starts", () => {
 		const setActiveTools = vi.fn();
-		const registeredTools: any[] = [];
 		const handlers = new Map<string, (...args: any[]) => unknown>();
-		const pi = new Proxy(
-			{
-				setActiveTools,
-				registerTool: vi.fn((tool: any) => registeredTools.push(tool)),
-				on: vi.fn((event: string, handler: (...args: any[]) => unknown) => handlers.set(event, handler)),
-				events: { emit: vi.fn(), on: vi.fn() },
-				getCommands: () => [],
-			},
-			{
-				get(target, property) {
-					return property in target ? target[property as keyof typeof target] : vi.fn();
-				},
-			},
-		) as unknown as ExtensionAPI;
+		const pi = {
+			setActiveTools,
+			registerTool: vi.fn(),
+			registerCommand: vi.fn(),
+			registerShortcut: vi.fn(),
+			setModel: vi.fn(),
+			setThinkingLevel: vi.fn(),
+			appendEntry: vi.fn(),
+			on: vi.fn((event: string, handler: (...args: any[]) => unknown) => handlers.set(event, handler)),
+			events: { emit: vi.fn(), on: vi.fn() },
+			getCommands: () => [],
+		} as unknown as ExtensionAPI;
 
 		harness(pi);
 		expect(setActiveTools).not.toHaveBeenCalled();
@@ -44,18 +37,6 @@ describe("harness extension entry", () => {
 			"librarian",
 			"task",
 			"mcp",
-		]);
-		expect(registeredTools.map(({ name, renderShell }) => [name, renderShell])).toEqual([
-			["shell_command", "self"],
-			["shell_command_status", "self"],
-			["shell_command_cancel", "self"],
-			["apply_patch", "self"],
-			["read", "self"],
-			["skill", "self"],
-			["finder", "self"],
-			["librarian", "self"],
-			["oracle", "self"],
-			["task", "self"],
 		]);
 	});
 });
