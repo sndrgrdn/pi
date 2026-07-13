@@ -7,12 +7,12 @@ export interface AgentToolboxDefinition {
 	allowMcp: boolean;
 }
 
-/** Spec §6 toolbox matrix. Child factories consume this single registry record. */
+/**
+ * Spec §6 toolbox matrix for the agents not yet migrated to the Agent Tool
+ * factory (#9 expand phase). Migrated agents declare `tools`/`allowMcp` in
+ * their own spec; their entries leave this record with the migration.
+ */
 export const AGENT_TOOLBOX_MATRIX = {
-	finder: {
-		tools: ["read", "grep", "find", "ls"],
-		allowMcp: false,
-	},
 	librarian: {
 		tools: [
 			"checkout",
@@ -44,7 +44,7 @@ export const AGENT_TOOLBOX_MATRIX = {
 		],
 		allowMcp: true,
 	},
-} as const satisfies Record<AgentKey, AgentToolboxDefinition>;
+} as const satisfies Record<Exclude<AgentKey, "finder">, AgentToolboxDefinition>;
 
 export interface AgentBaseDefinition {
 	key: AgentKey;

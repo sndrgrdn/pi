@@ -29,10 +29,6 @@ describe("subagent registry", () => {
 describe("agent toolbox matrix", () => {
 	it("matches the admitted child surfaces", () => {
 		expect(AGENT_TOOLBOX_MATRIX).toEqual({
-			finder: {
-				tools: ["read", "grep", "find", "ls"],
-				allowMcp: false,
-			},
 			librarian: {
 				tools: [
 					"checkout",

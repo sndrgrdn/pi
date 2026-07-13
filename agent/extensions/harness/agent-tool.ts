@@ -157,8 +157,8 @@ export function createAgentTool<TParams>(
 				resolveAgentRoute(profiles, spec.key, spec.mode(params)),
 			);
 			try {
-				let sessionID = "";
-				const answer = await runner.run({
+				let child: { sessionID: string; answer: string } | undefined;
+				await runner.run({
 					definition,
 					cwd: ctx.cwd,
 					input: params,
@@ -166,14 +166,15 @@ export function createAgentTool<TParams>(
 					onAction: recordAction,
 					...(planned.toolbox ? { toolbox: planned.toolbox } : {}),
 					mapInput: () => planned.message,
-					wrapResult: (childSessionID, childAnswer) => {
-						sessionID = childSessionID;
-						return childAnswer;
+					wrapResult: (sessionID, answer) => {
+						child = { sessionID, answer };
+						return answer;
 					},
 				});
-				const finalized = spec.finalize(answer);
+				if (child === undefined) throw new Error(`${spec.key} runner completed without a child result`);
+				const finalized = spec.finalize(child.answer);
 				return {
-					content: [{ type: "text", text: buildEnvelope(envelopeInput(spec.key, sessionID, finalized)) }],
+					content: [{ type: "text", text: buildEnvelope(envelopeInput(spec.key, child.sessionID, finalized)) }],
 					details: withTraceDetails(
 						{ ...(finalized.title !== undefined ? { title: finalized.title } : {}), ...finalized.traceDetails },
 						"success",
