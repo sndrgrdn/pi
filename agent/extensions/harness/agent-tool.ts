@@ -38,7 +38,7 @@ export interface AgentToolPlan {
  * throws). Only finder results carry a title — its envelope variant requires
  * one; every other agent's result cannot express one.
  */
-export type AgentToolResult<K extends AgentKey = AgentKey> = {
+export type AgentToolResult<K extends AgentKey> = {
 	content: string;
 	traceDetails?: Record<string, unknown>;
 } & (K extends "finder" ? { title: string } : { title?: undefined });
@@ -59,10 +59,9 @@ export interface AgentToolRecoverContext<TParams> {
 export interface AgentToolPresentation<TParams> {
 	action: string | ((params: TParams) => string);
 	target(params: TParams): string | undefined;
-	qualifiers?(params: TParams): string[];
 }
 
-export interface AgentToolSpec<TParams, K extends AgentKey = AgentKey> {
+export interface AgentToolSpec<TParams, K extends AgentKey> {
 	key: K;
 	name: string;
 	description: string;
@@ -93,13 +92,13 @@ function createProgressSignal(
 	};
 }
 
-function envelopeInput(key: AgentKey, sessionID: string, result: AgentToolResult): EnvelopeInput {
-	// `AgentToolResult<K>` admits a title exactly when the key is "finder", so
-	// title presence discriminates the envelope variant.
-	return result.title === undefined
-		? { kind: key as Exclude<AgentKey, "finder">, sessionID, content: result.content }
-		: { kind: "finder", sessionID, title: result.title, content: result.content };
-}
+/** Success-envelope construction, keyed by the agent — exhaustive over `AgentKey`. */
+const envelopeFor: { [K in AgentKey]: (sessionID: string, result: AgentToolResult<K>) => EnvelopeInput } = {
+	finder: (sessionID, result) => ({ kind: "finder", sessionID, title: result.title, content: result.content }),
+	librarian: (sessionID, result) => ({ kind: "librarian", sessionID, content: result.content }),
+	oracle: (sessionID, result) => ({ kind: "oracle", sessionID, content: result.content }),
+	task: (sessionID, result) => ({ kind: "task", sessionID, content: result.content }),
+};
 
 interface TraceResultLike {
 	content: readonly { type: string; text?: string }[];
@@ -124,7 +123,6 @@ function createAgentToolRenderer<TParams>(presentation: AgentToolPresentation<TP
 			return {
 				action: typeof presentation.action === "function" ? presentation.action(params) : presentation.action,
 				target: presentation.target(params),
-				qualifiers: presentation.qualifiers?.(params),
 			};
 		},
 		progress(result: TraceResultLike) {
@@ -210,7 +208,7 @@ export function createAgentTool<TParams, K extends AgentKey>(
 				});
 				const finalized = finalizeAnswer(spec, child);
 				return {
-					content: [{ type: "text", text: buildEnvelope(envelopeInput(spec.key, child.sessionID, finalized)) }],
+					content: [{ type: "text", text: buildEnvelope(envelopeFor[spec.key](child.sessionID, finalized)) }],
 					details: withTraceDetails(
 						{
 							...(finalized.title !== undefined ? { title: finalized.title } : {}),

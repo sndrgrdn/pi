@@ -137,7 +137,7 @@ export interface ProfilesOverride {
 	};
 }
 
-const AGENT_KEYS: readonly AgentKey[] = ["finder", "librarian", "oracle", "task"];
+export const AGENT_KEYS: readonly AgentKey[] = ["finder", "librarian", "oracle", "task"];
 const PER_ROUTE_AGENTS: readonly AgentKey[] = ["oracle", "task"];
 
 // Shape-level model id check: `provider/model-id`. Whether the model actually

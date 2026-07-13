@@ -19,7 +19,7 @@ import { createFinderTool } from "./finder.ts";
 import { createLibrarianTool } from "./librarian.ts";
 import { createHarnessReadTool } from "./read.ts";
 
-export interface TaskInput {
+interface TaskInput {
 	prompt: string;
 	description: string;
 	mode?: Mode;

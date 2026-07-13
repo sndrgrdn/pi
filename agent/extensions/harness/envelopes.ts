@@ -1,4 +1,4 @@
-import type { AgentKey } from "./profiles.ts";
+import { AGENT_KEYS, type AgentKey } from "./profiles.ts";
 
 export type EnvelopeInput =
 	| { kind: "finder"; sessionID: string; content: string; title: string }
@@ -15,16 +15,11 @@ function decodeAttribute(value: string): string {
 
 type EnvelopeTag = `${AgentKey}_result` | `${AgentKey}_error`;
 
-const ENVELOPE_TAGS: readonly EnvelopeTag[] = [
-	"finder_result",
-	"librarian_result",
-	"oracle_result",
-	"task_result",
-	"finder_error",
-	"librarian_error",
-	"oracle_error",
-	"task_error",
-];
+/** The tag grammar mirrors what `buildEnvelope` can emit: one result and one error tag per agent. */
+const ENVELOPE_TAGS: readonly EnvelopeTag[] = AGENT_KEYS.flatMap((key): EnvelopeTag[] => [
+	`${key}_result`,
+	`${key}_error`,
+]);
 
 export type ParsedEnvelope =
 	| { tag: "finder_result"; title: string; sessionID: string; content: string }
