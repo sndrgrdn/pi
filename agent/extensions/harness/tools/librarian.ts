@@ -6,9 +6,7 @@ import { Type } from "typebox";
 import { type AgentToolSpec, createAgentTool } from "../agent-tool.ts";
 import type { ResolvedProfiles } from "../profiles.ts";
 import type { SubagentRunner } from "../runner.ts";
-import { createShellCancelTool } from "../shell/cancel.ts";
-import { createShellCommandTool } from "../shell/command.ts";
-import { createShellStatusTool } from "../shell/status.ts";
+import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
 import { createCheckoutTool } from "./checkout.ts";
 
 const prompt = readFileSync(
@@ -45,12 +43,7 @@ const spec: AgentToolSpec<LibrarianParams> = {
 	plan: (params) => ({
 		systemPrompt: prompt,
 		message: librarianMessage(params),
-		toolbox: (processes) => [
-			createCheckoutTool(),
-			createShellCommandTool(processes),
-			createShellStatusTool(processes),
-			createShellCancelTool(processes),
-		],
+		toolbox: (processes) => [createCheckoutTool(), ...createShellToolbox(processes)],
 	}),
 	finalize: (answer) => ({ content: answer }),
 	recover: (error) => {
@@ -58,17 +51,7 @@ const spec: AgentToolSpec<LibrarianParams> = {
 		throw mapLibrarianError(error);
 	},
 	presentation: { action: "librarian", target: (params) => params.query },
-	tools: [
-		"checkout",
-		"grep",
-		"find",
-		"read",
-		"shell_command",
-		"shell_command_status",
-		"shell_command_cancel",
-		"web_search_exa",
-		"web_fetch_exa",
-	],
+	tools: ["checkout", "grep", "find", "read", ...SHELL_TOOLBOX_NAMES, "web_search_exa", "web_fetch_exa"],
 	allowMcp: false,
 };
 

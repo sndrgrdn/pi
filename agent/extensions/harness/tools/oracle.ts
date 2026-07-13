@@ -6,9 +6,7 @@ import { Type } from "typebox";
 import { type AgentToolSpec, createAgentTool } from "../agent-tool.ts";
 import { DEFAULT_MODE, type Mode, type ResolvedProfiles } from "../profiles.ts";
 import type { SubagentRunner } from "../runner.ts";
-import { createShellCancelTool } from "../shell/cancel.ts";
-import { createShellCommandTool } from "../shell/command.ts";
-import { createShellStatusTool } from "../shell/status.ts";
+import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
 import { createFinderTool } from "./finder.ts";
 import { createLibrarianTool } from "./librarian.ts";
 
@@ -63,9 +61,7 @@ export function createOracleTool(
 			systemPrompt: `${prompt}\n\nWorking directory: ${ctx.cwd}\nCurrent date: ${new Date().toISOString().slice(0, 10)}`,
 			message: oracleMessage(params, ctx.cwd),
 			toolbox: (processes) => [
-				createShellCommandTool(processes),
-				createShellStatusTool(processes),
-				createShellCancelTool(processes),
+				...createShellToolbox(processes),
 				createFinderTool(runner, profiles),
 				createLibrarianTool(runner, profiles),
 			],
@@ -75,7 +71,7 @@ export function createOracleTool(
 			return { content: answer };
 		},
 		presentation: { action: "oracle", target: (params) => params.task },
-		tools: ["shell_command", "shell_command_status", "shell_command_cancel", "finder", "librarian"],
+		tools: [...SHELL_TOOLBOX_NAMES, "finder", "librarian"],
 		allowMcp: false,
 	};
 	return createAgentTool(spec, runner, profiles);

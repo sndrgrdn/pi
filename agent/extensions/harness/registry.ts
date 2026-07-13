@@ -26,7 +26,7 @@ export const AGENT_TOOLBOX_MATRIX = {
 		],
 		allowMcp: true,
 	},
-} as const satisfies Record<Exclude<AgentKey, "finder" | "librarian" | "oracle">, AgentToolboxDefinition>;
+} as const satisfies Record<"task", AgentToolboxDefinition>;
 
 export interface AgentBaseDefinition {
 	key: AgentKey;
