@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initTheme } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { createApplyPatchTool, registerApplyPatch } from "./tool.ts";
+import { createApplyPatchTool } from "./tool.ts";
 
 const theme = {
 	fg: (color: string, value: string) => `<${color}>${value}</${color}>`,
@@ -149,19 +149,11 @@ describe("apply_patch tool", () => {
 		]);
 	});
 
-	it("preserves cancellation as structured lifecycle state", async () => {
-		let tool: any;
-		let resultHandler: any;
-		registerApplyPatch({
-			registerTool: (definition: any) => {
-				tool = definition;
-			},
-			on: (event: string, handler: any) => {
-				if (event === "tool_result") resultHandler = handler;
-			},
-		} as any);
+	it("preserves patch mutation semantics when the presentation turn is cancelled", async () => {
+		const tool = createApplyPatchTool();
 		const controller = new AbortController();
 		controller.abort();
+		const cwd = makeCwd();
 
 		await expect(
 			tool.execute(
@@ -169,12 +161,10 @@ describe("apply_patch tool", () => {
 				{ patch: "*** Begin Patch\n*** Add File: file.txt\n+text\n*** End Patch" },
 				controller.signal,
 				undefined,
-				{ cwd: makeCwd() },
+				{ cwd } as any,
 			),
-		).rejects.toThrow(/aborted/);
-		expect(resultHandler({ toolName: "apply_patch", toolCallId: "patch-1", details: undefined })).toEqual({
-			details: { trace: { state: "cancelled" } },
-		});
+		).resolves.toMatchObject({ details: { trace: { state: "cancelled" } } });
+		expect(readFileSync(join(cwd, "file.txt"), "utf8")).toBe("text\n");
 	});
 
 	it("serializes concurrent calls through the per-session mutex", async () => {

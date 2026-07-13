@@ -137,7 +137,7 @@ describe("applyPatch — preflight errors (collect-all)", () => {
 });
 
 describe("applyPatch — atomicity", () => {
-	it("rolls back writes when cancellation arrives during execution", async () => {
+	it("does not let presentation-turn cancellation alter patch mutation semantics", async () => {
 		const cwd = makeCwd();
 		writeFileSync(join(cwd, "one.txt"), "one-old\n");
 		writeFileSync(join(cwd, "two.txt"), "two-old\n");
@@ -164,9 +164,10 @@ describe("applyPatch — atomicity", () => {
 			].join("\n"),
 		);
 
-		await expect(applyPatch(patch, cwd, abortingOps, controller.signal)).rejects.toThrow(/aborted/);
-		expect(readFileSync(join(cwd, "one.txt"), "utf8")).toBe("one-old\n");
-		expect(readFileSync(join(cwd, "two.txt"), "utf8")).toBe("two-old\n");
+		await applyPatch(patch, cwd, abortingOps);
+		expect(controller.signal.aborted).toBe(true);
+		expect(readFileSync(join(cwd, "one.txt"), "utf8")).toBe("one-new\n");
+		expect(readFileSync(join(cwd, "two.txt"), "utf8")).toBe("two-new\n");
 	});
 
 	it("rolls back all written files on a forced mid-write failure", async () => {

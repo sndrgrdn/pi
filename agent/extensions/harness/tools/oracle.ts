@@ -6,11 +6,11 @@ import { Type } from "typebox";
 import { buildEnvelope } from "../envelopes.ts";
 import { DEFAULT_MODE, type Mode, type ResolvedProfiles, resolveAgentRoute } from "../profiles.ts";
 import { AGENT_TOOLBOX_MATRIX, resolveAgentDefinition } from "../registry.ts";
-import { SubagentRunError, type SubagentRunner } from "../runner.ts";
+import type { SubagentRunner } from "../runner.ts";
 import { createShellCancelTool } from "../shell/cancel.ts";
 import { createShellCommandTool } from "../shell/command.ts";
 import { createShellStatusTool } from "../shell/status.ts";
-import { createSubagentRenderer } from "../ui/subagent.ts";
+import { createProgressSignal, createSubagentRenderer } from "../ui/subagent.ts";
 import { withTraceDetails } from "../ui/trace.ts";
 import { createFinderTool } from "./finder.ts";
 import { createLibrarianTool } from "./librarian.ts";
@@ -53,7 +53,6 @@ export function createOracleTool(
 	runner: Pick<SubagentRunner, "run">,
 	profiles: ResolvedProfiles,
 	activeMode: ActiveMode,
-	cancelledCalls = new Set<string>(),
 ): ToolDefinition<any, any, any> {
 	return {
 		name: "oracle",
@@ -67,14 +66,8 @@ export function createOracleTool(
 			),
 		}),
 		renderShell: "self",
-		async execute(id, params: OracleInput, signal, onUpdate, ctx) {
-			const actions = new Map<string, number>();
-			const update = () =>
-				onUpdate?.({
-					content: [{ type: "text", text: `Oracle exploring — ${params.task}` }],
-					details: withTraceDetails({ actions: Object.fromEntries(actions) }, "running"),
-				});
-			update();
+		async execute(_id, params: OracleInput, signal, onUpdate, ctx) {
+			const recordAction = createProgressSignal(onUpdate);
 			const definition = resolveAgentDefinition(
 				{
 					key: "oracle",
@@ -83,35 +76,26 @@ export function createOracleTool(
 				},
 				resolveAgentRoute(profiles, "oracle", activeMode() ?? DEFAULT_MODE),
 			);
-			try {
-				const envelope = await runner.run({
-					definition,
-					cwd: ctx.cwd,
-					input: params,
-					signal,
-					onAction: (name) => {
-						actions.set(name, (actions.get(name) ?? 0) + 1);
-						update();
-					},
-					toolbox: (processes) => [
-						createShellCommandTool(processes),
-						createShellStatusTool(processes),
-						createShellCancelTool(processes),
-						createFinderTool(runner, profiles),
-						createLibrarianTool(runner, profiles),
-					],
-					mapInput: (input) => oracleMessage(input, ctx.cwd),
-					wrapResult: (sessionID, content) => {
-						if (!content.trim()) throw new Error("Oracle child returned an empty final message");
-						return buildEnvelope({ kind: "oracle", sessionID, content });
-					},
-				});
-				return { content: [{ type: "text", text: envelope }], details: withTraceDetails(undefined, "success") };
-			} catch (error) {
-				if (signal?.aborted || (error instanceof SubagentRunError && error.name === "AbortError"))
-					cancelledCalls.add(id);
-				throw error;
-			}
+			const envelope = await runner.run({
+				definition,
+				cwd: ctx.cwd,
+				input: params,
+				signal,
+				onAction: recordAction,
+				toolbox: (processes) => [
+					createShellCommandTool(processes),
+					createShellStatusTool(processes),
+					createShellCancelTool(processes),
+					createFinderTool(runner, profiles),
+					createLibrarianTool(runner, profiles),
+				],
+				mapInput: (input) => oracleMessage(input, ctx.cwd),
+				wrapResult: (sessionID, content) => {
+					if (!content.trim()) throw new Error("Oracle child returned an empty final message");
+					return buildEnvelope({ kind: "oracle", sessionID, content });
+				},
+			});
+			return { content: [{ type: "text", text: envelope }], details: withTraceDetails(undefined, "success") };
 		},
 		renderCall: renderer.renderCall,
 		renderResult: renderer.renderResult,

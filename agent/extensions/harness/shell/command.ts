@@ -12,7 +12,13 @@ import { delimiter, isAbsolute, join, resolve } from "node:path";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { getAgentDir, getShellConfig } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { createTraceRenderer, shellTraceInvocation, withTraceDetails } from "../ui/trace.ts";
+import {
+	createTraceRenderer,
+	emitTraceRunning,
+	shellTraceInvocation,
+	type TraceToolRegistrar,
+	withTraceDetails,
+} from "../ui/trace.ts";
 import { appendStatus, formatShellOutput, UPDATE_THROTTLE_MS } from "./output.ts";
 import {
 	type BackgroundShellRegistry,
@@ -68,25 +74,21 @@ function resolveWorkdir(cwd: string, workdir?: string): string {
 	return workdir ? (isAbsolute(workdir) ? workdir : resolve(cwd, workdir)) : cwd;
 }
 
-export function createShellCommandTool(
-	registry: BackgroundShellRegistry,
-	cancelledCalls = new Set<string>(),
-): ToolDefinition<any, any, any> {
+export function createShellCommandTool(registry: BackgroundShellRegistry): ToolDefinition<any, any, any> {
 	return {
 		name: "shell_command",
 		label: "shell_command",
 		description,
 		parameters: schema,
 		renderShell: "self",
-		async execute(toolCallId, params: ShellCommandParams, signal, onUpdate, ctx) {
-			onUpdate?.({ content: [{ type: "text", text: "" }], details: withTraceDetails(undefined, "running") });
+		async execute(_toolCallId, params: ShellCommandParams, signal, onUpdate, ctx) {
+			emitTraceRunning(onUpdate);
 			const workdir = resolveWorkdir(ctx.cwd, params.workdir);
 			if (!existsSync(workdir)) {
 				throw new Error(`Working directory does not exist: ${workdir}`);
 			}
 			const timeoutMs = clampTimeoutMs(params.timeout_ms);
 			if (signal?.aborted) {
-				cancelledCalls.add(toolCallId);
 				throw new Error("Command aborted");
 			}
 
@@ -184,7 +186,6 @@ export function createShellCommandTool(
 				if (details) output.close();
 				else output.unlink();
 				if (signal?.aborted) {
-					cancelledCalls.add(toolCallId);
 					throw new Error(appendStatus(text, "Command aborted"));
 				}
 				if (exitCode !== 0 && exitCode !== null) {
@@ -213,11 +214,10 @@ export function createShellCommandTool(
 	} as ToolDefinition<any, any, any>;
 }
 
-export function registerShellCommand(pi: ExtensionAPI, registry: BackgroundShellRegistry): void {
-	const cancelledCalls = new Set<string>();
-	pi.registerTool(createShellCommandTool(registry, cancelledCalls));
-	pi.on("tool_result", (event) => {
-		if (event.toolName !== "shell_command" || !cancelledCalls.delete(event.toolCallId)) return undefined;
-		return { details: withTraceDetails(event.details, "cancelled") };
-	});
+export function registerShellCommand(
+	pi: ExtensionAPI,
+	registry: BackgroundShellRegistry,
+	register: TraceToolRegistrar["register"] = (tool) => pi.registerTool(tool),
+): void {
+	register(createShellCommandTool(registry));
 }

@@ -10,7 +10,7 @@
  */
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { createTraceRenderer, withTraceDetails } from "../ui/trace.ts";
+import { createTraceRenderer, emitTraceRunning, type TraceToolRegistrar, withTraceDetails } from "../ui/trace.ts";
 import { appendStatus, formatShellOutput, UPDATE_THROTTLE_MS } from "./output.ts";
 import {
 	type BackgroundShellRegistry,
@@ -58,7 +58,7 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 		parameters: schema,
 		renderShell: "self",
 		async execute(_toolCallId, params: ShellStatusParams, signal, onUpdate, _ctx) {
-			onUpdate?.({ content: [{ type: "text", text: "" }], details: withTraceDetails(undefined, "running") });
+			emitTraceRunning(onUpdate);
 			// Lazy sweep of exited-but-unpolled records (spec §4.2 lifetime).
 			registry.sweep();
 
@@ -133,7 +133,7 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 
 				// Completing read: report exit exactly once, forget the record.
 				registry.completeRead(record.id);
-				if (record.exitCode !== 0) {
+				if (record.exitCode !== 0 && record.exitCode !== null) {
 					throw new Error(appendStatus(text, exitLabel(record)));
 				}
 				return {
@@ -150,6 +150,10 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 	} as ToolDefinition<any, any, any>;
 }
 
-export function registerShellStatus(pi: ExtensionAPI, registry: BackgroundShellRegistry): void {
-	pi.registerTool(createShellStatusTool(registry));
+export function registerShellStatus(
+	pi: ExtensionAPI,
+	registry: BackgroundShellRegistry,
+	register: TraceToolRegistrar["register"] = (tool) => pi.registerTool(tool),
+): void {
+	register(createShellStatusTool(registry));
 }

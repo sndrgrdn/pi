@@ -9,7 +9,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerModes } from "./modes.ts";
 import { registerApplyPatch } from "./patch/tool.ts";
-import { SubagentRunner } from "./runner.ts";
+import { isSubagentAbortError, SubagentRunner } from "./runner.ts";
 import { registerShellCancel } from "./shell/cancel.ts";
 import { registerShellCommand } from "./shell/command.ts";
 import { BackgroundShellRegistry } from "./shell/registry.ts";
@@ -21,7 +21,7 @@ import { createLibrarianTool } from "./tools/librarian.ts";
 import { createOracleTool } from "./tools/oracle.ts";
 import registerRead from "./tools/read.ts";
 import { createTaskTool } from "./tools/task.ts";
-import { withTraceDetails } from "./ui/trace.ts";
+import { createTraceToolRegistrar } from "./ui/trace.ts";
 
 export const MAIN_TOOL_NAMES = [
 	"shell_command",
@@ -37,43 +37,35 @@ export const MAIN_TOOL_NAMES = [
 	"mcp",
 ] as const;
 
-const DELEGATION_TOOL_NAMES = new Set(["finder", "librarian", "oracle", "task"]);
-
-export function registerDelegationCancellation(pi: ExtensionAPI, cancelledCalls: Set<string>): void {
-	pi.on("tool_result", (event) => {
-		if (!DELEGATION_TOOL_NAMES.has(event.toolName) || !cancelledCalls.delete(event.toolCallId)) return undefined;
-		return { details: withTraceDetails(event.details, "cancelled") };
-	});
-}
-
 export default function harness(pi: ExtensionAPI) {
+	const traceTools = createTraceToolRegistrar(
+		pi,
+		(error, signal) => signal?.aborted === true || isSubagentAbortError(error),
+	);
 	// Per-session background-process registry (spec §3.3), shared by the
 	// shell triplet (§9.2: indivisible).
 	const shellRegistry = currentShellRegistry() ?? new BackgroundShellRegistry();
-	registerShellCommand(pi, shellRegistry);
-	registerShellStatus(pi, shellRegistry);
-	registerShellCancel(pi, shellRegistry);
+	registerShellCommand(pi, shellRegistry, traceTools.register);
+	registerShellStatus(pi, shellRegistry, traceTools.register);
+	registerShellCancel(pi, shellRegistry, traceTools.register);
 	pi.on("session_shutdown", () => shellRegistry.killAll());
 
 	// Phase 2 (§4.4): apply_patch, the sole editor. Builtin edit/write stay
 	// enabled until the Phase 10 surface lock.
-	registerApplyPatch(pi);
-	registerRead(pi);
+	registerApplyPatch(pi, traceTools.register);
+	registerRead(pi, traceTools.register);
 
-	skillTool(pi); // Phase 3 (§4.5)
+	skillTool(pi, traceTools.register); // Phase 3 (§4.5)
 
 	// Phase 4 (§2): Modes + Profiles. Loads (and strictly validates)
 	// ~/.pi/agent/profiles.json — an invalid file fails startup loudly.
 	const modes = registerModes(pi);
 	const { profiles } = modes;
 	const runner = new SubagentRunner();
-	const cancelledDelegations = new Set<string>();
-
-	pi.registerTool(createFinderTool(runner, profiles, cancelledDelegations)); // Phase 6 (§6.2)
-	pi.registerTool(createLibrarianTool(runner, profiles, cancelledDelegations)); // Phase 7 (§6.4)
-	pi.registerTool(createOracleTool(runner, profiles, modes.activeMode, cancelledDelegations)); // Phase 8 (§6.3)
-	pi.registerTool(createTaskTool(runner, profiles, {}, cancelledDelegations)); // Phase 9 (§6.5)
-	registerDelegationCancellation(pi, cancelledDelegations);
+	traceTools.register(createFinderTool(runner, profiles)); // Phase 6 (§6.2)
+	traceTools.register(createLibrarianTool(runner, profiles)); // Phase 7 (§6.4)
+	traceTools.register(createOracleTool(runner, profiles, modes.activeMode)); // Phase 8 (§6.3)
+	traceTools.register(createTaskTool(runner, profiles)); // Phase 9 (§6.5)
 
 	// Phase 10 (§4): action methods become available only after pi binds the
 	// extension runtime. Lock every started/reloaded session at that seam.

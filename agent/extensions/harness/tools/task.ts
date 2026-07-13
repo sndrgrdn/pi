@@ -7,13 +7,13 @@ import { createApplyPatchTool } from "../patch/tool.ts";
 import { type Mode, type ResolvedProfiles, resolveAgentRoute, TASK_POSTURE } from "../profiles.ts";
 import { projectContextPrompt } from "../project-context.ts";
 import { AGENT_TOOLBOX_MATRIX, resolveAgentDefinition } from "../registry.ts";
-import { SubagentRunError, type SubagentRunner, type ToolLogEntry } from "../runner.ts";
+import { SubagentAbortError, SubagentRunError, type SubagentRunner, type ToolLogEntry } from "../runner.ts";
 import { createShellCancelTool } from "../shell/cancel.ts";
 import { createShellCommandTool } from "../shell/command.ts";
 import { createShellStatusTool } from "../shell/status.ts";
 import { createChildSkillTool, discoverChildSkills } from "../skill/child.ts";
 import { buildDirective, extractSkillRefs } from "../skill/core.ts";
-import { createSubagentRenderer } from "../ui/subagent.ts";
+import { createProgressSignal, createSubagentRenderer } from "../ui/subagent.ts";
 import { type TraceState, withTraceDetails } from "../ui/trace.ts";
 import { createFinderTool } from "./finder.ts";
 import { createLibrarianTool } from "./librarian.ts";
@@ -85,15 +85,10 @@ export interface TaskDependencies {
 		| Promise<Pick<TaskPromptParts, "system" | "appendSystem" | "projectContext">>;
 }
 
-function isAbortError(error: unknown): error is Error {
-	return error instanceof Error && error.name === "AbortError";
-}
-
 export function createTaskTool(
 	runner: Pick<SubagentRunner, "run">,
 	profiles: ResolvedProfiles,
 	dependencies: TaskDependencies = {},
-	cancelledCalls = new Set<string>(),
 ): ToolDefinition<any, any, any> {
 	return {
 		name: "task",
@@ -112,18 +107,9 @@ export function createTaskTool(
 			),
 		}),
 		renderShell: "self",
-		async execute(id, params: TaskInput, signal, onUpdate, ctx) {
+		async execute(_id, params: TaskInput, signal, onUpdate, ctx) {
 			const mode = params.mode ?? "low";
-			const actions = new Map<string, number>();
-			const update = () =>
-				onUpdate?.({
-					content: [{ type: "text", text: "working" }],
-					details: withTraceDetails(
-						{ mode, description: params.description, actions: Object.fromEntries(actions) },
-						"running",
-					),
-				});
-			update();
+			const recordAction = createProgressSignal(onUpdate, { mode, description: params.description });
 			const base = await (dependencies.basePrompts ?? readBasePrompts)(ctx.cwd);
 			const skills = discoverChildSkills(ctx.cwd);
 			const refs = extractSkillRefs(
@@ -155,10 +141,7 @@ export function createTaskTool(
 					cwd: ctx.cwd,
 					input: params,
 					signal,
-					onAction: (name) => {
-						actions.set(name, (actions.get(name) ?? 0) + 1);
-						update();
-					},
+					onAction: recordAction,
 					toolbox: (processes) => [
 						createShellCommandTool(processes),
 						createShellStatusTool(processes),
@@ -173,19 +156,17 @@ export function createTaskTool(
 					wrapResult: (sessionID, content) => buildEnvelope({ kind: "task", sessionID, content }),
 				});
 			} catch (error) {
-				if (!(error instanceof SubagentRunError)) {
-					if (isAbortError(error)) cancelledCalls.add(id);
-					throw error;
-				}
-				const failure = error;
-				if (failure.name === "AbortError") {
+				if (error instanceof SubagentAbortError) {
+					if (!error.sessionID) throw error;
 					outcome = "cancelled";
 					envelope = buildEnvelope({
 						kind: "task_error",
-						sessionID: failure.sessionID,
-						content: buildCancellationReport(failure.toolLog),
+						sessionID: error.sessionID,
+						content: buildCancellationReport(error.toolLog),
 					});
 				} else {
+					if (!(error instanceof SubagentRunError)) throw error;
+					const failure = error;
 					outcome = "failed";
 					try {
 						const summary = await runner.run({
@@ -207,7 +188,7 @@ export function createTaskTool(
 						});
 						envelope = buildEnvelope({ kind: "task_error", sessionID: failure.sessionID, content: summary });
 					} catch (summaryError) {
-						if (!isAbortError(summaryError)) throw summaryError;
+						if (!(summaryError instanceof SubagentAbortError) || !summaryError.sessionID) throw summaryError;
 						outcome = "cancelled";
 						envelope = buildEnvelope({
 							kind: "task_error",

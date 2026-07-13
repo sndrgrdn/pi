@@ -1,7 +1,7 @@
 import type { Text } from "@earendil-works/pi-tui";
 import { describe, expect, it, vi } from "vitest";
 import { BUILTIN_PROFILES } from "../profiles.ts";
-import { type RunOptions, SubagentRunError } from "../runner.ts";
+import { type RunOptions, SubagentAbortError } from "../runner.ts";
 import { createFinderTool, extractFinderAnswer, finderEnvelopeTitle } from "./finder.ts";
 
 describe("finder tool", () => {
@@ -47,19 +47,15 @@ describe("finder tool", () => {
 		).toBe("Auth & sessions");
 	});
 
-	it("records an aborted child call for mechanical cancellation rendering", async () => {
-		const cause = Object.assign(new Error("Subagent run aborted"), { name: "AbortError" });
-		const cancelledCalls = new Set<string>();
+	it("propagates the runner's typed cancellation outcome", async () => {
 		const tool = createFinderTool(
-			{ run: vi.fn().mockRejectedValue(new SubagentRunError("finder-1", [], cause)) } as any,
+			{ run: vi.fn().mockRejectedValue(new SubagentAbortError("finder-1")) } as any,
 			BUILTIN_PROFILES,
-			cancelledCalls,
 		);
 
 		await expect(
 			tool.execute("call-1", { query: "find auth" }, undefined, undefined, { cwd: "/repo" } as any),
-		).rejects.toThrow("Subagent run aborted");
-		expect(cancelledCalls).toEqual(new Set(["call-1"]));
+		).rejects.toBeInstanceOf(SubagentAbortError);
 	});
 
 	it("retains the original query after completion", () => {

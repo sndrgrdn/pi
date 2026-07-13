@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { Text } from "@earendil-works/pi-tui";
 import { describe, expect, it, vi } from "vitest";
 import { BUILTIN_PROFILES, POSTURES, TASK_POSTURE } from "../profiles.ts";
-import { type RunOptions, SubagentRunError } from "../runner.ts";
+import { type RunOptions, SubagentAbortError, SubagentRunError } from "../runner.ts";
 import { BackgroundShellRegistry } from "../shell/registry.ts";
 import { buildCancellationReport, createTaskTool, type TaskInput } from "./task.ts";
 
@@ -135,12 +135,9 @@ describe("task tool", () => {
 	});
 
 	it("returns cancellation failures in a task_error envelope", async () => {
-		const cause = Object.assign(new Error("Subagent run aborted"), { name: "AbortError" });
-		const error = new SubagentRunError(
-			"task-cancelled",
-			[{ id: "1", tool: "shell_command", input: { command: "npm test" }, output: "2 tests passed" }],
-			cause,
-		);
+		const error = new SubagentAbortError("task-cancelled", [
+			{ id: "1", tool: "shell_command", input: { command: "npm test" }, output: "2 tests passed" },
+		]);
 		const tool = createTaskTool({ run: vi.fn().mockRejectedValue(error) } as any, BUILTIN_PROFILES, {
 			basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),
 		});
@@ -155,20 +152,15 @@ describe("task tool", () => {
 		expect(result.details).toMatchObject({ trace: { state: "cancelled" } });
 	});
 
-	it("records a pre-child AbortError for mechanical cancellation rendering", async () => {
-		const abort = Object.assign(new Error("Subagent run aborted"), { name: "AbortError" });
-		const cancelledCalls = new Set<string>();
-		const tool = createTaskTool(
-			{ run: vi.fn().mockRejectedValue(abort) } as any,
-			BUILTIN_PROFILES,
-			{ basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }) },
-			cancelledCalls,
-		);
+	it("propagates a pre-child typed cancellation for the Trace registrar", async () => {
+		const abort = new SubagentAbortError();
+		const tool = createTaskTool({ run: vi.fn().mockRejectedValue(abort) } as any, BUILTIN_PROFILES, {
+			basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),
+		});
 
 		await expect(
 			tool.execute("call-1", { prompt: "Work", description: "work" }, undefined, undefined, { cwd: "/repo" } as any),
-		).rejects.toThrow("Subagent run aborted");
-		expect(cancelledCalls).toEqual(new Set(["call-1"]));
+		).rejects.toBe(abort);
 	});
 
 	it("summarizes a child hard error into a task_error payload", async () => {
@@ -206,8 +198,7 @@ describe("task tool", () => {
 			[{ id: "1", tool: "apply_patch", input: { patch: "+change" }, output: "Success" }],
 			new Error("provider failed"),
 		);
-		const abortCause = Object.assign(new Error("Subagent run aborted"), { name: "AbortError" });
-		const summaryAbort = new SubagentRunError("summary-failed", [], abortCause);
+		const summaryAbort = new SubagentAbortError("summary-failed");
 		const run = vi.fn().mockRejectedValueOnce(failure).mockRejectedValueOnce(summaryAbort);
 		const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
 			basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),

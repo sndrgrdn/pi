@@ -44,6 +44,22 @@ export class SubagentRunError extends Error {
 	}
 }
 
+export class SubagentAbortError extends Error {
+	readonly kind = "cancelled";
+	readonly sessionID: string | undefined;
+	readonly toolLog: ToolLogEntry[];
+	constructor(sessionID?: string, toolLog: ToolLogEntry[] = [], cause: unknown = abortError()) {
+		super(cause instanceof Error ? cause.message : String(cause), { cause });
+		this.name = "AbortError";
+		this.sessionID = sessionID;
+		this.toolLog = toolLog;
+	}
+}
+
+export function isSubagentAbortError(error: unknown): error is SubagentAbortError {
+	return error instanceof SubagentAbortError;
+}
+
 export interface ChildSessionConfig {
 	definition: AgentDefinition;
 	cwd: string;
@@ -71,6 +87,9 @@ function abortError(): Error {
 }
 
 function annotateFailure(error: unknown, child: ChildSession | undefined): Error {
+	if (isSubagentAbortError(error)) return error;
+	if (error instanceof Error && error.name === "AbortError")
+		return new SubagentAbortError(child?.sessionID, child?.toolLog() ?? [], error);
 	if (!child) return error instanceof Error ? error : new Error(String(error));
 	return error instanceof SubagentRunError ? error : new SubagentRunError(child.sessionID, child.toolLog(), error);
 }
@@ -82,7 +101,7 @@ export class SubagentRunner {
 	}
 
 	async run<T>(options: RunOptions<T>): Promise<string> {
-		if (options.signal?.aborted) throw abortError();
+		if (options.signal?.aborted) throw new SubagentAbortError();
 		let parentAborted = false;
 		let child: ChildSession | undefined;
 		let abortPromise: Promise<void> | undefined;

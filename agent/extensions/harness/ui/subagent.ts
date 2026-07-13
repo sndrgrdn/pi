@@ -1,5 +1,5 @@
 import { parseEnvelope } from "../envelopes.ts";
-import { createTraceRenderer, type TraceInvocation } from "./trace.ts";
+import { createTraceRenderer, emitTraceRunning, sanitizeTraceEvidence, type TraceInvocation } from "./trace.ts";
 
 interface SubagentRendererOptions<TArgs> {
 	action: string | ((args: TArgs) => string);
@@ -9,6 +9,18 @@ interface SubagentRendererOptions<TArgs> {
 
 interface SubagentProgressDetails {
 	actions?: Record<string, number>;
+}
+
+export function createProgressSignal(
+	onUpdate: ((result: { content: { type: "text"; text: string }[]; details: unknown }) => void) | undefined,
+	details?: Record<string, unknown>,
+): (action: string) => void {
+	const actions = new Map<string, number>();
+	emitTraceRunning(onUpdate, { ...details, actions: {} });
+	return (action) => {
+		actions.set(action, (actions.get(action) ?? 0) + 1);
+		emitTraceRunning(onUpdate, { ...details, actions: Object.fromEntries(actions) });
+	};
 }
 
 function progressTallies(details: unknown): string[] {
@@ -42,10 +54,13 @@ export function createSubagentRenderer<TArgs>(options: SubagentRendererOptions<T
 				)
 				.map((item) => item.text)
 				.join("\n");
-			return parseEnvelope(text)
-				?.content.split("\n")
-				.map((line) => theme.fg("toolOutput", line))
-				.join("\n");
+			const content = parseEnvelope(text)?.content;
+			return content
+				? sanitizeTraceEvidence(content)
+						.split("\n")
+						.map((line) => theme.fg("toolOutput", line))
+						.join("\n")
+				: undefined;
 		},
 	});
 }

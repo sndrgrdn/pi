@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createShellCommandTool, registerShellCommand } from "./command.ts";
+import { createShellCommandTool } from "./command.ts";
 import { BackgroundShellRegistry } from "./registry.ts";
 
 const ctx = { cwd: process.cwd() } as any;
@@ -66,27 +66,12 @@ describe("shell_command", () => {
 		registry.killAll();
 	});
 
-	it("persists cancellation as structured result state", async () => {
-		let tool: any;
-		let resultHandler: any;
-		registerShellCommand(
-			{
-				registerTool: (definition: any) => {
-					tool = definition;
-				},
-				on: (event: string, handler: any) => {
-					if (event === "tool_result") resultHandler = handler;
-				},
-			} as any,
-			new BackgroundShellRegistry(),
-		);
+	it("propagates foreground cancellation to the shared Trace lifecycle", async () => {
+		const tool = createShellCommandTool(new BackgroundShellRegistry());
 		const controller = new AbortController();
 		const pending = run(tool, { command: "sleep 30", timeout_ms: 5000 }, controller.signal);
 		setTimeout(() => controller.abort(), 100);
 		await expect(pending).rejects.toThrow(/Command aborted/);
-		expect(resultHandler({ toolName: "shell_command", toolCallId: "call-1", details: undefined })).toEqual({
-			details: { trace: { state: "cancelled" } },
-		});
 	});
 
 	it("backgrounded processes survive turn aborts; foreground abort kills", async () => {

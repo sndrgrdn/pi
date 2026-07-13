@@ -2,7 +2,7 @@ import { copyFileSync, mkdtempSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createHarnessReadTool, registerHarnessRead } from "./read.ts";
+import { createHarnessReadTool } from "./read.ts";
 
 const theme = {
 	fg: (color: string, value: string) => `<${color}>${value}</${color}>`,
@@ -134,25 +134,13 @@ describe("read Trace View renderer", () => {
 		]);
 	});
 
-	it("preserves cancellation as structured lifecycle state", async () => {
-		let tool: any;
-		let resultHandler: any;
-		registerHarnessRead({
-			registerTool: (definition: any) => {
-				tool = definition;
-			},
-			on: (event: string, handler: any) => {
-				if (event === "tool_result") resultHandler = handler;
-			},
-		} as any);
+	it("propagates read cancellation to the shared Trace lifecycle", async () => {
+		const tool = createHarnessReadTool();
 		const controller = new AbortController();
 		controller.abort();
 
 		await expect(
-			tool.execute("read-1", { path: "file.txt" }, controller.signal, undefined, { cwd: "/work" }),
+			tool.execute("read-1", { path: "file.txt" }, controller.signal, undefined, { cwd: "/work" } as any),
 		).rejects.toThrow(/aborted/);
-		expect(resultHandler({ toolName: "read", toolCallId: "read-1", details: undefined })).toEqual({
-			details: { trace: { state: "cancelled" } },
-		});
 	});
 });

@@ -7,11 +7,11 @@ import { buildEnvelope } from "../envelopes.ts";
 import type { ResolvedProfiles } from "../profiles.ts";
 import { resolveAgentRoute } from "../profiles.ts";
 import { AGENT_TOOLBOX_MATRIX, resolveAgentDefinition } from "../registry.ts";
-import { SubagentRunError, type SubagentRunner } from "../runner.ts";
+import type { SubagentRunner } from "../runner.ts";
 import { createShellCancelTool } from "../shell/cancel.ts";
 import { createShellCommandTool } from "../shell/command.ts";
 import { createShellStatusTool } from "../shell/status.ts";
-import { createSubagentRenderer } from "../ui/subagent.ts";
+import { createProgressSignal, createSubagentRenderer } from "../ui/subagent.ts";
 import { withTraceDetails } from "../ui/trace.ts";
 import { createCheckoutTool } from "./checkout.ts";
 
@@ -44,7 +44,6 @@ export function mapLibrarianError(error: unknown): Error {
 export function createLibrarianTool(
 	runner: Pick<SubagentRunner, "run">,
 	profiles: ResolvedProfiles,
-	cancelledCalls = new Set<string>(),
 ): ToolDefinition<any, any, any> {
 	const toolbox = AGENT_TOOLBOX_MATRIX.librarian;
 	const definition = resolveAgentDefinition(
@@ -64,24 +63,15 @@ export function createLibrarianTool(
 			context: Type.Optional(Type.String({ description: "Relevant context prepended to the research query." })),
 		}),
 		renderShell: "self",
-		async execute(id, params: LibrarianInput, signal, onUpdate, ctx) {
-			const actions = new Map<string, number>();
-			const update = () =>
-				onUpdate?.({
-					content: [{ type: "text", text: `Librarian researching — ${params.query}` }],
-					details: withTraceDetails({ actions: Object.fromEntries(actions) }, "running"),
-				});
-			update();
+		async execute(_id, params: LibrarianInput, signal, onUpdate, ctx) {
+			const recordAction = createProgressSignal(onUpdate);
 			try {
 				const envelope = await runner.run({
 					definition,
 					cwd: ctx.cwd,
 					input: params,
 					signal,
-					onAction: (name) => {
-						actions.set(name, (actions.get(name) ?? 0) + 1);
-						update();
-					},
+					onAction: recordAction,
 					toolbox: (processes) => [
 						createCheckoutTool(),
 						createShellCommandTool(processes),
@@ -93,8 +83,6 @@ export function createLibrarianTool(
 				});
 				return { content: [{ type: "text", text: envelope }], details: withTraceDetails(undefined, "success") };
 			} catch (error) {
-				if (signal?.aborted || (error instanceof SubagentRunError && error.name === "AbortError"))
-					cancelledCalls.add(id);
 				throw mapLibrarianError(error);
 			}
 		},

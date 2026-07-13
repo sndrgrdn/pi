@@ -2,7 +2,13 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
-import { createTraceRenderer, formatTracePath, shellTraceInvocation } from "./trace.ts";
+import {
+	createTraceRenderer,
+	createTraceToolRegistrar,
+	formatTracePath,
+	sanitizeTraceEvidence,
+	shellTraceInvocation,
+} from "./trace.ts";
 
 const theme = {
 	fg: (color: string, value: string) => `<${color}>${value}</${color}>`,
@@ -93,6 +99,41 @@ describe("Trace renderer", () => {
 		expect(lines(component)).toEqual([
 			"<success>✓</success> <b>$</b> sleep 10 · <muted>shell-3</muted> · <muted>backgrounded</muted>",
 		]);
+	});
+
+	it("sanitizes terminal controls before rendering expanded evidence", () => {
+		expect(sanitizeTraceEvidence("safe\u0000\u001b]52;c;secret\u0007\u001b[31mred\u001b[0m\r\nnext")).toBe(
+			"safered\nnext",
+		);
+	});
+
+	it("owns thrown cancellation recording and result rewriting for every registered tool", async () => {
+		let registered: any;
+		let resultHandler: ((event: any) => unknown) | undefined;
+		const registrar = createTraceToolRegistrar(
+			{
+				registerTool: (tool: any) => {
+					registered = tool;
+				},
+				on: (event: string, handler: (event: any) => unknown) => {
+					if (event === "tool_result") resultHandler = handler;
+				},
+			} as any,
+			(_error, signal) => signal?.aborted === true,
+		);
+		registrar.register({
+			name: "read",
+			execute: async () => {
+				throw new Error("aborted");
+			},
+		} as any);
+		const controller = new AbortController();
+		controller.abort();
+
+		await expect(registered.execute("call-1", {}, controller.signal)).rejects.toThrow("aborted");
+		expect(resultHandler?.({ toolName: "read", toolCallId: "call-1", details: { file: true } })).toEqual({
+			details: { file: true, trace: { state: "cancelled" } },
+		});
 	});
 });
 

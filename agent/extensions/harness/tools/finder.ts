@@ -7,8 +7,8 @@ import { buildEnvelope, parseEnvelope } from "../envelopes.ts";
 import type { ResolvedProfiles } from "../profiles.ts";
 import { resolveAgentRoute } from "../profiles.ts";
 import { AGENT_TOOLBOX_MATRIX, resolveAgentDefinition } from "../registry.ts";
-import { SubagentRunError, type SubagentRunner } from "../runner.ts";
-import { createSubagentRenderer } from "../ui/subagent.ts";
+import type { SubagentRunner } from "../runner.ts";
+import { createProgressSignal, createSubagentRenderer } from "../ui/subagent.ts";
 import { withTraceDetails } from "../ui/trace.ts";
 
 const prompt = readFileSync(
@@ -42,7 +42,6 @@ export function finderEnvelopeTitle(envelope: string): string | undefined {
 export function createFinderTool(
 	runner: Pick<SubagentRunner, "run">,
 	profiles: ResolvedProfiles,
-	cancelledCalls = new Set<string>(),
 ): ToolDefinition<any, any, any> {
 	const toolbox = AGENT_TOOLBOX_MATRIX.finder;
 	const definition = resolveAgentDefinition(
@@ -60,41 +59,24 @@ export function createFinderTool(
 			"Delegate local codebase search to a read-only scout. Use parallel finder calls for independent queries.",
 		parameters: Type.Object({ query: Type.String({ description: "What to locate and the desired thoroughness." }) }),
 		renderShell: "self",
-		async execute(id, params: { query: string }, signal, onUpdate, ctx) {
-			const actions = new Map<string, number>();
-			const update = () => {
-				const tally = [...actions].map(([name, count]) => `${name} ×${count}`).join(", ");
-				onUpdate?.({
-					content: [{ type: "text", text: `Finder searching — ${params.query}${tally ? ` — ${tally}` : ""}` }],
-					details: withTraceDetails({ actions: Object.fromEntries(actions) }, "running"),
-				});
+		async execute(_id, params: { query: string }, signal, onUpdate, ctx) {
+			const recordAction = createProgressSignal(onUpdate);
+			const envelope = await runner.run({
+				definition,
+				cwd: ctx.cwd,
+				input: params,
+				signal,
+				onAction: recordAction,
+				mapInput: (input) => input.query,
+				wrapResult: (sessionID, answer) => {
+					const result = extractFinderAnswer(answer);
+					return buildEnvelope({ kind: "finder", sessionID, title: result.title, content: result.content });
+				},
+			});
+			return {
+				content: [{ type: "text", text: envelope }],
+				details: withTraceDetails({ title: finderEnvelopeTitle(envelope) }, "success"),
 			};
-			update();
-			try {
-				const envelope = await runner.run({
-					definition,
-					cwd: ctx.cwd,
-					input: params,
-					signal,
-					onAction: (name) => {
-						actions.set(name, (actions.get(name) ?? 0) + 1);
-						update();
-					},
-					mapInput: (input) => input.query,
-					wrapResult: (sessionID, answer) => {
-						const result = extractFinderAnswer(answer);
-						return buildEnvelope({ kind: "finder", sessionID, title: result.title, content: result.content });
-					},
-				});
-				return {
-					content: [{ type: "text", text: envelope }],
-					details: withTraceDetails({ title: finderEnvelopeTitle(envelope) }, "success"),
-				};
-			} catch (error) {
-				if (signal?.aborted || (error instanceof SubagentRunError && error.name === "AbortError"))
-					cancelledCalls.add(id);
-				throw error;
-			}
 		},
 		renderCall: renderer.renderCall,
 		renderResult: renderer.renderResult,

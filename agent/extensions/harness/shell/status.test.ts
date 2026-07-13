@@ -102,12 +102,14 @@ describe("shell_command_status", () => {
 		expect(registry.get(id)).toBeUndefined();
 	});
 
-	it("signal termination surfaces as a tool error on the completing read", async () => {
+	it("preserves signal termination as a successful completing read", async () => {
 		const { registry, command, status } = makeTools();
 		const id = await background(command, "sleep 30");
 		const record = registry.get(id)!;
 		process.kill(process.platform === "win32" ? record.pid! : -record.pid!, "SIGKILL");
-		await expect(run(status, { id, timeout_ms: 5000 })).rejects.toThrow(/exited \(signal\)/);
+		await expect(run(status, { id, timeout_ms: 5000 })).resolves.toMatchObject({
+			content: [{ text: expect.stringMatching(/exited \(signal\)/) }],
+		});
 		expect(registry.get(id)).toBeUndefined();
 	});
 

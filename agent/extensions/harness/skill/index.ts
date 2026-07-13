@@ -29,7 +29,13 @@ import { formatSkillsForPrompt } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem, AutocompleteProvider, AutocompleteSuggestions } from "@earendil-works/pi-tui";
 import { fuzzyFilter } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { createTraceRenderer, type TraceInvocation, withTraceDetails } from "../ui/trace.ts";
+import {
+	createTraceRenderer,
+	emitTraceRunning,
+	type TraceInvocation,
+	type TraceToolRegistrar,
+	withTraceDetails,
+} from "../ui/trace.ts";
 import {
 	availableSkillsBlock,
 	buildDirective,
@@ -83,7 +89,7 @@ export function createSkillTool(skillsByName: ReadonlyMap<string, SkillEntry>): 
 		}),
 		renderShell: "self",
 		async execute(_toolCallId, params: SkillParams, _signal, onUpdate) {
-			onUpdate?.({ content: [{ type: "text", text: "" }], details: withTraceDetails(undefined, "running") });
+			emitTraceRunning(onUpdate);
 			const { title, text } = activateSkill(params.name);
 			return {
 				content: [{ type: "text", text }],
@@ -95,7 +101,10 @@ export function createSkillTool(skillsByName: ReadonlyMap<string, SkillEntry>): 
 	} as ToolDefinition<any, any, any>;
 }
 
-export default function skillTool(pi: ExtensionAPI): void {
+export default function skillTool(
+	pi: ExtensionAPI,
+	register: TraceToolRegistrar["register"] = (tool) => pi.registerTool(tool),
+): void {
 	// ── State ──
 	const skillsByName = new Map<string, SkillEntry>();
 
@@ -139,7 +148,7 @@ export default function skillTool(pi: ExtensionAPI): void {
 	// BEFORE emitting session_start (renderBeforeBind), and ToolExecution
 	// captures the tool definition at construction. Lazy registration meant
 	// resumed skill results lost their custom renderer and dumped raw content.
-	pi.registerTool(createSkillTool(skillsByName));
+	register(createSkillTool(skillsByName));
 
 	// ── Events ──
 

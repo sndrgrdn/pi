@@ -1,5 +1,7 @@
 import { homedir } from "node:os";
 import { isAbsolute, relative, resolve } from "node:path";
+import { stripVTControlCharacters } from "node:util";
+import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Text, truncateToWidth } from "@earendil-works/pi-tui";
 
 export type TraceState = "running" | "success" | "failed" | "cancelled";
@@ -23,6 +25,46 @@ export function withTraceDetails(details: unknown, state: TraceState, qualifiers
 interface TraceResult {
 	content: readonly { type: string; text?: string }[];
 	details?: unknown;
+}
+
+type TraceUpdate = (result: { content: { type: "text"; text: string }[]; details: unknown }) => void;
+
+/** Emit the shared running-state result shape used by every Trace tool. */
+export function emitTraceRunning(onUpdate: TraceUpdate | undefined, details?: unknown): void {
+	onUpdate?.({ content: [{ type: "text", text: "" }], details: withTraceDetails(details, "running") });
+}
+
+export interface TraceToolRegistrar {
+	register(tool: ToolDefinition<any, any, any>): void;
+}
+
+/** Own the thrown-cancellation bridge required by Pi's public result event. */
+export function createTraceToolRegistrar(
+	pi: ExtensionAPI,
+	isCancellation: (error: unknown, signal: AbortSignal | undefined) => boolean,
+): TraceToolRegistrar {
+	const toolNames = new Set<string>();
+	const cancelledCalls = new Set<string>();
+	pi.on("tool_result", (event) => {
+		if (!toolNames.has(event.toolName) || !cancelledCalls.delete(event.toolCallId)) return undefined;
+		return { details: withTraceDetails(event.details, "cancelled") };
+	});
+	return {
+		register(tool) {
+			toolNames.add(tool.name);
+			pi.registerTool({
+				...tool,
+				async execute(toolCallId, params, signal, onUpdate, context) {
+					try {
+						return await tool.execute(toolCallId, params, signal, onUpdate, context);
+					} catch (error) {
+						if (isCancellation(error, signal)) cancelledCalls.add(toolCallId);
+						throw error;
+					}
+				},
+			});
+		},
+	};
 }
 
 interface TraceTheme {
@@ -70,6 +112,18 @@ function resultText(result: TraceResult): string {
 		.join("\n");
 }
 
+/** Match Pi's display boundary: remove terminal controls and unsafe binary characters. */
+export function sanitizeTraceEvidence(text: string): string {
+	return Array.from(stripVTControlCharacters(text).replace(/\r/g, ""))
+		.filter((character) => {
+			const code = character.codePointAt(0);
+			if (code === undefined) return false;
+			if (code === 0x09 || code === 0x0a) return true;
+			return code > 0x1f && !(code >= 0xfff9 && code <= 0xfffb);
+		})
+		.join("");
+}
+
 class TraceText extends Text {
 	private row = "";
 	private evidence = "";
@@ -115,10 +169,11 @@ export function createTraceRenderer<TArgs>(options: TraceRendererOptions<TArgs>)
 				.join("");
 			const row = `${theme.fg(presentation.color, presentation.glyph)} ${theme.bold(invocation.action)}${target}${qualifiers}`;
 			const customEvidence = renderOptions.expanded ? options.evidence?.(result, theme, context) : undefined;
+			const safeResultText = sanitizeTraceEvidence(resultText(result));
 			const evidence = !renderOptions.expanded
 				? ""
 				: (customEvidence ??
-					resultText(result)
+					safeResultText
 						.split("\n")
 						.map((line) => theme.fg("toolOutput", line))
 						.join("\n"));

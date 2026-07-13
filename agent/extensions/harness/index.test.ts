@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
-import harness, { registerDelegationCancellation } from "./index.ts";
+import harness from "./index.ts";
 
 describe("harness extension entry", () => {
 	it("exports an extension entry function", () => {
@@ -57,21 +57,5 @@ describe("harness extension entry", () => {
 			["oracle", "self"],
 			["task", "self"],
 		]);
-	});
-
-	it("marks recorded delegation aborts as cancelled mechanical results", () => {
-		let handler: ((event: any) => unknown) | undefined;
-		const pi = {
-			on: vi.fn((_event: string, callback: (event: any) => unknown) => {
-				handler = callback;
-			}),
-		} as any;
-		const cancelledCalls = new Set(["call-1"]);
-		registerDelegationCancellation(pi, cancelledCalls);
-
-		expect(handler?.({ toolName: "task", toolCallId: "call-1", details: { child: true } })).toEqual({
-			details: { child: true, trace: { state: "cancelled" } },
-		});
-		expect(cancelledCalls).toEqual(new Set());
 	});
 });

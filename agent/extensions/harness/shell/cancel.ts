@@ -10,7 +10,7 @@
  */
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { createTraceRenderer, withTraceDetails } from "../ui/trace.ts";
+import { createTraceRenderer, emitTraceRunning, type TraceToolRegistrar, withTraceDetails } from "../ui/trace.ts";
 import { appendStatus, formatShellOutput } from "./output.ts";
 import { type BackgroundShellRegistry, killProcessTree } from "./registry.ts";
 
@@ -40,7 +40,7 @@ export function createShellCancelTool(registry: BackgroundShellRegistry): ToolDe
 		parameters: schema,
 		renderShell: "self",
 		async execute(_toolCallId, params: ShellCancelParams, _signal, onUpdate, _ctx) {
-			onUpdate?.({ content: [{ type: "text", text: "" }], details: withTraceDetails(undefined, "running") });
+			emitTraceRunning(onUpdate);
 			// Lazy sweep of exited-but-unpolled records (spec §4.2 lifetime).
 			registry.sweep();
 
@@ -86,6 +86,10 @@ export function createShellCancelTool(registry: BackgroundShellRegistry): ToolDe
 	} as ToolDefinition<any, any, any>;
 }
 
-export function registerShellCancel(pi: ExtensionAPI, registry: BackgroundShellRegistry): void {
-	pi.registerTool(createShellCancelTool(registry));
+export function registerShellCancel(
+	pi: ExtensionAPI,
+	registry: BackgroundShellRegistry,
+	register: TraceToolRegistrar["register"] = (tool) => pi.registerTool(tool),
+): void {
+	register(createShellCancelTool(registry));
 }

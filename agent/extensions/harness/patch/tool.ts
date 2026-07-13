@@ -9,7 +9,14 @@
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { renderDiff } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { createTraceRenderer, formatTracePath, type TraceInvocation, withTraceDetails } from "../ui/trace.ts";
+import {
+	createTraceRenderer,
+	emitTraceRunning,
+	formatTracePath,
+	type TraceInvocation,
+	type TraceToolRegistrar,
+	withTraceDetails,
+} from "../ui/trace.ts";
 import { type AppliedFile, applyPatch } from "./applier.ts";
 import { parsePatch } from "./parser.ts";
 
@@ -82,7 +89,7 @@ const traceRenderer = createTraceRenderer<ApplyPatchParams>({
 	},
 });
 
-export function createApplyPatchTool(cancelledCalls = new Set<string>()): ToolDefinition<any, any, any> {
+export function createApplyPatchTool(): ToolDefinition<any, any, any> {
 	// Per-session mutex: calls serialize (spec §4.4 Concurrency). The tool is
 	// constructed per session, so this closure is the session scope.
 	let mutex: Promise<unknown> = Promise.resolve();
@@ -93,20 +100,10 @@ export function createApplyPatchTool(cancelledCalls = new Set<string>()): ToolDe
 		description,
 		parameters: schema,
 		renderShell: "self",
-		async execute(toolCallId, params: ApplyPatchParams, signal, onUpdate, ctx) {
-			onUpdate?.({ content: [{ type: "text", text: "" }], details: withTraceDetails(undefined, "running") });
+		async execute(_toolCallId, params: ApplyPatchParams, signal, onUpdate, ctx) {
+			emitTraceRunning(onUpdate);
 			const run = async () => {
-				if (signal?.aborted) {
-					cancelledCalls.add(toolCallId);
-					throw new Error("Patch aborted");
-				}
-				let result: Awaited<ReturnType<typeof applyPatch>>;
-				try {
-					result = await applyPatch(params.patch, ctx.cwd, undefined, signal);
-				} catch (error) {
-					if (signal?.aborted) cancelledCalls.add(toolCallId);
-					throw error;
-				}
+				const result = await applyPatch(params.patch, ctx.cwd);
 				const files = result.files.map(
 					({ kind, path, movePath, diff, added, removed }): ApplyPatchFileDetail => ({
 						kind,
@@ -119,7 +116,10 @@ export function createApplyPatchTool(cancelledCalls = new Set<string>()): ToolDe
 				);
 				return {
 					content: [{ type: "text", text: result.summary }],
-					details: withTraceDetails({ files } satisfies ApplyPatchDetails, "success"),
+					details: withTraceDetails(
+						{ files } satisfies ApplyPatchDetails,
+						signal?.aborted ? "cancelled" : "success",
+					),
 				};
 			};
 			const turn = mutex.then(run, run);
@@ -131,11 +131,9 @@ export function createApplyPatchTool(cancelledCalls = new Set<string>()): ToolDe
 	} as ToolDefinition<any, any, any>;
 }
 
-export function registerApplyPatch(pi: ExtensionAPI): void {
-	const cancelledCalls = new Set<string>();
-	pi.registerTool(createApplyPatchTool(cancelledCalls));
-	pi.on("tool_result", (event) => {
-		if (event.toolName !== "apply_patch" || !cancelledCalls.delete(event.toolCallId)) return undefined;
-		return { details: withTraceDetails(event.details, "cancelled") };
-	});
+export function registerApplyPatch(
+	pi: ExtensionAPI,
+	register: TraceToolRegistrar["register"] = (tool) => pi.registerTool(tool),
+): void {
+	register(createApplyPatchTool());
 }
