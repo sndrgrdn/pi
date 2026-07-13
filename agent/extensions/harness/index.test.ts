@@ -9,10 +9,12 @@ describe("harness extension entry", () => {
 
 	it("locks Main to the eleven admitted tools", () => {
 		const setActiveTools = vi.fn();
+		const registeredTools: any[] = [];
 		const handlers = new Map<string, (...args: any[]) => unknown>();
 		const pi = new Proxy(
 			{
 				setActiveTools,
+				registerTool: vi.fn((tool: any) => registeredTools.push(tool)),
 				on: vi.fn((event: string, handler: (...args: any[]) => unknown) => handlers.set(event, handler)),
 				events: { emit: vi.fn(), on: vi.fn() },
 				getCommands: () => [],
@@ -42,6 +44,18 @@ describe("harness extension entry", () => {
 			"librarian",
 			"task",
 			"mcp",
+		]);
+		expect(registeredTools.map(({ name, renderShell }) => [name, renderShell])).toEqual([
+			["shell_command", "self"],
+			["shell_command_status", "self"],
+			["shell_command_cancel", "self"],
+			["apply_patch", "self"],
+			["read", "self"],
+			["skill", "self"],
+			["finder", "self"],
+			["librarian", "self"],
+			["oracle", "self"],
+			["task", "self"],
 		]);
 	});
 

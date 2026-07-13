@@ -92,6 +92,7 @@ export function createApplyPatchTool(cancelledCalls = new Set<string>()): ToolDe
 		label: "apply_patch",
 		description,
 		parameters: schema,
+		renderShell: "self",
 		async execute(toolCallId, params: ApplyPatchParams, signal, onUpdate, ctx) {
 			onUpdate?.({ content: [{ type: "text", text: "" }], details: withTraceDetails(undefined, "running") });
 			const run = async () => {

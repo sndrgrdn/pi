@@ -59,6 +59,7 @@ export function createFinderTool(
 		description:
 			"Delegate local codebase search to a read-only scout. Use parallel finder calls for independent queries.",
 		parameters: Type.Object({ query: Type.String({ description: "What to locate and the desired thoroughness." }) }),
+		renderShell: "self",
 		async execute(id, params: { query: string }, signal, onUpdate, ctx) {
 			const actions = new Map<string, number>();
 			const update = () => {

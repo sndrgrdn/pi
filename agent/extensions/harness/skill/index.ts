@@ -81,6 +81,7 @@ export function createSkillTool(skillsByName: ReadonlyMap<string, SkillEntry>): 
 		parameters: Type.Object({
 			name: Type.String({ description: "Name of the skill the user asked for" }),
 		}),
+		renderShell: "self",
 		async execute(_toolCallId, params: SkillParams, _signal, onUpdate) {
 			onUpdate?.({ content: [{ type: "text", text: "" }], details: withTraceDetails(undefined, "running") });
 			const { title, text } = activateSkill(params.name);

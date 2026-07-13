@@ -111,6 +111,7 @@ export function createTaskTool(
 				}),
 			),
 		}),
+		renderShell: "self",
 		async execute(id, params: TaskInput, signal, onUpdate, ctx) {
 			const mode = params.mode ?? "low";
 			const actions = new Map<string, number>();

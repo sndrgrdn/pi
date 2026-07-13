@@ -66,6 +66,7 @@ export function createOracleTool(
 				Type.Array(Type.String(), { description: "Files whose readable contents should be supplied." }),
 			),
 		}),
+		renderShell: "self",
 		async execute(id, params: OracleInput, signal, onUpdate, ctx) {
 			const actions = new Map<string, number>();
 			const update = () =>

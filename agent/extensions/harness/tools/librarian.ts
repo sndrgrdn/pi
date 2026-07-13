@@ -63,6 +63,7 @@ export function createLibrarianTool(
 			query: Type.String({ description: "The external research question." }),
 			context: Type.Optional(Type.String({ description: "Relevant context prepended to the research query." })),
 		}),
+		renderShell: "self",
 		async execute(id, params: LibrarianInput, signal, onUpdate, ctx) {
 			const actions = new Map<string, number>();
 			const update = () =>
