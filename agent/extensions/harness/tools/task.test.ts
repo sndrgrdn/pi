@@ -155,6 +155,22 @@ describe("task tool", () => {
 		expect(result.details).toMatchObject({ trace: { state: "cancelled" } });
 	});
 
+	it("records a pre-child AbortError for mechanical cancellation rendering", async () => {
+		const abort = Object.assign(new Error("Subagent run aborted"), { name: "AbortError" });
+		const cancelledCalls = new Set<string>();
+		const tool = createTaskTool(
+			{ run: vi.fn().mockRejectedValue(abort) } as any,
+			BUILTIN_PROFILES,
+			{ basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }) },
+			cancelledCalls,
+		);
+
+		await expect(
+			tool.execute("call-1", { prompt: "Work", description: "work" }, undefined, undefined, { cwd: "/repo" } as any),
+		).rejects.toThrow("Subagent run aborted");
+		expect(cancelledCalls).toEqual(new Set(["call-1"]));
+	});
+
 	it("summarizes a child hard error into a task_error payload", async () => {
 		const failure = new SubagentRunError(
 			"task-failed",

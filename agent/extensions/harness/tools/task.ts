@@ -86,10 +86,15 @@ export interface TaskDependencies {
 		| Promise<Pick<TaskPromptParts, "system" | "appendSystem" | "projectContext">>;
 }
 
+function isAbortError(error: unknown): error is Error {
+	return error instanceof Error && error.name === "AbortError";
+}
+
 export function createTaskTool(
 	runner: Pick<SubagentRunner, "run">,
 	profiles: ResolvedProfiles,
 	dependencies: TaskDependencies = {},
+	cancelledCalls = new Set<string>(),
 ): ToolDefinition<any, any, any> {
 	return {
 		name: "task",
@@ -107,7 +112,7 @@ export function createTaskTool(
 				}),
 			),
 		}),
-		async execute(_id, params: TaskInput, signal, onUpdate, ctx) {
+		async execute(id, params: TaskInput, signal, onUpdate, ctx) {
 			const mode = params.mode ?? "low";
 			const actions = new Map<string, number>();
 			const update = () =>
@@ -168,7 +173,10 @@ export function createTaskTool(
 					wrapResult: (sessionID, content) => buildEnvelope({ kind: "task", sessionID, content }),
 				});
 			} catch (error) {
-				if (!(error instanceof SubagentRunError)) throw error;
+				if (!(error instanceof SubagentRunError)) {
+					if (isAbortError(error)) cancelledCalls.add(id);
+					throw error;
+				}
 				const failure = error;
 				if (failure.name === "AbortError") {
 					outcome = "cancelled";
@@ -199,8 +207,7 @@ export function createTaskTool(
 						});
 						envelope = buildEnvelope({ kind: "task_error", sessionID: failure.sessionID, content: summary });
 					} catch (summaryError) {
-						if (!(summaryError instanceof SubagentRunError) || summaryError.name !== "AbortError")
-							throw summaryError;
+						if (!isAbortError(summaryError)) throw summaryError;
 						outcome = "cancelled";
 						envelope = buildEnvelope({
 							kind: "task_error",

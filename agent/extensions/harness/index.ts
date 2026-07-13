@@ -37,7 +37,7 @@ export const MAIN_TOOL_NAMES = [
 	"mcp",
 ] as const;
 
-const DELEGATION_TOOL_NAMES = new Set(["finder", "librarian", "oracle"]);
+const DELEGATION_TOOL_NAMES = new Set(["finder", "librarian", "oracle", "task"]);
 
 export function registerDelegationCancellation(pi: ExtensionAPI, cancelledCalls: Set<string>): void {
 	pi.on("tool_result", (event) => {
@@ -72,7 +72,7 @@ export default function harness(pi: ExtensionAPI) {
 	pi.registerTool(createFinderTool(runner, profiles, cancelledDelegations)); // Phase 6 (§6.2)
 	pi.registerTool(createLibrarianTool(runner, profiles, cancelledDelegations)); // Phase 7 (§6.4)
 	pi.registerTool(createOracleTool(runner, profiles, modes.activeMode, cancelledDelegations)); // Phase 8 (§6.3)
-	pi.registerTool(createTaskTool(runner, profiles)); // Phase 9 (§6.5)
+	pi.registerTool(createTaskTool(runner, profiles, {}, cancelledDelegations)); // Phase 9 (§6.5)
 	registerDelegationCancellation(pi, cancelledDelegations);
 
 	// Phase 10 (§4): action methods become available only after pi binds the

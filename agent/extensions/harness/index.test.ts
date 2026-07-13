@@ -55,7 +55,7 @@ describe("harness extension entry", () => {
 		const cancelledCalls = new Set(["call-1"]);
 		registerDelegationCancellation(pi, cancelledCalls);
 
-		expect(handler?.({ toolName: "finder", toolCallId: "call-1", details: { child: true } })).toEqual({
+		expect(handler?.({ toolName: "task", toolCallId: "call-1", details: { child: true } })).toEqual({
 			details: { child: true, trace: { state: "cancelled" } },
 		});
 		expect(cancelledCalls).toEqual(new Set());
