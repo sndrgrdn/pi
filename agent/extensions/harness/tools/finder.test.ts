@@ -6,9 +6,11 @@ import { createFinderTool } from "./finder.ts";
 
 describe("finder tool", () => {
 	it("lifts the first title line into the result envelope", async () => {
-		const run = vi.fn(async (options: RunOptions<{ query: string }>) =>
-			options.wrapResult("finder-session", "Authentication entry points\n/abs/auth.ts:12 — login route"),
-		);
+		const run = vi.fn(async (_options: RunOptions) => ({
+			sessionID: "finder-session",
+			answer: "Authentication entry points\n/abs/auth.ts:12 — login route",
+			toolLog: [],
+		}));
 		const tool = createFinderTool({ run } as any, BUILTIN_PROFILES);
 		const updates: any[] = [];
 		const result = await tool.execute(
@@ -34,11 +36,11 @@ describe("finder tool", () => {
 			tools: ["read", "grep", "find", "ls"],
 			allowMcp: false,
 		});
-		expect(options?.mapInput({ query: "find auth" })).toBe("find auth");
+		expect(options?.message).toBe("find auth");
 	});
 
 	it("turns an empty final answer into a normal nothing-matched envelope", async () => {
-		const run = vi.fn(async (options: RunOptions<{ query: string }>) => options.wrapResult("finder-session", "  "));
+		const run = vi.fn(async () => ({ sessionID: "finder-session", answer: "  ", toolLog: [] }));
 		const tool = createFinderTool({ run } as any, BUILTIN_PROFILES);
 
 		const result = await tool.execute("call", { query: "find auth" }, undefined, undefined, {
@@ -53,9 +55,11 @@ describe("finder tool", () => {
 	});
 
 	it("escapes the extracted title in the envelope and surfaces it raw for the TUI", async () => {
-		const run = vi.fn(async (options: RunOptions<{ query: string }>) =>
-			options.wrapResult("finder-session", 'Auth & "sessions"\n/abs/auth.ts:12'),
-		);
+		const run = vi.fn(async () => ({
+			sessionID: "finder-session",
+			answer: 'Auth & "sessions"\n/abs/auth.ts:12',
+			toolLog: [],
+		}));
 		const tool = createFinderTool({ run } as any, BUILTIN_PROFILES);
 
 		const result = await tool.execute("call", { query: "find auth" }, undefined, undefined, {

@@ -6,10 +6,10 @@ import { createLibrarianTool } from "./librarian.ts";
 
 describe("librarian tool", () => {
 	it("prepends optional context and returns the final answer envelope", async () => {
-		const run = vi.fn(async (options: RunOptions<{ query: string; context?: string }>) => {
+		const run = vi.fn(async (options: RunOptions) => {
 			options.onAction?.("checkout");
 			options.onAction?.("checkout");
-			return options.wrapResult("library-1", "Use [the source](https://example.com).");
+			return { sessionID: "library-1", answer: "Use [the source](https://example.com).", toolLog: [] };
 		});
 		const tool = createLibrarianTool({ run } as any, BUILTIN_PROFILES);
 		const updates: any[] = [];
@@ -27,7 +27,7 @@ describe("librarian tool", () => {
 			text: expect.stringContaining('<librarian_result sessionID="library-1">'),
 		});
 		const options = run.mock.calls[0]?.[0];
-		expect(options?.mapInput({ query: "How?", context: "Ruby 3.4" })).toBe("Context: Ruby 3.4\n\nQuery: How?");
+		expect(options?.message).toBe("Context: Ruby 3.4\n\nQuery: How?");
 		expect(options?.definition).toMatchObject({
 			key: "librarian",
 			model: "openai-codex/gpt-5.6-sol",
@@ -54,15 +54,17 @@ describe("librarian tool", () => {
 	});
 
 	it("formats a query without context", async () => {
-		const run = vi.fn(async (options: RunOptions<{ query: string }>) =>
-			options.wrapResult("library-2", "Rails 8.1."),
-		);
+		const run = vi.fn(async (_options: RunOptions) => ({
+			sessionID: "library-2",
+			answer: "Rails 8.1.",
+			toolLog: [],
+		}));
 		const tool = createLibrarianTool({ run } as any, BUILTIN_PROFILES);
 
 		await tool.execute("call", { query: "Current Rails release?" }, undefined, undefined, { cwd: "/repo" } as any);
 
 		const options = run.mock.calls[0]?.[0];
-		expect(options?.mapInput({ query: "Current Rails release?" })).toBe("Query: Current Rails release?");
+		expect(options?.message).toBe("Query: Current Rails release?");
 	});
 
 	it("maps context exhaustion to actionable guidance", async () => {

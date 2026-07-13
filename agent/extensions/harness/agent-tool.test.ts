@@ -2,14 +2,14 @@ import { Type } from "typebox";
 import { describe, expect, it, vi } from "vitest";
 import { type AgentToolSpec, createAgentTool } from "./agent-tool.ts";
 import { BUILTIN_PROFILES } from "./profiles.ts";
-import { type RunOptions, SubagentRunError } from "./runner.ts";
+import { type RunOptions, SubagentAbortError, SubagentRunError } from "./runner.ts";
 
 interface ProbeParams {
 	assignment: string;
 	mode?: "low" | "high";
 }
 
-function probeSpec(overrides: Partial<AgentToolSpec<ProbeParams>> = {}): AgentToolSpec<ProbeParams> {
+function probeSpec(overrides: Partial<AgentToolSpec<ProbeParams, "task">> = {}): AgentToolSpec<ProbeParams, "task"> {
 	return {
 		key: "task",
 		name: "probe",
@@ -26,7 +26,7 @@ function probeSpec(overrides: Partial<AgentToolSpec<ProbeParams>> = {}): AgentTo
 }
 
 function fakeRun(answer: string) {
-	return vi.fn(async (options: RunOptions<ProbeParams>) => options.wrapResult("probe-session", answer));
+	return vi.fn(async (_options: RunOptions) => ({ sessionID: "probe-session", answer, toolLog: [] }));
 }
 
 describe("agent tool factory", () => {
@@ -44,7 +44,7 @@ describe("agent tool factory", () => {
 		});
 		expect(result.details).toEqual({ trace: { state: "success" } });
 		const options = run.mock.calls[0]?.[0];
-		expect(options?.definition).toMatchObject({
+		expect(options?.definition).toEqual({
 			key: "task",
 			model: "openai-codex/gpt-5.6-sol",
 			reasoningEffort: "low",
@@ -52,7 +52,7 @@ describe("agent tool factory", () => {
 			allowMcp: false,
 			systemPrompt: "You are a probe.",
 		});
-		expect(options?.mapInput({ assignment: "probe it" })).toBe("Do: probe it");
+		expect(options?.message).toBe("Do: probe it");
 		expect(options?.cwd).toBe("/repo");
 
 		await tool.execute("call-2", { assignment: "probe it", mode: "high" }, undefined, undefined, {
@@ -65,10 +65,10 @@ describe("agent tool factory", () => {
 	});
 
 	it("emits a running progress tally per child action", async () => {
-		const run = vi.fn(async (options: RunOptions<ProbeParams>) => {
+		const run = vi.fn(async (options: RunOptions) => {
 			options.onAction?.("read");
 			options.onAction?.("read");
-			return options.wrapResult("probe-session", "done");
+			return { sessionID: "probe-session", answer: "done", toolLog: [] };
 		});
 		const tool = createAgentTool(probeSpec(), { run } as any, BUILTIN_PROFILES);
 		const updates: any[] = [];
@@ -84,17 +84,50 @@ describe("agent tool factory", () => {
 		]);
 	});
 
-	it("threads plan traceDetails through running, success, and recover details", async () => {
+	it("emits the running state before planning completes", async () => {
+		let resolvePlan!: (plan: { systemPrompt: string; message: string }) => void;
 		const spec = probeSpec({
-			plan: (params) => ({
-				systemPrompt: "You are a probe.",
-				message: `Do: ${params.assignment}`,
-				traceDetails: { flavor: "salty" },
-			}),
+			plan: () =>
+				new Promise((resolve) => {
+					resolvePlan = resolve;
+				}),
 		});
-		const run = vi.fn(async (options: RunOptions<ProbeParams>) => {
+		const updates: any[] = [];
+		const tool = createAgentTool(spec, { run: fakeRun("done") } as any, BUILTIN_PROFILES);
+
+		const running = tool.execute(
+			"call",
+			{ assignment: "probe it" },
+			undefined,
+			(update: any) => updates.push(update),
+			{ cwd: "/repo" } as any,
+		);
+		expect(updates.map((update) => update.details)).toEqual([{ trace: { state: "running" }, actions: {} }]);
+		resolvePlan({ systemPrompt: "You are a probe.", message: "Do: probe it" });
+		await running;
+	});
+
+	it("honors a pre-aborted signal without planning or running the child", async () => {
+		const plan = vi.fn();
+		const run = vi.fn();
+		const controller = new AbortController();
+		controller.abort();
+		const tool = createAgentTool(probeSpec({ plan }), { run } as any, BUILTIN_PROFILES);
+
+		await expect(
+			tool.execute("call", { assignment: "probe it" }, controller.signal, undefined, { cwd: "/repo" } as any),
+		).rejects.toBeInstanceOf(SubagentAbortError);
+		expect(plan).not.toHaveBeenCalled();
+		expect(run).not.toHaveBeenCalled();
+	});
+
+	it("threads spec traceDetails through running, success, and recover details", async () => {
+		const spec = probeSpec({
+			traceDetails: () => ({ flavor: "salty" }),
+		});
+		const run = vi.fn(async (options: RunOptions) => {
 			options.onAction?.("read");
-			return options.wrapResult("probe-session", "done");
+			return { sessionID: "probe-session", answer: "done", toolLog: [] };
 		});
 		const updates: any[] = [];
 		const tool = createAgentTool(spec, { run } as any, BUILTIN_PROFILES);
@@ -124,7 +157,7 @@ describe("agent tool factory", () => {
 		expect(recovered.details).toEqual({ trace: { state: "cancelled" }, flavor: "salty" });
 	});
 
-	it("propagates a finalize throw as the tool failure", async () => {
+	it("annotates a finalize throw with the child session and log", async () => {
 		const spec = probeSpec({
 			finalize: () => {
 				throw new Error("child returned an empty answer");
@@ -132,9 +165,18 @@ describe("agent tool factory", () => {
 		});
 		const tool = createAgentTool(spec, { run: fakeRun("") } as any, BUILTIN_PROFILES);
 
-		await expect(
-			tool.execute("call", { assignment: "probe it" }, undefined, undefined, { cwd: "/repo" } as any),
-		).rejects.toThrow("child returned an empty answer");
+		const failure = await tool
+			.execute("call", { assignment: "probe it" }, undefined, undefined, { cwd: "/repo" } as any)
+			.then(
+				() => undefined,
+				(error: unknown) => error,
+			);
+		expect(failure).toBeInstanceOf(SubagentRunError);
+		expect(failure).toMatchObject({
+			sessionID: "probe-session",
+			toolLog: [],
+			message: "child returned an empty answer",
+		});
 	});
 
 	it("rethrows run failures untouched when the spec has no recover hook", async () => {

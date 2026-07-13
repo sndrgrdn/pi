@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { BUILTIN_PROFILES, POSTURES, TASK_POSTURE } from "../profiles.ts";
 import { type RunOptions, SubagentAbortError, SubagentRunError } from "../runner.ts";
 import { BackgroundShellRegistry } from "../shell/registry.ts";
-import { createTaskTool, type TaskInput } from "./task.ts";
+import { createTaskTool } from "./task.ts";
 
 describe("task tool", () => {
 	it("keeps the restraint-first delegation contract in the Task child prompt", async () => {
@@ -23,9 +23,9 @@ describe("task tool", () => {
   context, paths, constraints, verification steps
 - summarize results for the user; they cannot see subagent output
 - trust subagent results; do not re-check them just to verify`;
-		const run = vi.fn(async (options: RunOptions<TaskInput>) => {
+		const run = vi.fn(async (options: RunOptions) => {
 			expect(options.definition.systemPrompt).toContain(delegation);
-			return options.wrapResult("task-1", "Done");
+			return { sessionID: "task-1", answer: "Done", toolLog: [] };
 		});
 		const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
 			basePrompts: () => ({ system, appendSystem: "A", projectContext: "C" }),
@@ -42,9 +42,9 @@ describe("task tool", () => {
 		["medium", "openai-codex/gpt-5.6-sol", "high"],
 		["high", "anthropic/claude-fable-5", "high"],
 	] as const)("routes mode %s independently and exposes the exact Task toolbox", async (mode, model, reasoning) => {
-		const run = vi.fn(async (options: RunOptions<{ prompt: string }>) => {
+		const run = vi.fn(async (options: RunOptions) => {
 			options.onAction?.("apply_patch");
-			return options.wrapResult("task-1", "Changed x.ts. Verification: tests pass.");
+			return { sessionID: "task-1", answer: "Changed x.ts. Verification: tests pass.", toolLog: [] };
 		});
 		const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
 			basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),
@@ -73,7 +73,7 @@ describe("task tool", () => {
 			],
 		});
 		expect(options.definition.systemPrompt).toBe(`S\n\nA\n\nC\n\n${POSTURES[mode ?? "low"]}\n\n${TASK_POSTURE}`);
-		expect(options.mapInput(params)).toBe("Implement it");
+		expect(options.message).toBe("Implement it");
 		expect(options.toolbox!(new BackgroundShellRegistry()).map((entry) => entry.name)).toEqual([
 			"shell_command",
 			"shell_command_status",
@@ -185,12 +185,11 @@ describe("task tool", () => {
 			new Error("context window exceeded"),
 		);
 		const controller = new AbortController();
-		const run = vi
-			.fn()
-			.mockRejectedValueOnce(failure)
-			.mockImplementationOnce(async (options: RunOptions<string>) =>
-				options.wrapResult("summary-1", "Changed app.ts; verification did not run."),
-			);
+		const run = vi.fn().mockRejectedValueOnce(failure).mockResolvedValueOnce({
+			sessionID: "summary-1",
+			answer: "Changed app.ts; verification did not run.",
+			toolLog: [],
+		});
 		const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
 			basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),
 		});
@@ -230,11 +229,11 @@ describe("task tool", () => {
 	});
 
 	it("injects skill-trigger directives from the Task brief", async () => {
-		const run = vi.fn(async (options: RunOptions<TaskInput>) => {
-			expect(options.mapInput(options.input)).toMatch(
+		const run = vi.fn(async (options: RunOptions) => {
+			expect(options.message).toMatch(
 				/^<skill_directive>[\s\S]*<skill>tdd<\/skill>[\s\S]*<\/skill_directive>\n\nUse \$tdd/,
 			);
-			return options.wrapResult("task-skill", "Done");
+			return { sessionID: "task-skill", answer: "Done", toolLog: [] };
 		});
 		const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
 			basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),
@@ -253,11 +252,11 @@ describe("task tool", () => {
 			),
 			join(cwd, "pixel.png"),
 		);
-		const run = vi.fn(async (options: RunOptions<TaskInput>) => {
+		const run = vi.fn(async (options: RunOptions) => {
 			const read = options.toolbox!(new BackgroundShellRegistry()).find((entry) => entry.name === "read")!;
 			const result = await read.execute("read", { path: "pixel.png" }, undefined, undefined, { cwd } as any);
 			expect(result.content).toEqual(expect.arrayContaining([expect.objectContaining({ type: "image" })]));
-			return options.wrapResult("task-image", "Image inspected");
+			return { sessionID: "task-image", answer: "Image inspected", toolLog: [] };
 		});
 		const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
 			basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),

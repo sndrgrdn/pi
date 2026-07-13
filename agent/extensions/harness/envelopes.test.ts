@@ -8,6 +8,17 @@ describe("subagent result envelopes", () => {
 		);
 	});
 
+	it("stamps error envelopes with the failing agent's tag", () => {
+		expect(buildEnvelope({ kind: "error", agent: "task", sessionID: "child-1", content: "Cancelled." })).toBe(
+			'<task_error sessionID="child-1">\nCancelled.\n</task_error>',
+		);
+		expect(parseEnvelope('<oracle_error sessionID="child-2">\nFailed.\n</oracle_error>')).toEqual({
+			tag: "oracle_error",
+			sessionID: "child-2",
+			content: "Failed.",
+		});
+	});
+
 	it("escapes harness-owned XML attributes", () => {
 		expect(
 			buildEnvelope({ kind: "finder", sessionID: 'child&"1', content: "Found it", title: 'Files & "tests"' }),

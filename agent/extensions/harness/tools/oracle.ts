@@ -45,7 +45,7 @@ export function createOracleTool(
 	profiles: ResolvedProfiles,
 	activeMode: ActiveMode,
 ): ToolDefinition<any, any, any> {
-	const spec: AgentToolSpec<OracleParams> = {
+	const spec: AgentToolSpec<OracleParams, "oracle"> = {
 		key: "oracle",
 		name: "oracle",
 		description: "Get a read-only senior advisor's second opinion on a bounded technical question.",

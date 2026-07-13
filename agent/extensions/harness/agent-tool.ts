@@ -1,6 +1,6 @@
 /**
  * Agent Tool — the single factory that turns a per-agent spec into a
- * model-visible delegation tool (issue #8, expand phase #9). The spine —
+ * model-visible delegation tool (issue #8). The spine —
  * mode-to-route dispatch, per-call definition build, plan, envelope
  * build/parse, finalize, recovery, Trace View rendering, and the progress
  * signal — lives here; agents are declarative specs.
@@ -8,8 +8,15 @@
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { buildEnvelope, type EnvelopeInput, parseEnvelope } from "./envelopes.ts";
 import { type AgentKey, type Mode, type ResolvedProfiles, resolveAgentRoute } from "./profiles.ts";
-import { resolveAgentDefinition } from "./registry.ts";
-import { type ChildToolboxFactory, isSubagentAbortError, SubagentRunError, type SubagentRunner } from "./runner.ts";
+import {
+	type AgentDefinition,
+	type ChildToolboxFactory,
+	isSubagentAbortError,
+	SubagentAbortError,
+	SubagentRunError,
+	type SubagentRunner,
+	type SubagentRunResult,
+} from "./runner.ts";
 import {
 	createTraceRenderer,
 	emitTraceRunning,
@@ -24,16 +31,17 @@ export interface AgentToolPlan {
 	systemPrompt: string;
 	message: string;
 	toolbox?: ChildToolboxFactory;
-	/** Static per-call facts carried on every details emission (running, success, recover). */
-	traceDetails?: Record<string, unknown>;
 }
 
-/** A spec's reading of the child's final answer. May not be produced (finalize throws). */
-export interface AgentToolResult {
+/**
+ * A spec's reading of the child's final answer. May not be produced (finalize
+ * throws). Only finder results carry a title — its envelope variant requires
+ * one; every other agent's result cannot express one.
+ */
+export type AgentToolResult<K extends AgentKey = AgentKey> = {
 	content: string;
-	title?: string;
 	traceDetails?: Record<string, unknown>;
-}
+} & (K extends "finder" ? { title: string } : { title?: undefined });
 
 /** A spec's recovery from a failed run; the factory wraps it as the error envelope. */
 export interface AgentToolRecovery {
@@ -54,16 +62,18 @@ export interface AgentToolPresentation<TParams> {
 	qualifiers?(params: TParams): string[];
 }
 
-export interface AgentToolSpec<TParams> {
-	key: AgentKey;
+export interface AgentToolSpec<TParams, K extends AgentKey = AgentKey> {
+	key: K;
 	name: string;
 	description: string;
 	parameters: unknown;
 	mode(params: TParams): Mode;
 	plan(params: TParams, ctx: { cwd: string }): AgentToolPlan | Promise<AgentToolPlan>;
-	finalize(answer: string): AgentToolResult;
+	finalize(answer: string): AgentToolResult<K>;
 	recover?(error: unknown, ctx: AgentToolRecoverContext<TParams>): AgentToolRecovery | Promise<AgentToolRecovery>;
 	presentation: AgentToolPresentation<TParams>;
+	/** Static per-call facts carried on every details emission (running, success, recover). */
+	traceDetails?(params: TParams): Record<string, unknown>;
 	tools: readonly string[];
 	allowMcp: boolean;
 }
@@ -84,9 +94,11 @@ function createProgressSignal(
 }
 
 function envelopeInput(key: AgentKey, sessionID: string, result: AgentToolResult): EnvelopeInput {
-	return key === "finder"
-		? { kind: "finder", sessionID, title: result.title ?? "", content: result.content }
-		: { kind: key, sessionID, content: result.content };
+	// `AgentToolResult<K>` admits a title exactly when the key is "finder", so
+	// title presence discriminates the envelope variant.
+	return result.title === undefined
+		? { kind: key as Exclude<AgentKey, "finder">, sessionID, content: result.content }
+		: { kind: "finder", sessionID, title: result.title, content: result.content };
 }
 
 interface TraceResultLike {
@@ -142,9 +154,21 @@ function failureSessionID(error: unknown): string | undefined {
 	return undefined;
 }
 
+/** A finalize throw is a child-run failure: annotate it with the child's session and log. */
+function finalizeAnswer<TParams, K extends AgentKey>(
+	spec: AgentToolSpec<TParams, K>,
+	child: SubagentRunResult,
+): AgentToolResult<K> {
+	try {
+		return spec.finalize(child.answer);
+	} catch (error) {
+		throw new SubagentRunError(child.sessionID, child.toolLog, error);
+	}
+}
+
 /** Turn a declarative agent spec into the delegation tool callers register. */
-export function createAgentTool<TParams>(
-	spec: AgentToolSpec<TParams>,
+export function createAgentTool<TParams, K extends AgentKey>(
+	spec: AgentToolSpec<TParams, K>,
 	runner: Pick<SubagentRunner, "run">,
 	profiles: ResolvedProfiles,
 ): ToolDefinition<any, any, any> {
@@ -162,35 +186,35 @@ export function createAgentTool<TParams>(
 			onUpdate: ToolUpdate | undefined,
 			ctx: { cwd: string },
 		) {
+			const traceDetails = spec.traceDetails?.(params);
+			const recordAction = createProgressSignal(onUpdate, traceDetails);
+			if (signal?.aborted) throw new SubagentAbortError();
 			const planned = await spec.plan(params, { cwd: ctx.cwd });
-			const recordAction = createProgressSignal(onUpdate, planned.traceDetails);
-			const definition = resolveAgentDefinition(
-				{ key: spec.key, systemPrompt: planned.systemPrompt, tools: spec.tools, allowMcp: spec.allowMcp },
-				resolveAgentRoute(profiles, spec.key, spec.mode(params)),
-			);
+			const route = resolveAgentRoute(profiles, spec.key, spec.mode(params));
+			const definition: AgentDefinition = {
+				key: spec.key,
+				systemPrompt: planned.systemPrompt,
+				tools: [...spec.tools],
+				allowMcp: spec.allowMcp,
+				model: route.model,
+				reasoningEffort: route.reasoning,
+			};
 			try {
-				let child: { sessionID: string; answer: string } | undefined;
-				await runner.run({
+				const child = await runner.run({
 					definition,
 					cwd: ctx.cwd,
-					input: params,
+					message: planned.message,
 					signal,
 					onAction: recordAction,
 					...(planned.toolbox ? { toolbox: planned.toolbox } : {}),
-					mapInput: () => planned.message,
-					wrapResult: (sessionID, answer) => {
-						child = { sessionID, answer };
-						return answer;
-					},
 				});
-				if (child === undefined) throw new Error(`${spec.key} runner completed without a child result`);
-				const finalized = spec.finalize(child.answer);
+				const finalized = finalizeAnswer(spec, child);
 				return {
 					content: [{ type: "text", text: buildEnvelope(envelopeInput(spec.key, child.sessionID, finalized)) }],
 					details: withTraceDetails(
 						{
 							...(finalized.title !== undefined ? { title: finalized.title } : {}),
-							...planned.traceDetails,
+							...traceDetails,
 							...finalized.traceDetails,
 						},
 						"success",
@@ -203,9 +227,12 @@ export function createAgentTool<TParams>(
 				if (sessionID === undefined) throw error; // no child session — nothing to attribute the report to
 				return {
 					content: [
-						{ type: "text", text: buildEnvelope({ kind: "task_error", sessionID, content: recovery.content }) },
+						{
+							type: "text",
+							text: buildEnvelope({ kind: "error", agent: spec.key, sessionID, content: recovery.content }),
+						},
 					],
-					details: withTraceDetails(planned.traceDetails, recovery.outcome),
+					details: withTraceDetails(traceDetails, recovery.outcome),
 				};
 			}
 		},

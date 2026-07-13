@@ -31,7 +31,7 @@ function mapLibrarianError(error: unknown): Error {
 	return resolved;
 }
 
-const spec: AgentToolSpec<LibrarianParams> = {
+const spec: AgentToolSpec<LibrarianParams, "librarian"> = {
 	key: "librarian",
 	name: "librarian",
 	description: "Delegate remote repository and web research. Returns source-linked findings.",

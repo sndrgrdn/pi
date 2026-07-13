@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { Text } from "@earendil-works/pi-tui";
 import { describe, expect, it, vi } from "vitest";
 import { BUILTIN_PROFILES, type Mode } from "../profiles.ts";
-import type { RunOptions } from "../runner.ts";
+import { type RunOptions, SubagentRunError } from "../runner.ts";
 import { BackgroundShellRegistry } from "../shell/registry.ts";
 import { createOracleTool } from "./oracle.ts";
 
@@ -16,10 +16,10 @@ interface OracleParams {
 
 /** Run the tool against a fake runner and capture the child message it plans. */
 async function capturedMessage(params: OracleParams, cwd: string): Promise<string> {
-	const run = vi.fn(async (options: RunOptions<OracleParams>) => options.wrapResult("oracle-1", "Advice"));
+	const run = vi.fn(async (_options: RunOptions) => ({ sessionID: "oracle-1", answer: "Advice", toolLog: [] }));
 	const tool = createOracleTool({ run } as any, BUILTIN_PROFILES, () => "medium");
 	await tool.execute("call", params, undefined, undefined, { cwd } as any);
-	return run.mock.calls[0]?.[0].mapInput(params) as string;
+	return run.mock.calls[0]?.[0].message as string;
 }
 
 describe("oracle tool", () => {
@@ -65,9 +65,11 @@ describe("oracle tool", () => {
 		["medium", "openai-codex/gpt-5.6-sol"],
 		["high", "anthropic/claude-fable-5"],
 	] as const)("resolves the %s parent Mode route at invocation", async (mode, model) => {
-		const run = vi.fn(async (options: RunOptions<OracleParams>) =>
-			options.wrapResult("oracle-1", "Use the smaller change."),
-		);
+		const run = vi.fn(async (_options: RunOptions) => ({
+			sessionID: "oracle-1",
+			answer: "Use the smaller change.",
+			toolLog: [],
+		}));
 		const tool = createOracleTool({ run } as any, BUILTIN_PROFILES, () => mode as Mode);
 		const result = await tool.execute("call", { task: "Review it" }, undefined, undefined, { cwd: "/repo" } as any);
 
@@ -80,7 +82,7 @@ describe("oracle tool", () => {
 		});
 		const toolbox = run.mock.calls[0]?.[0].toolbox;
 		expect(toolbox).toEqual(expect.any(Function));
-		expect(toolbox?.(new BackgroundShellRegistry()).map((tool) => tool.name)).toEqual([
+		expect(toolbox?.(new BackgroundShellRegistry()).map((tool: { name: string }) => tool.name)).toEqual([
 			"shell_command",
 			"shell_command_status",
 			"shell_command_cancel",
@@ -95,7 +97,7 @@ describe("oracle tool", () => {
 
 	it("follows the active parent Mode at call time", async () => {
 		let mode: Mode = "low";
-		const run = vi.fn(async (options: RunOptions<OracleParams>) => options.wrapResult("oracle-1", "Advice"));
+		const run = vi.fn(async (_options: RunOptions) => ({ sessionID: "oracle-1", answer: "Advice", toolLog: [] }));
 		const tool = createOracleTool({ run } as any, BUILTIN_PROFILES, () => mode);
 
 		await tool.execute("call-1", { task: "Review it" }, undefined, undefined, { cwd: "/repo" } as any);
@@ -107,9 +109,9 @@ describe("oracle tool", () => {
 	});
 
 	it("uses the medium route when no named parent Mode is active", async () => {
-		const run = vi.fn(async (options: RunOptions<OracleParams>) => {
+		const run = vi.fn(async (options: RunOptions) => {
 			options.onAction?.("finder");
-			return options.wrapResult("oracle-1", "Advice");
+			return { sessionID: "oracle-1", answer: "Advice", toolLog: [] };
 		});
 		const tool = createOracleTool({ run } as any, BUILTIN_PROFILES, () => null);
 		const updates: any[] = [];
@@ -127,12 +129,17 @@ describe("oracle tool", () => {
 		expect(result.details).toEqual({ trace: { state: "success" } });
 	});
 
-	it("rejects an empty final message explicitly", async () => {
-		const run = vi.fn(async (options: RunOptions<OracleParams>) => options.wrapResult("oracle-1", "  "));
+	it("rejects an empty final message with the child session attributed", async () => {
+		const run = vi.fn(async (_options: RunOptions) => ({ sessionID: "oracle-1", answer: "  ", toolLog: [] }));
 		const tool = createOracleTool({ run } as any, BUILTIN_PROFILES, () => "medium");
-		await expect(
-			tool.execute("call", { task: "Review it" }, undefined, undefined, { cwd: "/repo" } as any),
-		).rejects.toThrow("Oracle child returned an empty final message");
+		const failure = await tool
+			.execute("call", { task: "Review it" }, undefined, undefined, { cwd: "/repo" } as any)
+			.then(
+				() => undefined,
+				(error: unknown) => error,
+			);
+		expect(failure).toBeInstanceOf(SubagentRunError);
+		expect(failure).toMatchObject({ sessionID: "oracle-1", message: "Oracle child returned an empty final message" });
 	});
 
 	it("retains the original task after completion", () => {

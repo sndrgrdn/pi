@@ -107,19 +107,17 @@ export function createTaskTool(
 					reasoningEffort: route.reasoning,
 				},
 				cwd,
-				input: JSON.stringify({ error: error.message, toolLog: error.toolLog }),
-				mapInput: String,
-				wrapResult: (_sessionID, content) => content,
+				message: JSON.stringify({ error: error.message, toolLog: error.toolLog }),
 				signal,
 			});
-			return { content: summary, outcome: "failed" };
+			return { content: summary.answer, outcome: "failed" };
 		} catch (summaryError) {
 			if (!isSubagentAbortError(summaryError) || !summaryError.sessionID) throw summaryError;
 			return { content: buildCancellationReport(error.toolLog), outcome: "cancelled" };
 		}
 	}
 
-	const spec: AgentToolSpec<TaskInput> = {
+	const spec: AgentToolSpec<TaskInput, "task"> = {
 		key: "task",
 		name: "task",
 		description:
@@ -162,7 +160,6 @@ export function createTaskTool(
 					createFinderTool(runner, profiles),
 					createLibrarianTool(runner, profiles),
 				],
-				traceDetails: { mode: taskMode(params), description: params.description },
 			};
 		},
 		finalize: (answer) => ({ content: answer }),
@@ -171,6 +168,7 @@ export function createTaskTool(
 			action: (params) => `task (${taskMode(params)})`,
 			target: (params) => params.description,
 		},
+		traceDetails: (params) => ({ mode: taskMode(params), description: params.description }),
 		tools: [...SHELL_TOOLBOX_NAMES, "read", "apply_patch", "skill", "finder", "librarian"],
 		allowMcp: true,
 	};

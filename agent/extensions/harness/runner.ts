@@ -9,9 +9,19 @@ import {
 	SessionManager,
 	type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import type { AgentDefinition } from "./registry.ts";
+import type { AgentKey, ReasoningLevel } from "./profiles.ts";
 import { BackgroundShellRegistry } from "./shell/registry.ts";
 import { withShellRegistry } from "./shell/session-registry.ts";
+
+/** A route-resolved, invocation-ready child agent definition. */
+export interface AgentDefinition {
+	key: AgentKey;
+	systemPrompt: string;
+	tools: readonly string[];
+	allowMcp: boolean;
+	model: string;
+	reasoningEffort: ReasoningLevel;
+}
 
 export interface ChildSession {
 	sessionID: string;
@@ -69,15 +79,20 @@ export interface ChildSessionConfig {
 export type ChildSessionFactory = (config: ChildSessionConfig) => Promise<ChildSession>;
 export type ChildToolboxFactory = (processes: BackgroundShellRegistry) => ToolDefinition[];
 
-export interface RunOptions<T> {
+export interface RunOptions {
 	definition: AgentDefinition;
 	cwd: string;
-	input: T;
-	mapInput(input: T): string;
-	wrapResult(sessionID: string, content: string): string;
+	message: string;
 	onAction?(toolName: string): void;
 	toolbox?: ChildToolboxFactory;
 	signal?: AbortSignal;
+}
+
+/** The completed child run: session attribution, final answer, and tool log. */
+export interface SubagentRunResult {
+	sessionID: string;
+	answer: string;
+	toolLog: ToolLogEntry[];
 }
 
 function abortError(): Error {
@@ -100,7 +115,7 @@ export class SubagentRunner {
 		this.createChild = createChild;
 	}
 
-	async run<T>(options: RunOptions<T>): Promise<string> {
+	async run(options: RunOptions): Promise<SubagentRunResult> {
 		if (options.signal?.aborted) throw new SubagentAbortError();
 		let parentAborted = false;
 		let child: ChildSession | undefined;
@@ -124,12 +139,12 @@ export class SubagentRunner {
 				await abortPromise;
 				throw annotateFailure(abortError(), child);
 			}
-			await child.prompt(options.mapInput(options.input));
+			await child.prompt(options.message);
 			if (parentAborted) {
 				if (abortPromise) await abortPromise;
 				throw annotateFailure(abortError(), child);
 			}
-			return options.wrapResult(child.sessionID, child.finalMessage());
+			return { sessionID: child.sessionID, answer: child.finalMessage(), toolLog: child.toolLog() };
 		} catch (error) {
 			if (parentAborted) {
 				if (abortPromise) await abortPromise;

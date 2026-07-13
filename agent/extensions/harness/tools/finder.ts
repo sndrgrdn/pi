@@ -25,7 +25,7 @@ function extractFinderAnswer(answer: string): { title: string; content: string }
 	return { title, content };
 }
 
-const spec: AgentToolSpec<FinderParams> = {
+const spec: AgentToolSpec<FinderParams, "finder"> = {
 	key: "finder",
 	name: "finder",
 	description:
