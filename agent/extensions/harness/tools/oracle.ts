@@ -7,14 +7,17 @@ import { buildEnvelope } from "../envelopes.ts";
 import { DEFAULT_MODE, type Mode, type ResolvedProfiles, resolveAgentRoute } from "../profiles.ts";
 import { AGENT_TOOLBOX_MATRIX, resolveAgentDefinition } from "../registry.ts";
 import type { SubagentRunner } from "../runner.ts";
+import { createShellCancelTool } from "../shell/cancel.ts";
+import { createShellCommandTool } from "../shell/command.ts";
+import { createShellStatusTool } from "../shell/status.ts";
 import { createSubagentRenderer } from "../ui/subagent.ts";
 import { createFinderTool } from "./finder.ts";
 import { createLibrarianTool } from "./librarian.ts";
-import { createShellCommandTool } from "../shell/command.ts";
-import { createShellStatusTool } from "../shell/status.ts";
-import { createShellCancelTool } from "../shell/cancel.ts";
 
-const prompt = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "agents", "prompts", "oracle.md"), "utf8").trim();
+const prompt = readFileSync(
+	join(dirname(fileURLToPath(import.meta.url)), "..", "agents", "prompts", "oracle.md"),
+	"utf8",
+).trim();
 const renderer = createSubagentRenderer({ running: "Oracle exploring", complete: "Oracle has spoken" });
 
 export interface OracleInput {
@@ -54,17 +57,28 @@ export function createOracleTool(
 		parameters: Type.Object({
 			task: Type.String({ description: "The review, debugging, architecture, or design question." }),
 			context: Type.Optional(Type.String({ description: "Relevant constraints or background." })),
-			files: Type.Optional(Type.Array(Type.String(), { description: "Files whose readable contents should be supplied." })),
+			files: Type.Optional(
+				Type.Array(Type.String(), { description: "Files whose readable contents should be supplied." }),
+			),
 		}),
 		async execute(_id, params: OracleInput, signal, onUpdate, ctx) {
-			onUpdate?.({ content: [{ type: "text", text: `Oracle exploring — ${params.task}` }], details: { state: "running", query: params.task } });
-			const definition = resolveAgentDefinition({
-				key: "oracle",
-				systemPrompt: `${prompt}\n\nWorking directory: ${ctx.cwd}\nCurrent date: ${new Date().toISOString().slice(0, 10)}`,
-				...AGENT_TOOLBOX_MATRIX.oracle,
-			}, resolveAgentRoute(profiles, "oracle", activeMode() ?? DEFAULT_MODE));
+			onUpdate?.({
+				content: [{ type: "text", text: `Oracle exploring — ${params.task}` }],
+				details: { state: "running", query: params.task },
+			});
+			const definition = resolveAgentDefinition(
+				{
+					key: "oracle",
+					systemPrompt: `${prompt}\n\nWorking directory: ${ctx.cwd}\nCurrent date: ${new Date().toISOString().slice(0, 10)}`,
+					...AGENT_TOOLBOX_MATRIX.oracle,
+				},
+				resolveAgentRoute(profiles, "oracle", activeMode() ?? DEFAULT_MODE),
+			);
 			const envelope = await runner.run({
-				definition, cwd: ctx.cwd, input: params, signal,
+				definition,
+				cwd: ctx.cwd,
+				input: params,
+				signal,
 				toolbox: (processes) => [
 					createShellCommandTool(processes),
 					createShellStatusTool(processes),

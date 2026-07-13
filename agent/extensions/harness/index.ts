@@ -7,20 +7,20 @@
  * Modules are wired in as each phase lands.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { registerModes } from "./modes.ts";
+import { registerApplyPatch } from "./patch/tool.ts";
+import { SubagentRunner } from "./runner.ts";
 import { registerShellCancel } from "./shell/cancel.ts";
 import { registerShellCommand } from "./shell/command.ts";
-import { registerApplyPatch } from "./patch/tool.ts";
 import { BackgroundShellRegistry } from "./shell/registry.ts";
 import { currentShellRegistry } from "./shell/session-registry.ts";
 import { registerShellStatus } from "./shell/status.ts";
 import skillTool from "./skill/index.ts";
-import { registerModes } from "./modes.ts";
 import { createFinderTool } from "./tools/finder.ts";
 import { createLibrarianTool } from "./tools/librarian.ts";
 import { createOracleTool } from "./tools/oracle.ts";
-import { createTaskTool } from "./tools/task.ts";
-import { SubagentRunner } from "./runner.ts";
 import registerRead from "./tools/read.ts";
+import { createTaskTool } from "./tools/task.ts";
 
 export const MAIN_TOOL_NAMES = [
 	"shell_command",

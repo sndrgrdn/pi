@@ -109,36 +109,34 @@ describe("validateProfilesOverride", () => {
 		expect(() => validateProfilesOverride({ agents: { finder: { posture: "x" } } })).toThrow(
 			/agents\.finder: unknown field "posture" \(expected model, reasoning\)/,
 		);
-		expect(() =>
-			validateProfilesOverride({ agents: { task: { low: { posture: "x" } } } }),
-		).toThrow(/agents\.task\.low: unknown field "posture" \(expected model, reasoning\)/);
+		expect(() => validateProfilesOverride({ agents: { task: { low: { posture: "x" } } } })).toThrow(
+			/agents\.task\.low: unknown field "posture" \(expected model, reasoning\)/,
+		);
 	});
 
 	it("rejects flat model/reasoning on per-route agents", () => {
-		expect(() =>
-			validateProfilesOverride({ agents: { oracle: { model: "a/b" } } }),
-		).toThrow(/agents\.oracle: unknown route "model" \(expected low, medium, high\)/);
+		expect(() => validateProfilesOverride({ agents: { oracle: { model: "a/b" } } })).toThrow(
+			/agents\.oracle: unknown route "model" \(expected low, medium, high\)/,
+		);
 	});
 
 	it("rejects route keys on flat agents", () => {
-		expect(() =>
-			validateProfilesOverride({ agents: { librarian: { low: { model: "a/b" } } } }),
-		).toThrow(/agents\.librarian: unknown field "low" \(expected model, reasoning\)/);
+		expect(() => validateProfilesOverride({ agents: { librarian: { low: { model: "a/b" } } } })).toThrow(
+			/agents\.librarian: unknown field "low" \(expected model, reasoning\)/,
+		);
 	});
 
 	it("rejects bad model ids", () => {
-		expect(() =>
-			validateProfilesOverride({ modes: { low: { model: "no-slash" } } }),
-		).toThrow(/modes\.low\.model: invalid model id "no-slash" \(expected "provider\/model-id"\)/);
+		expect(() => validateProfilesOverride({ modes: { low: { model: "no-slash" } } })).toThrow(
+			/modes\.low\.model: invalid model id "no-slash" \(expected "provider\/model-id"\)/,
+		);
 		expect(() => validateProfilesOverride({ agents: { finder: { model: 42 } } })).toThrow(
 			/agents\.finder\.model: invalid model id 42/,
 		);
 	});
 
 	it("rejects bad reasoning levels", () => {
-		expect(() =>
-			validateProfilesOverride({ modes: { medium: { reasoning: "ultra" } } }),
-		).toThrow(
+		expect(() => validateProfilesOverride({ modes: { medium: { reasoning: "ultra" } } })).toThrow(
 			/modes\.medium\.reasoning: invalid reasoning level "ultra" \(expected off, minimal, low, medium, high, xhigh\)/,
 		);
 	});
@@ -204,9 +202,7 @@ describe("mergeProfiles", () => {
 			model: "anthropic/claude-opus-4-6",
 			reasoning: "high",
 		});
-		expect(resolveAgentRoute(merged, "task", "low")).toEqual(
-			resolveAgentRoute(BUILTIN_PROFILES, "task", "low"),
-		);
+		expect(resolveAgentRoute(merged, "task", "low")).toEqual(resolveAgentRoute(BUILTIN_PROFILES, "task", "low"));
 		expect(merged.agents.oracle).toEqual(BUILTIN_PROFILES.agents.oracle);
 	});
 

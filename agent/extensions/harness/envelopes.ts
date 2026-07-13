@@ -27,7 +27,8 @@ export function parseEnvelope(value: string): ParsedEnvelope | undefined {
 	const sessionID = attribute("sessionID");
 	if (sessionID === undefined) return undefined;
 	const tag = match[1] as EnvelopeTag;
-	if (!["finder_result", "librarian_result", "oracle_result", "task_result", "task_error"].includes(tag)) return undefined;
+	if (!["finder_result", "librarian_result", "oracle_result", "task_result", "task_error"].includes(tag))
+		return undefined;
 	const title = attribute("title");
 	const common = { sessionID: decodeAttribute(sessionID), content: match[3] };
 	if (tag === "finder_result") {
@@ -40,8 +41,6 @@ export function parseEnvelope(value: string): ParsedEnvelope | undefined {
 
 export function buildEnvelope(input: EnvelopeInput): string {
 	const tag = input.kind === "task_error" ? input.kind : `${input.kind}_result`;
-	const title = input.kind === "finder"
-		? ` title="${escapeAttribute(input.title)}"`
-		: "";
+	const title = input.kind === "finder" ? ` title="${escapeAttribute(input.title)}"` : "";
 	return `<${tag}${title} sessionID="${escapeAttribute(input.sessionID)}">\n${input.content}\n</${tag}>`;
 }

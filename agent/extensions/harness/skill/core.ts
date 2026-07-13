@@ -5,9 +5,10 @@
  * here so it's unit-testable: trigger matching, directive construction,
  * miss-path ranking, skill content rendering, resources listing.
  */
-import { fuzzyFilter } from "@earendil-works/pi-tui";
-import { readFileSync, readdirSync } from "node:fs";
+
+import { type Dirent, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import { fuzzyFilter } from "@earendil-works/pi-tui";
 
 const MAX_LISTED_FILES = 20;
 const SKIP_DIRS = new Set(["node_modules", "__pycache__"]);
@@ -39,10 +40,7 @@ export function buildSkillRefPattern(names: readonly string[]): RegExp | null {
 		.sort((a, b) => b.length - a.length)
 		.map((name) => name.replace(/[\\^$.*+?()[\]{}|-]/g, "\\$&"))
 		.join("|");
-	return new RegExp(
-		`(?<=^|[\\s([{"'\`])${TRIGGER_CLASS}(${alternatives})(?![\\w/-]|\\.\\w)`,
-		"gm",
-	);
+	return new RegExp(`(?<=^|[\\s([{"'\`])${TRIGGER_CLASS}(${alternatives})(?![\\w/-]|\\.\\w)`, "gm");
 }
 
 /** All distinct skill names referenced in a prompt, in first-occurrence order. */
@@ -99,7 +97,7 @@ export function listSkillFiles(baseDir: string): { files: string[]; truncated: b
 	let truncated = false;
 	const walk = (dir: string): void => {
 		if (truncated) return;
-		let entries;
+		let entries: Dirent[];
 		try {
 			entries = readdirSync(dir, { withFileTypes: true });
 		} catch {

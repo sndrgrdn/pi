@@ -14,7 +14,7 @@ import { getAgentDir, getShellConfig } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { appendStatus, bashToolBase, formatShellOutput, UPDATE_THROTTLE_MS } from "./output.ts";
 import {
-	BackgroundShellRegistry,
+	type BackgroundShellRegistry,
 	clampTimeoutMs,
 	DEFAULT_TIMEOUT_MS,
 	killProcessTree,
@@ -23,7 +23,9 @@ import {
 } from "./registry.ts";
 
 const schema = Type.Object({
-	command: Type.String({ description: "The shell command to execute. Do not use cd — use the workdir parameter instead." }),
+	command: Type.String({
+		description: "The shell command to execute. Do not use cd — use the workdir parameter instead.",
+	}),
 	workdir: Type.Optional(
 		Type.String({ description: "Working directory to run the command in. Defaults to the session cwd." }),
 	),
@@ -191,7 +193,10 @@ export function createShellCommandTool(registry: BackgroundShellRegistry): ToolD
 		// Pi bash TUI verbatim: delegate to the builtin renderers, mapping args.
 		renderCall(args: ShellCommandParams | undefined, theme, context) {
 			const mapped = args
-				? { command: args.command, timeout: args.timeout_ms !== undefined ? clampTimeoutMs(args.timeout_ms) / 1000 : undefined }
+				? {
+						command: args.command,
+						timeout: args.timeout_ms !== undefined ? clampTimeoutMs(args.timeout_ms) / 1000 : undefined,
+					}
 				: args;
 			return bashToolBase.renderCall?.(mapped as any, theme, context as any);
 		},

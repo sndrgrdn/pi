@@ -4,8 +4,8 @@
  * replacement fixtures from `lib.rs` compute_replacements tests.
  */
 import { describe, expect, it } from "vitest";
-import type { UpdateChunk } from "./parser.ts";
 import { computeReplacements, deriveNewContents, seekSequence } from "./matcher.ts";
+import type { UpdateChunk } from "./parser.ts";
 
 const chunk = (partial: Partial<UpdateChunk>): UpdateChunk => ({
 	changeContext: undefined,
@@ -84,9 +84,7 @@ describe("computeReplacements", () => {
 
 	it("anchors *** End of File chunks at EOF", () => {
 		const lines = ["x", "tail", "y", "tail"];
-		const result = computeReplacements(lines, [
-			chunk({ oldLines: ["tail"], newLines: ["TAIL"], isEndOfFile: true }),
-		]);
+		const result = computeReplacements(lines, [chunk({ oldLines: ["tail"], newLines: ["TAIL"], isEndOfFile: true })]);
 		expect(result.replacements).toEqual([{ index: 3, oldLen: 1, newLines: ["TAIL"] }]);
 	});
 

@@ -14,11 +14,11 @@ import type { CustomEntry, ExtensionAPI, ExtensionContext } from "@earendil-work
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import {
 	DEFAULT_MODE,
+	isMode,
+	loadProfiles,
 	MODES,
 	type Mode,
 	type ResolvedProfiles,
-	isMode,
-	loadProfiles,
 	resolveAgentRoute,
 	resolveMainRoute,
 	selectPosture,
@@ -44,14 +44,12 @@ export function pickInitialMode(recorded: unknown, global: unknown): Mode | null
  * selector), derived from the loaded Profiles so overrides never go stale.
  */
 export function describeModeCommand(profiles: ResolvedProfiles): string {
-	const fmt = (r: { model: string; reasoning: string }) =>
-		`${r.model.split("/").pop()}/${r.reasoning}`;
+	const fmt = (r: { model: string; reasoning: string }) => `${r.model.split("/").pop()}/${r.reasoning}`;
 	const perMode = (route: (m: Mode) => { model: string; reasoning: string }) =>
 		MODES.map((m) => fmt(route(m))).join(" · ");
 	// Finder/Librarian are Mode-invariant by schema (flat overrides only), so
 	// one Mode's route describes all three.
-	const flat = (agent: "finder" | "librarian") =>
-		fmt(resolveAgentRoute(profiles, agent, DEFAULT_MODE));
+	const flat = (agent: "finder" | "librarian") => fmt(resolveAgentRoute(profiles, agent, DEFAULT_MODE));
 	return (
 		`Switch Mode (${MODES.join("/")}). Routes — ` +
 		`Main: ${perMode((m) => resolveMainRoute(profiles, m))}; ` +

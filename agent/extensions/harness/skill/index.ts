@@ -22,23 +22,20 @@
  * extendable, so active-skill recording falls back to plain V1 behavior
  * (noted in docs/pi-harness-v2-checklist.md Phase 3).
  */
+
+import { dirname } from "node:path";
 import type { ExtensionAPI, Skill } from "@earendil-works/pi-coding-agent";
 import { formatSkillsForPrompt } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
-import type {
-	AutocompleteItem,
-	AutocompleteProvider,
-	AutocompleteSuggestions,
-} from "@earendil-works/pi-tui";
+import type { AutocompleteItem, AutocompleteProvider, AutocompleteSuggestions } from "@earendil-works/pi-tui";
 import { fuzzyFilter, Text } from "@earendil-works/pi-tui";
-import { dirname } from "node:path";
+import { Type } from "typebox";
 import {
 	availableSkillsBlock,
 	buildDirective,
 	extractSkillRefs,
 	renderSkillContent,
-	TRIGGER_CLASS,
 	type SkillEntry,
+	TRIGGER_CLASS,
 } from "./core.ts";
 
 export default function skillTool(pi: ExtensionAPI): void {
@@ -138,9 +135,7 @@ export default function skillTool(pi: ExtensionAPI): void {
 				text.setText("");
 				return text;
 			}
-			const output =
-				result.content.find((c): c is { type: "text"; text: string } => c.type === "text")
-					?.text ?? "";
+			const output = result.content.find((c): c is { type: "text"; text: string } => c.type === "text")?.text ?? "";
 			const lines = output.split("\n");
 			text.setText(`\n${lines.map((line) => theme.fg("toolOutput", line)).join("\n")}`);
 			return text;
@@ -183,9 +178,7 @@ export default function skillTool(pi: ExtensionAPI): void {
 
 	pi.on("session_start", (_event, ctx) => {
 		refreshSkillsFromCommands();
-		ctx.ui.addAutocompleteProvider((current) =>
-			createSkillRefProvider(current, () => [...skillsByName.values()]),
-		);
+		ctx.ui.addAutocompleteProvider((current) => createSkillRefProvider(current, () => [...skillsByName.values()]));
 	});
 
 	pi.on("resources_discover", () => {
@@ -210,10 +203,7 @@ export default function skillTool(pi: ExtensionAPI): void {
 
 // ── Autocomplete ──────────────────────────────────────────────────
 
-function createSkillRefProvider(
-	current: AutocompleteProvider,
-	getSkills: () => SkillEntry[],
-): AutocompleteProvider {
+function createSkillRefProvider(current: AutocompleteProvider, getSkills: () => SkillEntry[]): AutocompleteProvider {
 	const tokenPattern = new RegExp(`(?:^|\\s)(${TRIGGER_CLASS})([\\w-]*)$`);
 	return {
 		// The editor blacklists "/" as a custom trigger char, so only "$"
@@ -221,12 +211,7 @@ function createSkillRefProvider(
 		// (the editor calls the provider regardless of trigger chars then).
 		triggerCharacters: ["$"],
 
-		async getSuggestions(
-			lines,
-			cursorLine,
-			cursorCol,
-			options,
-		): Promise<AutocompleteSuggestions | null> {
+		async getSuggestions(lines, cursorLine, cursorCol, options): Promise<AutocompleteSuggestions | null> {
 			const line = lines[cursorLine] ?? "";
 			const beforeCursor = line.slice(0, cursorCol);
 			// The editor only triggers after whitespace/line-start (its own
@@ -245,13 +230,11 @@ function createSkillRefProvider(
 			if (trigger === "/" && cursorLine === 0 && tokenStart === 0) {
 				return current.getSuggestions(lines, cursorLine, cursorCol, options);
 			}
-			const items: AutocompleteItem[] = fuzzyFilter(getSkills(), query, (s) => s.name).map(
-				(s) => ({
-					value: `${trigger}${s.name}`,
-					label: `${trigger}${s.name}`,
-					description: s.description,
-				}),
-			);
+			const items: AutocompleteItem[] = fuzzyFilter(getSkills(), query, (s) => s.name).map((s) => ({
+				value: `${trigger}${s.name}`,
+				label: `${trigger}${s.name}`,
+				description: s.description,
+			}));
 
 			if (items.length === 0) {
 				return current.getSuggestions(lines, cursorLine, cursorCol, options);

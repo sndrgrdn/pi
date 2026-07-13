@@ -4,7 +4,7 @@
  * `streaming_parser.rs`.
  */
 import { describe, expect, it } from "vitest";
-import { parsePatch, PatchParseError } from "./parser.ts";
+import { PatchParseError, parsePatch } from "./parser.ts";
 
 describe("parsePatch — accept table", () => {
 	it("parses an empty patch", () => {

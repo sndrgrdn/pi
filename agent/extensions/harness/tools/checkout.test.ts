@@ -37,7 +37,9 @@ describe("checkout cache", () => {
 	});
 
 	it("rejects ambiguous and missing bare names loudly", async () => {
-		const ambiguous = new CheckoutCache(operations({ findCachedRepositories: () => ["/a/org/widgets", "/b/org/widgets"] }));
+		const ambiguous = new CheckoutCache(
+			operations({ findCachedRepositories: () => ["/a/org/widgets", "/b/org/widgets"] }),
+		);
 		await expect(ambiguous.checkout("widgets")).rejects.toThrow("/a/org/widgets\n/b/org/widgets");
 		const missing = new CheckoutCache(operations());
 		await expect(missing.checkout("widgets")).rejects.toThrow("owner/repo");

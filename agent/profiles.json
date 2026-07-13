@@ -9,8 +9,8 @@
 			"reasoning": "medium"
 		},
 		"high": {
-			"model": "openai-codex/gpt-5.6-sol",
-			"reasoning": "xhigh"
+			"model": "anthropic/claude-fable-5",
+			"reasoning": "high"
 		}
 	},
 	"agents": {
@@ -32,7 +32,7 @@
 				"reasoning": "high"
 			},
 			"high": {
-				"model": "anthropic/claude-fable-5",
+				"model": "openai-codex/gpt-5.6-sol",
 				"reasoning": "high"
 			}
 		},

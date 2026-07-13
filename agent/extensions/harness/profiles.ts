@@ -159,11 +159,7 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 	const errors: string[] = [];
 	const fail = (path: string, why: string) => errors.push(`${path}: ${why}`);
 
-	const parseRouteFields = (
-		path: string,
-		value: unknown,
-		allowed: readonly string[],
-	): ModeOverride => {
+	const parseRouteFields = (path: string, value: unknown, allowed: readonly string[]): ModeOverride => {
 		const out: ModeOverride = {};
 		if (!isPlainObject(value)) {
 			fail(path, "expected an object");
@@ -242,17 +238,19 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 							if (!isMode(route)) {
 								fail(`agents.${agent}`, `unknown route "${route}" (expected ${MODES.join(", ")})`);
 							} else {
-								routes[route] = parseRouteFields(`agents.${agent}.${route}`, routeValue, ["model", "reasoning"]);
+								routes[route] = parseRouteFields(`agents.${agent}.${route}`, routeValue, [
+									"model",
+									"reasoning",
+								]);
 							}
 						}
 						parsed.agents[agent as "oracle" | "task"] = routes;
 					}
 				} else {
-					parsed.agents[agent as "finder" | "librarian"] = parseRouteFields(
-						`agents.${agent}`,
-						value,
-						["model", "reasoning"],
-					);
+					parsed.agents[agent as "finder" | "librarian"] = parseRouteFields(`agents.${agent}`, value, [
+						"model",
+						"reasoning",
+					]);
 				}
 			}
 		}
@@ -282,9 +280,7 @@ function mergePerRoute(
 }
 
 /** A flat (Mode-invariant) agent override applies under every Mode. */
-function flatOverride(
-	override: RouteOverride | undefined,
-): Partial<Record<Mode, RouteOverride>> | undefined {
+function flatOverride(override: RouteOverride | undefined): Partial<Record<Mode, RouteOverride>> | undefined {
 	return override ? { low: override, medium: override, high: override } : undefined;
 }
 

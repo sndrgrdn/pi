@@ -4,15 +4,21 @@ import { Type } from "typebox";
 
 const schema = Type.Object({
 	path: Type.String({ description: "Path to a file (relative or absolute)." }),
-	offset: Type.Optional(Type.Number({ description: "Start from this line/entry number (1-indexed). Use to continue after truncation." })),
-	limit: Type.Optional(Type.Number({ description: "Maximum lines or entries to return. Prefer larger windows over tiny repeated chunks." })),
+	offset: Type.Optional(
+		Type.Number({ description: "Start from this line/entry number (1-indexed). Use to continue after truncation." }),
+	),
+	limit: Type.Optional(
+		Type.Number({
+			description: "Maximum lines or entries to return. Prefer larger windows over tiny repeated chunks.",
+		}),
+	),
 });
 
 const description = [
 	"Read the contents of a file.",
 	"Supports text files and images (jpg, png, gif, webp). Images are sent as attachments.",
 	`Output truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB.`,
-	"Use offset/limit for large files; continue with offset until complete when needed."
+	"Use offset/limit for large files; continue with offset until complete when needed.",
 ].join(" ");
 
 export function createHarnessReadTool(): ToolDefinition<any, any, any> {

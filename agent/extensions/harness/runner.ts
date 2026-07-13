@@ -1,14 +1,14 @@
+import { join } from "node:path";
 import type { Model } from "@earendil-works/pi-ai";
 import {
 	AuthStorage,
+	type CreateAgentSessionOptions,
 	createAgentSession,
 	getAgentDir,
 	ModelRegistry,
 	SessionManager,
-	type CreateAgentSessionOptions,
 	type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { join } from "node:path";
 import type { AgentDefinition } from "./registry.ts";
 import { BackgroundShellRegistry } from "./shell/registry.ts";
 import { withShellRegistry } from "./shell/session-registry.ts";
@@ -24,13 +24,23 @@ export interface ChildSession {
 	toolLog(): ToolLogEntry[];
 }
 
-export interface ToolLogEntry { id: string; tool: string; input: Record<string, unknown>; output?: string; isError?: boolean }
+export interface ToolLogEntry {
+	id: string;
+	tool: string;
+	input: Record<string, unknown>;
+	output?: string;
+	isError?: boolean;
+}
 
 export class SubagentRunError extends Error {
 	readonly kind = "child_failure";
-	constructor(readonly sessionID: string, readonly toolLog: ToolLogEntry[], cause: unknown) {
+	readonly sessionID: string;
+	readonly toolLog: ToolLogEntry[];
+	constructor(sessionID: string, toolLog: ToolLogEntry[], cause: unknown) {
 		super(cause instanceof Error ? cause.message : String(cause), { cause });
 		this.name = cause instanceof Error ? cause.name : "SubagentRunError";
+		this.sessionID = sessionID;
+		this.toolLog = toolLog;
 	}
 }
 
@@ -66,7 +76,10 @@ function annotateFailure(error: unknown, child: ChildSession | undefined): Error
 }
 
 export class SubagentRunner {
-	constructor(private readonly createChild: ChildSessionFactory = createSdkChildSession) {}
+	private readonly createChild: ChildSessionFactory;
+	constructor(createChild: ChildSessionFactory = createSdkChildSession) {
+		this.createChild = createChild;
+	}
 
 	async run<T>(options: RunOptions<T>): Promise<string> {
 		if (options.signal?.aborted) throw abortError();
@@ -149,17 +162,22 @@ export async function createSdkChildSession(config: ChildSessionConfig): Promise
 	session.agent.state.systemPrompt = config.definition.systemPrompt;
 	const toolLog: ToolLogEntry[] = [];
 	const unsubscribeLog = session.subscribe((event) => {
-		if (event.type === "tool_execution_start") toolLog.push({ id: event.toolCallId, tool: event.toolName, input: event.args });
+		if (event.type === "tool_execution_start")
+			toolLog.push({ id: event.toolCallId, tool: event.toolName, input: event.args });
 		if (event.type === "tool_execution_end") {
 			const pending = toolLog.find((entry) => entry.id === event.toolCallId);
 			if (!pending) throw new Error(`tool log invariant failed: no start event for ${event.toolCallId}`);
 			{
 				const content = event.result?.content;
-				pending.output = typeof event.result === "string"
-					? event.result
-					: Array.isArray(content)
-						? content.filter((part): part is { type: "text"; text: string } => part.type === "text").map((part) => part.text).join("\n")
-						: "";
+				pending.output =
+					typeof event.result === "string"
+						? event.result
+						: Array.isArray(content)
+							? content
+									.filter((part): part is { type: "text"; text: string } => part.type === "text")
+									.map((part) => part.text)
+									.join("\n")
+							: "";
 				pending.isError = event.isError === true;
 			}
 		}
@@ -174,10 +192,14 @@ export async function createSdkChildSession(config: ChildSessionConfig): Promise
 			return message;
 		},
 		abort: () => session.abort(),
-		dispose: () => { unsubscribeLog(); session.dispose(); },
+		dispose: () => {
+			unsubscribeLog();
+			session.dispose();
+		},
 		toolLog: () => structuredClone(toolLog),
-		onAction: (listener) => session.subscribe((event) => {
-			if (event.type === "tool_execution_start") listener(event.toolName);
-		}),
+		onAction: (listener) =>
+			session.subscribe((event) => {
+				if (event.type === "tool_execution_start") listener(event.toolName);
+			}),
 	};
 }

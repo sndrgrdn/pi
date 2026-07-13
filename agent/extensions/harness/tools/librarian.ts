@@ -8,16 +8,22 @@ import type { ResolvedProfiles } from "../profiles.ts";
 import { resolveAgentRoute } from "../profiles.ts";
 import { AGENT_TOOLBOX_MATRIX, resolveAgentDefinition } from "../registry.ts";
 import type { SubagentRunner } from "../runner.ts";
-import { createSubagentRenderer } from "../ui/subagent.ts";
-import { createCheckoutTool } from "./checkout.ts";
+import { createShellCancelTool } from "../shell/cancel.ts";
 import { createShellCommandTool } from "../shell/command.ts";
 import { createShellStatusTool } from "../shell/status.ts";
-import { createShellCancelTool } from "../shell/cancel.ts";
+import { createSubagentRenderer } from "../ui/subagent.ts";
+import { createCheckoutTool } from "./checkout.ts";
 
-const prompt = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "agents", "prompts", "librarian.md"), "utf8").trim();
+const prompt = readFileSync(
+	join(dirname(fileURLToPath(import.meta.url)), "..", "agents", "prompts", "librarian.md"),
+	"utf8",
+).trim();
 const renderer = createSubagentRenderer({ running: "Librarian researching", complete: "Librarian researched" });
 
-export interface LibrarianInput { query: string; context?: string }
+export interface LibrarianInput {
+	query: string;
+	context?: string;
+}
 
 export function librarianMessage(input: LibrarianInput): string {
 	return input.context ? `Context: ${input.context}\n\nQuery: ${input.query}` : `Query: ${input.query}`;
@@ -31,13 +37,19 @@ export function mapLibrarianError(error: unknown): Error {
 	return resolved;
 }
 
-export function createLibrarianTool(runner: Pick<SubagentRunner, "run">, profiles: ResolvedProfiles): ToolDefinition<any, any, any> {
+export function createLibrarianTool(
+	runner: Pick<SubagentRunner, "run">,
+	profiles: ResolvedProfiles,
+): ToolDefinition<any, any, any> {
 	const toolbox = AGENT_TOOLBOX_MATRIX.librarian;
-	const definition = resolveAgentDefinition({
-		key: "librarian",
-		systemPrompt: prompt,
-		...toolbox,
-	}, resolveAgentRoute(profiles, "librarian", "medium"));
+	const definition = resolveAgentDefinition(
+		{
+			key: "librarian",
+			systemPrompt: prompt,
+			...toolbox,
+		},
+		resolveAgentRoute(profiles, "librarian", "medium"),
+	);
 	return {
 		name: "librarian",
 		label: "librarian",
@@ -47,10 +59,16 @@ export function createLibrarianTool(runner: Pick<SubagentRunner, "run">, profile
 			context: Type.Optional(Type.String({ description: "Relevant context prepended to the research query." })),
 		}),
 		async execute(_id, params: LibrarianInput, signal, onUpdate, ctx) {
-			onUpdate?.({ content: [{ type: "text", text: `Librarian researching — ${params.query}` }], details: { state: "running", query: params.query } });
+			onUpdate?.({
+				content: [{ type: "text", text: `Librarian researching — ${params.query}` }],
+				details: { state: "running", query: params.query },
+			});
 			try {
 				const envelope = await runner.run({
-					definition, cwd: ctx.cwd, input: params, signal,
+					definition,
+					cwd: ctx.cwd,
+					input: params,
+					signal,
 					toolbox: (processes) => [
 						createCheckoutTool(),
 						createShellCommandTool(processes),
@@ -61,7 +79,9 @@ export function createLibrarianTool(runner: Pick<SubagentRunner, "run">, profile
 					wrapResult: (sessionID, content) => buildEnvelope({ kind: "librarian", sessionID, content }),
 				});
 				return { content: [{ type: "text", text: envelope }], details: { state: "complete" } };
-			} catch (error) { throw mapLibrarianError(error); }
+			} catch (error) {
+				throw mapLibrarianError(error);
+			}
 		},
 		renderCall(args: LibrarianInput | undefined, theme, context) {
 			return renderer.renderCall({ detail: args?.query }, theme, context);

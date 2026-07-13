@@ -13,8 +13,8 @@
  * https://github.com/picassio/pi-cc-patch
  */
 
-import { createHash } from "crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { createHash } from "crypto";
 
 const CLAUDE_CODE_VERSION = "2.1.160";
 const FINGERPRINT_SALT = "59cf53e54c78";
@@ -76,7 +76,10 @@ export default function (pi: ExtensionAPI) {
 			});
 
 			for (const block of payload.system) {
-				if (block.type !== "text" || !block.text) { newBlocks.push(block); continue; }
+				if (block.type !== "text" || !block.text) {
+					newBlocks.push(block);
+					continue;
+				}
 				if (block.text.startsWith("x-anthropic-billing-header")) continue;
 				if (block.text.startsWith("You are") && block.text.includes("official CLI")) continue;
 

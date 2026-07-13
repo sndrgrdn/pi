@@ -54,7 +54,10 @@ export interface AppliedFile {
 	removed: number;
 }
 
-function diffFields(originalLines: string[], replacements: Replacement[]): Pick<AppliedFile, "diff" | "added" | "removed"> {
+function diffFields(
+	originalLines: string[],
+	replacements: Replacement[],
+): Pick<AppliedFile, "diff" | "added" | "removed"> {
 	return { diff: buildDisplayDiff(originalLines, replacements), ...countChanges(replacements) };
 }
 
@@ -81,7 +84,11 @@ const resolvePath = (cwd: string, path: string): string => (isAbsolute(path) ? p
  * Throws with the collected preflight error catalog, or — after a mid-write
  * failure — with a wholly-failed report (honest caveat if rollback fails).
  */
-export async function applyPatch(patch: string, cwd: string, ops: PatchFsOps = defaultFsOps): Promise<ApplyPatchResult> {
+export async function applyPatch(
+	patch: string,
+	cwd: string,
+	ops: PatchFsOps = defaultFsOps,
+): Promise<ApplyPatchResult> {
 	const hunks = parsePatch(patch); // parse failure alone is fail-fast
 	if (hunks.length === 0) throw new Error("No files were modified.");
 
@@ -148,10 +155,12 @@ export async function applyPatch(patch: string, cwd: string, ops: PatchFsOps = d
 					break;
 				}
 				const oldContents = await ops.readFile(absPath);
-				const { newContents, errors: matchErrors, originalLines, replacements } = deriveNewContents(
-					oldContents,
-					hunk.chunks,
-				);
+				const {
+					newContents,
+					errors: matchErrors,
+					originalLines,
+					replacements,
+				} = deriveNewContents(oldContents, hunk.chunks);
 				if (matchErrors.length > 0 || newContents === undefined) {
 					errors.push(...matchErrors.map((message) => `${hunk.path}: ${message}`));
 					break;

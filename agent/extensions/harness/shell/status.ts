@@ -115,7 +115,10 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 				}
 
 				if (!record.exited) {
-					return { content: [{ type: "text", text: appendStatus(text, `${record.id} · still running`) }], details };
+					return {
+						content: [{ type: "text", text: appendStatus(text, `${record.id} · still running`) }],
+						details,
+					};
 				}
 
 				// Completing read: report exit exactly once, forget the record.

@@ -29,10 +29,7 @@ describe("skill trigger matcher", () => {
 	});
 
 	it("collects multiple distinct refs, deduplicated", () => {
-		expect(extractSkillRefs("$tdd then /deslop then $tdd again", names)).toEqual([
-			"tdd",
-			"deslop",
-		]);
+		expect(extractSkillRefs("$tdd then /deslop then $tdd again", names)).toEqual(["tdd", "deslop"]);
 	});
 
 	it("guards against path fragments", () => {
@@ -108,19 +105,12 @@ describe("availableSkillsBlock", () => {
 	it("lists all names, fuzzy-ranked by the attempted name", () => {
 		const block = availableSkillsBlock(["deslop", "tdd"], "tdd");
 		expect(block).toBe(
-			[
-				"<available_skills>",
-				"  <skill>tdd</skill>",
-				"  <skill>deslop</skill>",
-				"</available_skills>",
-			].join("\n"),
+			["<available_skills>", "  <skill>tdd</skill>", "  <skill>deslop</skill>", "</available_skills>"].join("\n"),
 		);
 	});
 
 	it("handles the empty corpus", () => {
-		expect(availableSkillsBlock([], "x")).toBe(
-			"<available_skills>(none)</available_skills>",
-		);
+		expect(availableSkillsBlock([], "x")).toBe("<available_skills>(none)</available_skills>");
 	});
 });
 
@@ -148,12 +138,7 @@ describe("listSkillFiles", () => {
 	});
 
 	it("skips dotfiles, node_modules and __pycache__", () => {
-		setup([
-			".hidden",
-			"node_modules/pkg/index.js",
-			"__pycache__/mod.pyc",
-			"kept.md",
-		]);
+		setup([".hidden", "node_modules/pkg/index.js", "__pycache__/mod.pyc", "kept.md"]);
 		expect(listSkillFiles(dir).files).toEqual(["kept.md"]);
 	});
 

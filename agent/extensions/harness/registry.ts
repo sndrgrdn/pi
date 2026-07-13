@@ -14,7 +14,17 @@ export const AGENT_TOOLBOX_MATRIX = {
 		allowMcp: false,
 	},
 	librarian: {
-		tools: ["checkout", "grep", "find", "read", "shell_command", "shell_command_status", "shell_command_cancel", "web_search_exa", "web_fetch_exa"],
+		tools: [
+			"checkout",
+			"grep",
+			"find",
+			"read",
+			"shell_command",
+			"shell_command_status",
+			"shell_command_cancel",
+			"web_search_exa",
+			"web_fetch_exa",
+		],
 		allowMcp: false,
 	},
 	oracle: {
@@ -22,7 +32,16 @@ export const AGENT_TOOLBOX_MATRIX = {
 		allowMcp: false,
 	},
 	task: {
-		tools: ["shell_command", "shell_command_status", "shell_command_cancel", "read", "apply_patch", "skill", "finder", "librarian"],
+		tools: [
+			"shell_command",
+			"shell_command_status",
+			"shell_command_cancel",
+			"read",
+			"apply_patch",
+			"skill",
+			"finder",
+			"librarian",
+		],
 		allowMcp: true,
 	},
 } as const satisfies Record<AgentKey, AgentToolboxDefinition>;

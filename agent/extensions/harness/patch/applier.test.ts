@@ -3,7 +3,7 @@
  * rollback; collect-all preflight errors; move + parent-dir creation;
  * cwd-relative and absolute path handling; A/M/D summary.
  */
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -42,9 +42,7 @@ describe("applyPatch — happy path", () => {
 			cwd,
 		);
 
-		expect(result.summary).toBe(
-			"Success. Updated the following files:\nA sub/add.txt\nM update.txt\nD delete.txt",
-		);
+		expect(result.summary).toBe("Success. Updated the following files:\nA sub/add.txt\nM update.txt\nD delete.txt");
 		expect(readFileSync(join(cwd, "sub/add.txt"), "utf8")).toBe("hello\n");
 		expect(readFileSync(join(cwd, "update.txt"), "utf8")).toBe("keep\nnew\n");
 		expect(existsSync(join(cwd, "delete.txt"))).toBe(false);
@@ -119,10 +117,9 @@ describe("applyPatch — preflight errors (collect-all)", () => {
 	it("reports failed-to-find with the expected lines", async () => {
 		const cwd = makeCwd();
 		writeFileSync(join(cwd, "f.txt"), "actual\n");
-		const error = await applyPatch(
-			wrap(["*** Update File: f.txt", "@@", "-not here", "+x"].join("\n")),
-			cwd,
-		).catch((e: unknown) => e as Error);
+		const error = await applyPatch(wrap(["*** Update File: f.txt", "@@", "-not here", "+x"].join("\n")), cwd).catch(
+			(e: unknown) => e as Error,
+		);
 		expect((error as Error).message).toContain("f.txt: failed to find expected lines:\nnot here");
 	});
 

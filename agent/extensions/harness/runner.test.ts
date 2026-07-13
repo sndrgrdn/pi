@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
 import type { Model } from "@earendil-works/pi-ai";
-import type { AgentDefinition } from "./registry.ts";
-import { resolveConfiguredModel, SubagentRunner, type ChildSession } from "./runner.ts";
-import { BackgroundShellRegistry } from "./shell/registry.ts";
+import { describe, expect, it, vi } from "vitest";
 import { buildEnvelope } from "./envelopes.ts";
+import type { AgentDefinition } from "./registry.ts";
+import { type ChildSession, resolveConfiguredModel, SubagentRunner } from "./runner.ts";
+import { BackgroundShellRegistry } from "./shell/registry.ts";
 
 const definition: AgentDefinition = {
 	key: "oracle",
@@ -50,23 +50,36 @@ describe("shared subagent runner", () => {
 	});
 
 	it("kills child processes after a hard error", async () => {
-		const child = fakeChild(async () => { throw new Error("provider failed"); });
+		const child = fakeChild(async () => {
+			throw new Error("provider failed");
+		});
 		const runner = new SubagentRunner(async () => child);
 
-		await expect(runner.run({ definition, cwd: "/tmp", input: "x", mapInput: String, wrapResult: () => "unused" }))
-			.rejects.toThrow("provider failed");
+		await expect(
+			runner.run({ definition, cwd: "/tmp", input: "x", mapInput: String, wrapResult: () => "unused" }),
+		).rejects.toThrow("provider failed");
 		expect(child.processes.killAll).toHaveBeenCalledOnce();
 	});
 
 	it("cascades parent abort without returning a partial envelope", async () => {
 		const controller = new AbortController();
 		let rejectPrompt!: (error: Error) => void;
-		const child = fakeChild(() => new Promise<void>((_, reject) => { rejectPrompt = reject; }));
+		const child = fakeChild(
+			() =>
+				new Promise<void>((_, reject) => {
+					rejectPrompt = reject;
+				}),
+		);
 		vi.mocked(child.abort).mockImplementation(async () => rejectPrompt(new Error("aborted")));
 		const runner = new SubagentRunner(async () => child);
 
 		const running = runner.run({
-			definition, cwd: "/tmp", input: "x", mapInput: String, wrapResult: () => "unused", signal: controller.signal,
+			definition,
+			cwd: "/tmp",
+			input: "x",
+			mapInput: String,
+			wrapResult: () => "unused",
+			signal: controller.signal,
 		});
 		await Promise.resolve();
 		controller.abort();
@@ -80,13 +93,19 @@ describe("shared subagent runner", () => {
 		const controller = new AbortController();
 		const child = fakeChild(vi.fn(async () => {}));
 		let finishCreate!: () => void;
-		const create = () => new Promise<ChildSession>((resolve) => {
-			finishCreate = () => resolve(child);
-		});
+		const create = () =>
+			new Promise<ChildSession>((resolve) => {
+				finishCreate = () => resolve(child);
+			});
 		const runner = new SubagentRunner(create);
 
 		const running = runner.run({
-			definition, cwd: "/tmp", input: "x", mapInput: String, wrapResult: () => "unused", signal: controller.signal,
+			definition,
+			cwd: "/tmp",
+			input: "x",
+			mapInput: String,
+			wrapResult: () => "unused",
+			signal: controller.signal,
 		});
 		controller.abort();
 		finishCreate();
@@ -98,21 +117,23 @@ describe("shared subagent runner", () => {
 	});
 
 	it("keeps concurrent calls isolated on one runner instance", async () => {
-		const children = [
-			fakeChild(vi.fn(async () => {})),
-			fakeChild(vi.fn(async () => {})),
-		];
+		const children = [fakeChild(vi.fn(async () => {})), fakeChild(vi.fn(async () => {}))];
 		children[0]!.sessionID = "child-a";
 		children[1]!.sessionID = "child-b";
 		const allChildren = [...children];
 		const runner = new SubagentRunner(vi.fn(async () => children.shift()!));
-		const run = (input: string) => runner.run({
-			definition, cwd: "/tmp", input, mapInput: String,
-			wrapResult: (sessionID, content) => `${sessionID}:${content}`,
-		});
+		const run = (input: string) =>
+			runner.run({
+				definition,
+				cwd: "/tmp",
+				input,
+				mapInput: String,
+				wrapResult: (sessionID, content) => `${sessionID}:${content}`,
+			});
 
 		await expect(Promise.all([run("a"), run("b")])).resolves.toEqual([
-			"child-a:Final advice", "child-b:Final advice",
+			"child-a:Final advice",
+			"child-b:Final advice",
 		]);
 		for (const child of allChildren) expect(child.processes.killAll).toHaveBeenCalledOnce();
 	});
@@ -128,7 +149,8 @@ describe("resolved child model", () => {
 	});
 
 	it("fails at the boundary for an unconfigured model", () => {
-		expect(() => resolveConfiguredModel({ find: () => undefined }, "custom/missing"))
-			.toThrow('resolved model "custom/missing" is not configured');
+		expect(() => resolveConfiguredModel({ find: () => undefined }, "custom/missing")).toThrow(
+			'resolved model "custom/missing" is not configured',
+		);
 	});
 });

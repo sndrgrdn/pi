@@ -12,7 +12,11 @@ const CONTEXT_LINES = 4;
  * Render the display diff for one file from its original lines and the
  * (ascending, non-overlapping) replacements that were applied to it.
  */
-export function buildDisplayDiff(originalLines: string[], replacements: Replacement[], context = CONTEXT_LINES): string {
+export function buildDisplayDiff(
+	originalLines: string[],
+	replacements: Replacement[],
+	context = CONTEXT_LINES,
+): string {
 	const newTotal = originalLines.length + replacements.reduce((n, r) => n + r.newLines.length - r.oldLen, 0);
 	const width = String(Math.max(originalLines.length, newTotal, 1)).length;
 	const pad = (n: number): string => String(n).padStart(width, " ");

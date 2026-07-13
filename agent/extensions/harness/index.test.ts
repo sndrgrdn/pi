@@ -10,18 +10,19 @@ describe("harness extension entry", () => {
 	it("locks Main to the eleven admitted tools", () => {
 		const setActiveTools = vi.fn();
 		const handlers = new Map<string, (...args: any[]) => unknown>();
-		const pi = new Proxy({
-			setActiveTools,
-			on: vi.fn((event: string, handler: (...args: any[]) => unknown) => handlers.set(event, handler)),
-			events: { emit: vi.fn(), on: vi.fn() },
-			getCommands: () => [],
-		}, {
-			get(target, property) {
-				return property in target
-					? target[property as keyof typeof target]
-					: vi.fn();
+		const pi = new Proxy(
+			{
+				setActiveTools,
+				on: vi.fn((event: string, handler: (...args: any[]) => unknown) => handlers.set(event, handler)),
+				events: { emit: vi.fn(), on: vi.fn() },
+				getCommands: () => [],
 			},
-		}) as unknown as ExtensionAPI;
+			{
+				get(target, property) {
+					return property in target ? target[property as keyof typeof target] : vi.fn();
+				},
+			},
+		) as unknown as ExtensionAPI;
 
 		harness(pi);
 		expect(setActiveTools).not.toHaveBeenCalled();
