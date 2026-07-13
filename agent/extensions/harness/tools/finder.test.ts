@@ -100,6 +100,6 @@ describe("finder tool", () => {
 			{ args: { query: "find auth" }, cwd: "/repo", isError: false, lastComponent: row } as any,
 		);
 		expect(completed).toBe(row);
-		expect(row.render(100).map((line) => line.trimEnd())).toEqual(["✓ finder find auth"]);
+		expect(row.render(100).map((line) => line.trimEnd())).toEqual([" ✓ finder find auth"]);
 	});
 });

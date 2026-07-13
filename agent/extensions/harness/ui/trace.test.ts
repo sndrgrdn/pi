@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
 import {
@@ -39,7 +40,7 @@ describe("Trace renderer", () => {
 			theme,
 			{ args: { command: "echo ok" }, cwd: "/work", isError: state.isError },
 		);
-		expect(lines(component)).toEqual([expected]);
+		expect(lines(component)).toEqual([` ${expected}`]);
 	});
 
 	it("keeps output hidden until expanded", () => {
@@ -49,7 +50,7 @@ describe("Trace renderer", () => {
 			theme,
 			{ args: { command: "printf output" }, cwd: "/work", isError: false },
 		);
-		expect(lines(collapsed)).toEqual(["<success>✓</success> <b>$</b> printf output"]);
+		expect(lines(collapsed)).toEqual([" <success>✓</success> <b>$</b> printf output"]);
 
 		const expanded = renderer.renderResult(
 			{ content: [{ type: "text", text: "first\nsecond" }] },
@@ -58,21 +59,21 @@ describe("Trace renderer", () => {
 			{ args: { command: "printf output" }, cwd: "/work", isError: false },
 		);
 		expect(lines(expanded)).toEqual([
-			"<success>✓</success> <b>$</b> printf output",
-			"<toolOutput>first</toolOutput>",
-			"<toolOutput>second</toolOutput>",
+			" <success>✓</success> <b>$</b> printf output",
+			" <toolOutput>first</toolOutput>",
+			" <toolOutput>second</toolOutput>",
 		]);
 	});
 
-	it("uses the first non-empty command line and shows a material workdir", () => {
+	it("preserves a multiline command and shows a material workdir", () => {
 		const invocation = shellTraceInvocation(
 			{ command: "\n  echo first\necho second", workdir: "/work/app" },
 			"/work",
 		);
-		expect(invocation).toEqual({ action: "$", target: "echo first …", qualifiers: ["in ./app"] });
+		expect(invocation).toEqual({ action: "$", target: "echo first\necho second", qualifiers: ["in ./app"] });
 	});
 
-	it("clips rather than wraps a long collapsed row", () => {
+	it("ends a truncated single-line row with an ellipsis", () => {
 		const plainTheme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
 		const component = renderer.renderResult(
 			{ content: [{ type: "text", text: "hidden" }] },
@@ -83,7 +84,7 @@ describe("Trace renderer", () => {
 		const rendered = component.render(12);
 		expect(rendered).toHaveLength(1);
 		expect(visibleWidth(rendered[0]!)).toBe(12);
-		expect(rendered[0]).toContain("✓ $ echo a v");
+		expect(stripVTControlCharacters(rendered[0]!)).toBe(" ✓ $ echo … ");
 	});
 
 	it("adds mechanical result qualifiers", () => {
@@ -97,7 +98,7 @@ describe("Trace renderer", () => {
 			{ args: { command: "sleep 10" }, cwd: "/work", isError: false },
 		);
 		expect(lines(component)).toEqual([
-			"<success>✓</success> <b>$</b> sleep 10 · <muted>shell-3</muted> · <muted>backgrounded</muted>",
+			" <success>✓</success> <b>$</b> sleep 10 · <muted>shell-3</muted> · <muted>backgrounded</muted>",
 		]);
 	});
 

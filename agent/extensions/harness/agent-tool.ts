@@ -119,6 +119,7 @@ function progressTallies(details: unknown): string[] {
 /** Trace View renderer for a delegated agent call: presentation row, tallies, envelope evidence. */
 function createAgentToolRenderer<TParams>(presentation: AgentToolPresentation<TParams>) {
 	return createTraceRenderer<TParams>({
+		maxRowLines: 3,
 		invocation(params): TraceInvocation {
 			return {
 				action: typeof presentation.action === "function" ? presentation.action(params) : presentation.action,

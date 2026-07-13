@@ -46,7 +46,7 @@ describe("apply_patch tool", () => {
 		);
 
 		expect(renderedLines(component)).toEqual([
-			"<success>✓</success> <b>apply_patch</b> ./src/file.ts · <muted>+2 -1</muted>",
+			" <success>✓</success> <b>apply_patch</b> ./src/file.ts · <muted>+2 -1</muted>",
 		]);
 	});
 
@@ -61,7 +61,7 @@ describe("apply_patch tool", () => {
 		);
 
 		expect(renderedLines(component)).toEqual([
-			"<success>✓</success> <b>apply_patch</b> 2 files · <muted>+1 -0</muted>",
+			" <success>✓</success> <b>apply_patch</b> 2 files · <muted>+1 -0</muted>",
 		]);
 	});
 
@@ -77,7 +77,7 @@ describe("apply_patch tool", () => {
 		);
 
 		expect(renderedLines(component)).toEqual([
-			"<success>✓</success> <b>apply_patch</b> ./file.txt · <muted>+2 -2</muted>",
+			" <success>✓</success> <b>apply_patch</b> ./file.txt · <muted>+2 -2</muted>",
 		]);
 	});
 
@@ -141,11 +141,11 @@ describe("apply_patch tool", () => {
 		const context = { args: { patch }, cwd, isError: true } as any;
 
 		expect(renderedLines(tool.renderResult!(result, { expanded: false, isPartial: false }, theme, context))).toEqual([
-			"<error>✗</error> <b>apply_patch</b> ./nope.txt · <muted>+1 -1</muted>",
+			" <error>✗</error> <b>apply_patch</b> ./nope.txt · <muted>+1 -1</muted>",
 		]);
 		expect(renderedLines(tool.renderResult!(result, { expanded: true, isPartial: false }, theme, context))).toEqual([
-			"<error>✗</error> <b>apply_patch</b> ./nope.txt · <muted>+1 -1</muted>",
-			"<toolOutput>nope.txt: file not found</toolOutput>",
+			" <error>✗</error> <b>apply_patch</b> ./nope.txt · <muted>+1 -1</muted>",
+			" <toolOutput>nope.txt: file not found</toolOutput>",
 		]);
 	});
 

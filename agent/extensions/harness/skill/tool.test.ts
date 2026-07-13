@@ -47,7 +47,7 @@ describe("skill Trace View renderer", () => {
 			trace: { state: "success" },
 		});
 		expect(renderedLines(tool.renderResult!(result, { expanded: false, isPartial: false }, theme, context))).toEqual([
-			"<success>✓</success> <b>skill</b> tdd",
+			" <success>✓</success> <b>skill</b> tdd",
 		]);
 		const expanded = renderedLines(
 			tool.renderResult!(result, { expanded: true, isPartial: false }, theme, context),
@@ -65,12 +65,12 @@ describe("skill Trace View renderer", () => {
 		const context = { args: { name: "missing" }, cwd: "/work", isError: true } as any;
 
 		expect(renderedLines(tool.renderResult!(result, { expanded: false, isPartial: false }, theme, context))).toEqual([
-			"<error>✗</error> <b>skill</b> missing",
+			" <error>✗</error> <b>skill</b> missing",
 		]);
 		expect(renderedLines(tool.renderResult!(result, { expanded: true, isPartial: false }, theme, context))).toEqual([
-			"<error>✗</error> <b>skill</b> missing",
-			'<toolOutput>Unknown skill "missing".</toolOutput>',
-			"<toolOutput><available_skills>(none)</available_skills></toolOutput>",
+			" <error>✗</error> <b>skill</b> missing",
+			' <toolOutput>Unknown skill "missing".</toolOutput>',
+			" <toolOutput><available_skills>(none)</available_skills></toolOutput>",
 		]);
 	});
 

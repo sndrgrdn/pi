@@ -265,7 +265,25 @@ describe("agent tool factory", () => {
 			theme,
 			{ args: { assignment: "probe it" }, cwd: "/repo", isError: false, lastComponent: row } as any,
 		) as any;
-		expect(running.render(100).map((line: string) => line.trimEnd())).toEqual(["◐ probe probe it · read ×2"]);
+		expect(running.render(100).map((line: string) => line.trimEnd())).toEqual([" ◐ probe probe it · read ×2"]);
+	});
+
+	it("wraps the assignment with hanging indentation and caps it at three lines", () => {
+		const tool = createAgentTool(probeSpec(), { run: vi.fn() } as any, BUILTIN_PROFILES);
+		const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
+		const assignment = "one two three four five six seven eight nine";
+		const component = tool.renderResult?.(
+			{ content: [{ type: "text", text: "hidden" }], details: { trace: { state: "success" } } },
+			{ expanded: false, isPartial: false },
+			theme,
+			{ args: { assignment }, cwd: "/repo", isError: false } as any,
+		) as any;
+
+		expect(component.render(24).map((line: string) => line.trimEnd())).toEqual([
+			" ✓ probe one two three",
+			"         four five six",
+			"         seven eight …",
+		]);
 	});
 
 	it("renders completed envelope evidence below the presentation row", () => {
@@ -283,8 +301,8 @@ describe("agent tool factory", () => {
 			{ args: { assignment: "probe it" }, cwd: "/repo", isError: false, lastComponent: row } as any,
 		) as any;
 		expect(completed.render(100).map((line: string) => line.trimEnd())).toEqual([
-			"✓ probe probe it",
-			"salvage notes",
+			" ✓ probe probe it",
+			" salvage notes",
 		]);
 	});
 });

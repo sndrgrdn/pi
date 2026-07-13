@@ -24,12 +24,12 @@ describe("read Trace View renderer", () => {
 		} as any;
 
 		expect(renderedLines(tool.renderResult!(result, { expanded: false, isPartial: false }, theme, context))).toEqual([
-			"<success>✓</success> <b>read</b> ./src/file.ts · <muted>lines 2-3</muted>",
+			" <success>✓</success> <b>read</b> ./src/file.ts · <muted>lines 2-3</muted>",
 		]);
 		expect(renderedLines(tool.renderResult!(result, { expanded: true, isPartial: false }, theme, context))).toEqual([
-			"<success>✓</success> <b>read</b> ./src/file.ts · <muted>lines 2-3</muted>",
-			"<toolOutput>second</toolOutput>",
-			"<toolOutput>third</toolOutput>",
+			" <success>✓</success> <b>read</b> ./src/file.ts · <muted>lines 2-3</muted>",
+			" <toolOutput>second</toolOutput>",
+			" <toolOutput>third</toolOutput>",
 		]);
 	});
 
@@ -63,7 +63,7 @@ describe("read Trace View renderer", () => {
 					isError: false,
 				} as any),
 			),
-		).toEqual(["<success>✓</success> <b>read</b> ./pixel.png · <muted>image/png</muted>"]);
+		).toEqual([" <success>✓</success> <b>read</b> ./pixel.png · <muted>image/png</muted>"]);
 	});
 
 	it.each(["image/jpeg", "image/png", "image/gif", "image/webp"])(
@@ -80,7 +80,7 @@ describe("read Trace View renderer", () => {
 				{ args: { path: "image.bin" }, cwd: "/work", isError: false } as any,
 			);
 			expect(renderedLines(component)).toEqual([
-				`<success>✓</success> <b>read</b> ./image.bin · <muted>${mimeType}</muted>`,
+				` <success>✓</success> <b>read</b> ./image.bin · <muted>${mimeType}</muted>`,
 			]);
 		},
 	);
@@ -97,7 +97,7 @@ describe("read Trace View renderer", () => {
 			theme,
 			{ args: { path }, cwd, isError: false } as any,
 		);
-		expect(renderedLines(component)).toEqual([`<success>✓</success> <b>read</b> ${expectedPath}`]);
+		expect(renderedLines(component)).toEqual([` <success>✓</success> <b>read</b> ${expectedPath}`]);
 	});
 
 	it.each([
@@ -112,7 +112,7 @@ describe("read Trace View renderer", () => {
 			{ args: { path: "file.ts", ...range }, cwd: "/work", isError: false } as any,
 		);
 		expect(renderedLines(component)).toEqual([
-			`<success>✓</success> <b>read</b> ./file.ts · <muted>${expected}</muted>`,
+			` <success>✓</success> <b>read</b> ./file.ts · <muted>${expected}</muted>`,
 		]);
 	});
 
@@ -126,11 +126,11 @@ describe("read Trace View renderer", () => {
 		const context = { args: { path: "missing.txt" }, cwd, isError: true } as any;
 
 		expect(renderedLines(tool.renderResult!(result, { expanded: false, isPartial: false }, theme, context))).toEqual([
-			"<error>✗</error> <b>read</b> ./missing.txt",
+			" <error>✗</error> <b>read</b> ./missing.txt",
 		]);
 		expect(renderedLines(tool.renderResult!(result, { expanded: true, isPartial: false }, theme, context))).toEqual([
-			"<error>✗</error> <b>read</b> ./missing.txt",
-			"<toolOutput>ENOENT: no such file or directory</toolOutput>",
+			" <error>✗</error> <b>read</b> ./missing.txt",
+			" <toolOutput>ENOENT: no such file or directory</toolOutput>",
 		]);
 	});
 

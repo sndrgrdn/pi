@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import { isAbsolute, relative, resolve } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { Text, truncateToWidth } from "@earendil-works/pi-tui";
+import { Text, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
 export type TraceState = "running" | "success" | "failed" | "cancelled";
 
@@ -81,6 +81,7 @@ interface TraceRenderContext<TArgs> {
 
 interface TraceRendererOptions<TArgs> {
 	invocation(args: TArgs, cwd: string): TraceInvocation;
+	maxRowLines?: number;
 	progress?(result: TraceResult): string[];
 	evidence?(result: TraceResult, theme: TraceTheme, context: TraceRenderContext<TArgs>): string | undefined;
 }
@@ -125,20 +126,38 @@ export function sanitizeTraceEvidence(text: string): string {
 }
 
 class TraceText extends Text {
-	private row = "";
+	private prefix = "";
+	private content = "";
 	private evidence = "";
+	private maxRowLines = 1;
 
-	setTrace(row: string, evidence: string): void {
-		this.row = row;
+	setTrace(prefix: string, content: string, evidence: string, maxRowLines: number): void {
+		this.prefix = prefix;
+		this.content = content;
 		this.evidence = evidence;
+		this.maxRowLines = maxRowLines;
 		this.invalidate();
 	}
 
 	override render(width: number): string[] {
-		if (!this.row) return [];
-		const row = truncateToWidth(this.row, width, "", true);
-		if (!this.evidence) return [row];
-		return [row, ...new Text(this.evidence, 0, 0).render(width)];
+		if (!this.prefix) return [];
+		const paddingX = width >= 3 ? 1 : 0;
+		const contentWidth = width - paddingX * 2;
+		let rows: string[];
+		if (this.maxRowLines === 1 || !this.content) {
+			rows = [truncateToWidth(this.prefix + this.content, contentWidth, "…", true)];
+		} else {
+			const indent = Math.min(visibleWidth(this.prefix), Math.max(0, contentWidth - 1));
+			const wrapped = wrapTextWithAnsi(this.content, Math.max(1, contentWidth - indent));
+			rows = wrapped.map((line, index) => `${index === 0 ? this.prefix : " ".repeat(indent)}${line}`);
+			if (rows.length > this.maxRowLines) {
+				rows = rows.slice(0, this.maxRowLines);
+				rows[rows.length - 1] = truncateToWidth(`${rows[rows.length - 1]} …`, contentWidth, "…", true);
+			}
+		}
+		const renderedRows = new Text(rows.join("\n"), paddingX, 0).render(width);
+		if (!this.evidence) return renderedRows;
+		return [...renderedRows, ...new Text(this.evidence, paddingX, 0).render(width)];
 	}
 }
 
@@ -147,7 +166,7 @@ export function createTraceRenderer<TArgs>(options: TraceRendererOptions<TArgs>)
 	return {
 		renderCall(_args: TArgs, _theme: TraceTheme, context: { lastComponent?: unknown }): TraceText {
 			const component = (context.lastComponent as TraceText | undefined) ?? new TraceText("", 0, 0);
-			component.setTrace("", "");
+			component.setTrace("", "", "", 1);
 			return component;
 		},
 		renderResult(
@@ -162,12 +181,13 @@ export function createTraceRenderer<TArgs>(options: TraceRendererOptions<TArgs>)
 				(renderOptions.isPartial ? "running" : context.isError ? "failed" : "success");
 			const presentation = statePresentation[state];
 			const invocation = options.invocation(context.args, context.cwd);
-			const target = invocation.target ? ` ${invocation.target}` : "";
 			const progress = state === "running" ? (options.progress?.(result) ?? []) : [];
 			const qualifiers = [...(invocation.qualifiers ?? []), ...detailQualifiers(result.details), ...progress]
 				.map((value) => ` · ${theme.fg("muted", value)}`)
 				.join("");
-			const row = `${theme.fg(presentation.color, presentation.glyph)} ${theme.bold(invocation.action)}${target}${qualifiers}`;
+			const target = invocation.target ?? "";
+			const prefix = `${theme.fg(presentation.color, presentation.glyph)} ${theme.bold(invocation.action)}${target ? " " : ""}`;
+			const content = `${target}${qualifiers}`;
 			const customEvidence = renderOptions.expanded ? options.evidence?.(result, theme, context) : undefined;
 			const safeResultText = sanitizeTraceEvidence(resultText(result));
 			const evidence = !renderOptions.expanded
@@ -177,7 +197,7 @@ export function createTraceRenderer<TArgs>(options: TraceRendererOptions<TArgs>)
 						.split("\n")
 						.map((line) => theme.fg("toolOutput", line))
 						.join("\n"));
-			component.setTrace(row, evidence);
+			component.setTrace(prefix, content, evidence, options.maxRowLines ?? 1);
 			return component;
 		},
 	};
@@ -209,11 +229,7 @@ export interface ShellTraceArgs {
 
 /** Mechanically format a shell invocation without parsing shell grammar or output. */
 export function shellTraceInvocation(args: ShellTraceArgs, cwd: string): TraceInvocation {
-	const firstLine = args.command
-		.split("\n")
-		.find((line) => line.trim().length > 0)
-		?.trim();
-	const target = `${firstLine ?? ""}${args.command.includes("\n") ? " …" : ""}`;
+	const target = args.command.trim();
 	const workdir = args.workdir ? resolve(cwd, args.workdir) : cwd;
 	return {
 		action: "$",

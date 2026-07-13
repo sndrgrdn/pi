@@ -58,7 +58,7 @@ const description = [
 	"Output is truncated to the last 2000 lines or 50KB; full output is saved to a temp file whose path is included when truncated.",
 ].join(" ");
 
-const traceRenderer = createTraceRenderer<ShellCommandParams>({ invocation: shellTraceInvocation });
+const traceRenderer = createTraceRenderer<ShellCommandParams>({ invocation: shellTraceInvocation, maxRowLines: 3 });
 
 /** Mirror pi's internal getShellEnv: prepend the agent bin dir to PATH. */
 function shellEnv(): NodeJS.ProcessEnv {

@@ -59,13 +59,13 @@ describe("shell_command_cancel", () => {
 
 		expect(
 			renderedLines(cancel.renderResult!(result, { expanded: false, isPartial: false }, theme, context)),
-		).toEqual(["<warning>■</warning> <b>cancel</b> shell-1"]);
+		).toEqual([" <warning>■</warning> <b>cancel</b> shell-1"]);
 		expect(renderedLines(cancel.renderResult!(result, { expanded: true, isPartial: false }, theme, context))).toEqual(
 			[
-				"<warning>■</warning> <b>cancel</b> shell-1",
-				"<toolOutput>final output</toolOutput>",
-				"<toolOutput></toolOutput>",
-				"<toolOutput>cancelled shell-1</toolOutput>",
+				" <warning>■</warning> <b>cancel</b> shell-1",
+				" <toolOutput>final output</toolOutput>",
+				" <toolOutput></toolOutput>",
+				" <toolOutput>cancelled shell-1</toolOutput>",
 			],
 		);
 	});

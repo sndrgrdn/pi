@@ -3,6 +3,7 @@ import { createShellCommandTool } from "./command.ts";
 import { BackgroundShellRegistry } from "./registry.ts";
 
 const ctx = { cwd: process.cwd() } as any;
+const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
 
 function makeTool(registry = new BackgroundShellRegistry()) {
 	return { tool: createShellCommandTool(registry), registry };
@@ -13,6 +14,23 @@ async function run(tool: any, params: object, signal?: AbortSignal) {
 }
 
 describe("shell_command", () => {
+	it("wraps the command with hanging indentation and caps it at three lines", () => {
+		const { tool } = makeTool();
+		const command = "one two three four five six seven eight nine ten";
+		const component = tool.renderResult!(
+			{ content: [{ type: "text", text: "hidden" }] } as any,
+			{ expanded: false, isPartial: false },
+			theme,
+			{ args: { command }, cwd: "/work", isError: false } as any,
+		);
+
+		expect(component.render(20).map((line: string) => line.trimEnd())).toEqual([
+			" ✓ $ one two three",
+			"     four five six",
+			"     seven eight …",
+		]);
+	});
+
 	it("emits a running update immediately", async () => {
 		const { tool } = makeTool();
 		const updates: any[] = [];

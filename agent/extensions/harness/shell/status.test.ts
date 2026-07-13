@@ -43,13 +43,13 @@ describe("shell_command_status", () => {
 
 		expect(
 			renderedLines(status.renderResult!(result, { expanded: false, isPartial: false }, theme, context)),
-		).toEqual(["<success>✓</success> <b>poll</b> shell-1 · <muted>still running</muted>"]);
+		).toEqual([" <success>✓</success> <b>poll</b> shell-1 · <muted>still running</muted>"]);
 		expect(renderedLines(status.renderResult!(result, { expanded: true, isPartial: false }, theme, context))).toEqual(
 			[
-				"<success>✓</success> <b>poll</b> shell-1 · <muted>still running</muted>",
-				"<toolOutput>new output</toolOutput>",
-				"<toolOutput></toolOutput>",
-				"<toolOutput>shell-1 · still running</toolOutput>",
+				" <success>✓</success> <b>poll</b> shell-1 · <muted>still running</muted>",
+				" <toolOutput>new output</toolOutput>",
+				" <toolOutput></toolOutput>",
+				" <toolOutput>shell-1 · still running</toolOutput>",
 			],
 		);
 	});

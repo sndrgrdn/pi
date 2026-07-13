@@ -111,7 +111,7 @@ describe("task tool", () => {
 			theme,
 			{ args, cwd: "/repo", isError: false } as any,
 		) as Text;
-		expect(row.render(100).map((line) => line.trimEnd())).toEqual([`✓ task (${mode ?? "low"}) fix renderer`]);
+		expect(row.render(100).map((line) => line.trimEnd())).toEqual([` ✓ task (${mode ?? "low"}) fix renderer`]);
 	});
 
 	it("reports capped completed and in-progress work when cancellation interrupts a tool log", async () => {

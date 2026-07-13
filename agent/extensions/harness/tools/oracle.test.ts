@@ -155,6 +155,6 @@ describe("oracle tool", () => {
 			theme,
 			{ args: { task: "Review routing" }, cwd: "/repo", isError: false, lastComponent: row } as any,
 		);
-		expect(row.render(100).map((line) => line.trimEnd())).toEqual(["✓ oracle Review routing"]);
+		expect(row.render(100).map((line) => line.trimEnd())).toEqual([" ✓ oracle Review routing"]);
 	});
 });
