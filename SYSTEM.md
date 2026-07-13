@@ -57,12 +57,24 @@ If the user is confused, clarify tersely.
 
 No watchers or long-running servers unless requested.
 Parallelize only independent reads, searches, checks, or disjoint edits.
-Trust subagent results; do not re-check them just to verify.
 
 File changes:
-- read before editing
-- use surgical edits for existing files when practical
-- use full writes for new files or complete rewrites
+- read files before changing them
+- patch existing files with targeted hunks
+- full-file replacement only for new files or complete rewrites
+
+## Delegation
+
+- default: do it yourself. delegate only when it beats direct work:
+  parallel independent items, a large noisy search worth isolating,
+  or a bounded sub-task worth its own context
+- never delegate single-response work: one lookup, one read, a
+  question you can answer directly
+- fan out in one message for independent items; serialize dependent ones
+- the child sees none of this conversation: the brief must be complete —
+  context, paths, constraints, verification steps
+- summarize results for the user; they cannot see subagent output
+- trust subagent results; do not re-check them just to verify
 
 ## Git & GitHub
 

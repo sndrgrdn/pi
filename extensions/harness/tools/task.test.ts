@@ -1,4 +1,4 @@
-import { copyFileSync, mkdtempSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -8,6 +8,31 @@ import { BackgroundShellRegistry } from "../shell/registry.ts";
 import { buildCancellationReport, createTaskTool, type TaskInput } from "./task.ts";
 
 describe("task tool", () => {
+	it("keeps the restraint-first delegation contract in the Task child prompt", async () => {
+		const system = readFileSync(join(import.meta.dirname, "../../../SYSTEM.md"), "utf8");
+		const delegation = `## Delegation
+
+- default: do it yourself. delegate only when it beats direct work:
+  parallel independent items, a large noisy search worth isolating,
+  or a bounded sub-task worth its own context
+- never delegate single-response work: one lookup, one read, a
+  question you can answer directly
+- fan out in one message for independent items; serialize dependent ones
+- the child sees none of this conversation: the brief must be complete —
+  context, paths, constraints, verification steps
+- summarize results for the user; they cannot see subagent output
+- trust subagent results; do not re-check them just to verify`;
+		const run = vi.fn(async (options: RunOptions<TaskInput>) => {
+			expect(options.definition.systemPrompt).toContain(delegation);
+			return options.wrapResult("task-1", "Done");
+		});
+		const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
+			basePrompts: () => ({ system, appendSystem: "A", projectContext: "C" }),
+		});
+
+		await tool.execute("call", { prompt: "Implement it", description: "implementation" }, undefined, undefined, { cwd: "/repo" } as any);
+	});
+
 	it.each([
 		[undefined, "openai-codex/gpt-5.6-sol", "low"],
 		["low", "openai-codex/gpt-5.6-sol", "low"],
