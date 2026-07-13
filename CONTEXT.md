@@ -44,6 +44,10 @@ _Avoid_: skill tool, skill runtime
 The V2 mechanism by which agents discover and load the Skill Corpus. Existing built-in and custom mechanisms carry no presumption of reuse.
 _Avoid_: skill corpus, inherited skill tool
 
+**Agent Tool**:
+The single factory that turns a per-agent spec — key, parameters, mode selection, per-call plan, result finalization, recovery — into a model-visible delegation tool. finder, librarian, oracle, and task are specs, not implementations.
+_Avoid_: subagent tool, tool wrapper
+
 **Checkout Cache**:
 The shared local store of partial clones of remote repositories at `~/.cache/checkouts/<host>/<org>/<repo>`, kept fresh by throttled refresh and never edited in place.
 _Avoid_: clone dir, temp checkout
