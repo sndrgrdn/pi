@@ -1,7 +1,7 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { SkillEntry } from "./core.ts";
 import { createSkillTool } from "./index.ts";
 
@@ -14,14 +14,21 @@ function renderedLines(component: { render(width: number): string[] }): string[]
 	return component.render(200).map((line) => line.trimEnd());
 }
 
+const skillDirs: string[] = [];
+
 function skillEntry(): SkillEntry {
 	const baseDir = mkdtempSync(join(tmpdir(), "skill-trace-"));
+	skillDirs.push(baseDir);
 	const filePath = join(baseDir, "SKILL.md");
 	mkdirSync(join(baseDir, "references"));
 	writeFileSync(filePath, "---\nname: tdd\n---\n\nTest instructions.");
 	writeFileSync(join(baseDir, "references", "guide.md"), "Guide");
 	return { name: "tdd", description: "Test first", filePath, baseDir };
 }
+
+afterEach(() => {
+	for (const dir of skillDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
 
 describe("skill Trace View renderer", () => {
 	it("renders one compact successful row and preserves content and resources behind expansion", async () => {
