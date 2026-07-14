@@ -41,8 +41,7 @@ describe("librarian tool", () => {
 				"shell_command",
 				"shell_command_status",
 				"shell_command_cancel",
-				"web_search_exa",
-				"web_fetch_exa",
+				"web_search",
 			],
 		});
 		expect(options?.toolbox?.(new BackgroundShellRegistry()).map((tool) => tool.name)).toEqual([
@@ -50,6 +49,7 @@ describe("librarian tool", () => {
 			"shell_command",
 			"shell_command_status",
 			"shell_command_cancel",
+			"web_search",
 		]);
 	});
 
