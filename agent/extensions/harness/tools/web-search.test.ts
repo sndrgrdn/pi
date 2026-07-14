@@ -91,7 +91,7 @@ describe("web_search tool", () => {
 	});
 
 	it("falls back to EXA_API_KEY and fails without credentials before network activity", async () => {
-		const fetch = vi.fn(async () => jsonResponse({ results: [{ url: "https://example.com" }] }));
+		const fetch = vi.fn(async () => jsonResponse({ results: [{ title: "Example", url: "https://example.com" }] }));
 		const fromEnvironment = createWebSearchTool({
 			fetch,
 			authStorage: { get: () => undefined },
@@ -129,10 +129,17 @@ describe("web_search tool", () => {
 						{
 							id: "exa-internal-id",
 							score: 0.99,
+							title: "First result",
 							url: "https://first.example",
 							highlights: ["First point", "Second point"],
 						},
-						{ title: "Second result", author: null, publishedDate: null, highlights: [] },
+						{
+							title: "Second result",
+							url: "https://second.example",
+							author: null,
+							publishedDate: null,
+							highlights: [],
+						},
 					],
 				}),
 			),
@@ -145,10 +152,11 @@ describe("web_search tool", () => {
 		expect(result.content[0]).toMatchObject({
 			type: "text",
 			text: [
-				"## 1",
+				"## 1. First result",
 				"**URL:** https://first.example",
 				"**Highlights:**\n- First point\n- Second point",
 				"## 2. Second result",
+				"**URL:** https://second.example",
 			].join("\n\n"),
 		});
 		expect(JSON.stringify(result)).not.toMatch(/exa-internal-id|0\.99|costDollars/);
@@ -171,6 +179,7 @@ describe("web_search tool", () => {
 		],
 		["malformed JSON", async () => new Response("not json"), "malformed response", "malformed_response"],
 		["malformed shape", async () => jsonResponse({ results: "wrong" }), "malformed response", "malformed_response"],
+		["missing identity", async () => jsonResponse({ results: [{}] }), "malformed response", "malformed_response"],
 		["empty results", async () => jsonResponse({ results: [] }), "returned no results", "empty_results"],
 	] as const)("reports concise %s errors without credential leakage", async (_case, fetch, message, code) => {
 		const tool = toolWithFetch(fetch as typeof globalThis.fetch);

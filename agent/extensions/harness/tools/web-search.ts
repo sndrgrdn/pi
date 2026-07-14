@@ -1,7 +1,7 @@
-import { join } from "node:path";
-import { AuthStorage, getAgentDir, type ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { type Static, Type } from "typebox";
+import { type AuthStorage, defineTool } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import { Value } from "typebox/value";
+import { createHarnessAuthStorage } from "../runner.ts";
 
 interface WebSearchDependencies {
 	fetch: typeof globalThis.fetch;
@@ -10,8 +10,8 @@ interface WebSearchDependencies {
 }
 
 interface WebSearchResult {
-	title?: string;
-	url?: string;
+	title: string;
+	url: string;
 	publishedDate?: string;
 	author?: string;
 	highlights?: string[];
@@ -39,8 +39,8 @@ const optionalString = Type.Optional(Type.Union([Type.String(), Type.Null()]));
 const exaResponse = Type.Object({
 	results: Type.Array(
 		Type.Object({
-			title: optionalString,
-			url: optionalString,
+			title: Type.String({ minLength: 1 }),
+			url: Type.String({ minLength: 1 }),
 			publishedDate: optionalString,
 			author: optionalString,
 			highlights: Type.Optional(Type.Union([Type.Array(Type.String()), Type.Null()])),
@@ -48,9 +48,12 @@ const exaResponse = Type.Object({
 	),
 });
 
-type WebSearchParams = Static<typeof parameters>;
+interface ExaSearchRequest {
+	query: string;
+	numResults: number;
+}
 
-export type WebSearchFailureCode =
+type WebSearchFailureCode =
 	| "invalid_input"
 	| "credentials_missing"
 	| "cancelled"
@@ -62,7 +65,7 @@ export type WebSearchFailureCode =
 	| "malformed_response"
 	| "empty_results";
 
-export class WebSearchError extends Error {
+class WebSearchError extends Error {
 	readonly code: WebSearchFailureCode;
 	constructor(code: WebSearchFailureCode, message: string) {
 		super(message);
@@ -71,20 +74,19 @@ export class WebSearchError extends Error {
 	}
 }
 
-const PARENT_ABORT = Symbol("parent abort");
 const TIMEOUT_ABORT = Symbol("timeout abort");
 
 const defaultDependencies = (): WebSearchDependencies => ({
 	fetch: globalThis.fetch,
-	authStorage: AuthStorage.create(join(getAgentDir(), "auth.json")),
+	authStorage: createHarnessAuthStorage(),
 	env: process.env,
 });
 
 function formatResult(result: WebSearchResult, index: number): string {
-	const heading = result.title ? `## ${index + 1}. ${result.title}` : `## ${index + 1}`;
+	const heading = `## ${index + 1}. ${result.title}`;
 	return [
 		heading,
-		...(result.url ? [`**URL:** ${result.url}`] : []),
+		`**URL:** ${result.url}`,
 		...(result.publishedDate ? [`**Published:** ${result.publishedDate}`] : []),
 		...(result.author ? [`**Author:** ${result.author}`] : []),
 		...(result.highlights?.length
@@ -101,8 +103,8 @@ function parseSearchResponse(value: unknown): WebSearchResult[] {
 	if (!Value.Check(exaResponse, value)) throw failure("malformed_response", "received a malformed response.");
 	const results = value.results.map(
 		(result): WebSearchResult => ({
-			...(result.title ? { title: result.title } : {}),
-			...(result.url ? { url: result.url } : {}),
+			title: result.title,
+			url: result.url,
 			...(result.publishedDate ? { publishedDate: result.publishedDate } : {}),
 			...(result.author ? { author: result.author } : {}),
 			...(result.highlights?.length ? { highlights: [...result.highlights] } : {}),
@@ -121,17 +123,17 @@ function abortFailure(signal: AbortSignal): WebSearchError {
 async function searchExa(
 	dependencies: WebSearchDependencies,
 	apiKey: string,
-	params: WebSearchParams,
+	params: ExaSearchRequest,
 	signal: AbortSignal,
-): Promise<WebSearchResult[]> {
+): Promise<{ ok: true; results: WebSearchResult[] } | { ok: false; error: WebSearchError }> {
 	try {
 		const response = await dependencies.fetch("https://api.exa.ai/search", {
 			method: "POST",
 			headers: { "content-type": "application/json", "x-api-key": apiKey },
 			body: JSON.stringify({
-				query: params.query.trim(),
+				query: params.query,
 				type: "auto",
-				numResults: params.numResults ?? 10,
+				numResults: params.numResults,
 				contents: { highlights: true },
 			}),
 			signal,
@@ -148,45 +150,50 @@ async function searchExa(
 		} catch {
 			throw failure("malformed_response", "received a malformed response.");
 		}
-		return parseSearchResponse(value);
+		return { ok: true, results: parseSearchResponse(value) };
 	} catch (error) {
-		if (signal.aborted) throw abortFailure(signal);
-		if (error instanceof WebSearchError) throw error;
-		throw failure("transport", "network request failed.");
+		if (signal.aborted) return { ok: false, error: abortFailure(signal) };
+		return {
+			ok: false,
+			error: error instanceof WebSearchError ? error : failure("transport", "network request failed."),
+		};
 	}
 }
 
-export function createWebSearchTool(
-	dependencies: WebSearchDependencies = defaultDependencies(),
-): ToolDefinition<any, any, any> {
-	return {
+export function createWebSearchTool(dependencies: WebSearchDependencies = defaultDependencies()) {
+	return defineTool({
 		name: "web_search",
 		label: "web_search",
 		description:
 			"Search the web for any topic and get clean, ready-to-use content. Best for finding current information, news, facts, people, companies, or answers. Describe the ideal page rather than using only keywords.",
 		parameters,
-		async execute(_id, params: unknown, signal) {
+		async execute(_id, params, signal) {
 			if (!Value.Check(parameters, params))
 				throw failure("invalid_input", "requires a non-empty query and numResults from 1 to 100.");
+			const searchRequest: ExaSearchRequest = {
+				query: params.query.trim(),
+				numResults: params.numResults ?? 10,
+			};
 			const credential = dependencies.authStorage.get("exa");
 			const apiKey = credential?.type === "api_key" ? credential.key : dependencies.env.EXA_API_KEY;
 			if (!apiKey)
 				throw failure("credentials_missing", "requires an `exa` API key in Pi AuthStorage or EXA_API_KEY.");
 			if (signal?.aborted) throw failure("cancelled", "was cancelled.");
 			const request = new AbortController();
-			const cancel = () => request.abort(PARENT_ABORT);
+			const cancel = () => request.abort();
 			signal?.addEventListener("abort", cancel, { once: true });
 			const timeout = setTimeout(() => request.abort(TIMEOUT_ABORT), 30_000);
 			try {
-				const results = await searchExa(dependencies, apiKey, params, request.signal);
+				const outcome = await searchExa(dependencies, apiKey, searchRequest, request.signal);
+				if (!outcome.ok) throw outcome.error;
 				return {
-					content: [{ type: "text", text: results.map(formatResult).join("\n\n") }],
-					details: { resultCount: results.length },
+					content: [{ type: "text", text: outcome.results.map(formatResult).join("\n\n") }],
+					details: { resultCount: outcome.results.length },
 				};
 			} finally {
 				clearTimeout(timeout);
 				signal?.removeEventListener("abort", cancel);
 			}
 		},
-	} as ToolDefinition<any, any, any>;
+	});
 }

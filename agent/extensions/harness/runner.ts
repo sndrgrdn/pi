@@ -88,6 +88,11 @@ export interface RunOptions {
 	signal?: AbortSignal;
 }
 
+/** The single Harness-owned location for Pi credentials. */
+export function createHarnessAuthStorage(): AuthStorage {
+	return AuthStorage.create(join(getAgentDir(), "auth.json"));
+}
+
 /** The completed child run: session attribution, final answer, and tool log. */
 export interface SubagentRunResult {
 	sessionID: string;
@@ -174,7 +179,7 @@ export function resolveConfiguredModel(registry: Pick<ModelRegistry, "find">, mo
 export async function createSdkChildSession(config: ChildSessionConfig): Promise<ChildSession> {
 	const processes = new BackgroundShellRegistry();
 	const agentDir = getAgentDir();
-	const authStorage = AuthStorage.create(join(agentDir, "auth.json"));
+	const authStorage = createHarnessAuthStorage();
 	const modelRegistry = ModelRegistry.create(authStorage, join(agentDir, "models.json"));
 	const options: CreateAgentSessionOptions = {
 		cwd: config.cwd,
