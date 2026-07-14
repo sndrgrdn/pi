@@ -17,13 +17,17 @@ type ExaFailureCode =
 	| "transport"
 	| "malformed_response";
 
-class ExaRequestError extends Error {
-	readonly code: ExaFailureCode;
-	constructor(toolName: string, code: ExaFailureCode, message: string) {
+export class CodedToolError<Code extends string> extends Error {
+	readonly code: Code;
+	constructor(errorName: string, toolName: string, code: Code, message: string) {
 		super(`${toolName} ${message}`);
-		this.name = "ExaRequestError";
+		this.name = errorName;
 		this.code = code;
 	}
+}
+
+export function createCodedToolErrorFactory<Code extends string>(toolName: string, errorName: string) {
+	return (code: Code, message: string): CodedToolError<Code> => new CodedToolError(errorName, toolName, code, message);
 }
 
 const TIMEOUT_ABORT = Symbol("timeout abort");
@@ -36,14 +40,11 @@ export function createExaDependencies(): ExaDependencies {
 	};
 }
 
-function requestFailure(toolName: string, code: ExaFailureCode, message: string): ExaRequestError {
-	return new ExaRequestError(toolName, code, message);
-}
-
-function abortFailure(toolName: string, signal: AbortSignal): ExaRequestError {
+function abortFailure(toolName: string, signal: AbortSignal): CodedToolError<ExaFailureCode> {
+	const failure = createCodedToolErrorFactory<ExaFailureCode>(toolName, "ExaRequestError");
 	return signal.reason === TIMEOUT_ABORT
-		? requestFailure(toolName, "timeout", "timed out after 30 seconds.")
-		: requestFailure(toolName, "cancelled", "was cancelled.");
+		? failure("timeout", "timed out after 30 seconds.")
+		: failure("cancelled", "was cancelled.");
 }
 
 export async function requestExaJson(
@@ -52,20 +53,17 @@ export async function requestExaJson(
 	body: unknown,
 	dependencies: ExaDependencies,
 	signal: AbortSignal | undefined,
-): Promise<{ ok: true; value: unknown } | { ok: false; error: ExaRequestError }> {
+): Promise<{ ok: true; value: unknown } | { ok: false; error: CodedToolError<ExaFailureCode> }> {
+	const failure = createCodedToolErrorFactory<ExaFailureCode>(toolName, "ExaRequestError");
 	const credential = dependencies.authStorage.get("exa");
 	const apiKey = credential?.type === "api_key" ? credential.key : dependencies.env.EXA_API_KEY;
 	if (!apiKey) {
 		return {
 			ok: false,
-			error: requestFailure(
-				toolName,
-				"credentials_missing",
-				"requires an `exa` API key in Pi AuthStorage or EXA_API_KEY.",
-			),
+			error: failure("credentials_missing", "requires an `exa` API key in Pi AuthStorage or EXA_API_KEY."),
 		};
 	}
-	if (signal?.aborted) return { ok: false, error: requestFailure(toolName, "cancelled", "was cancelled.") };
+	if (signal?.aborted) return { ok: false, error: failure("cancelled", "was cancelled.") };
 
 	const request = new AbortController();
 	const cancel = () => request.abort();
@@ -78,27 +76,35 @@ export async function requestExaJson(
 			body: JSON.stringify(body),
 			signal: request.signal,
 		});
+		if (request.signal.aborted) return { ok: false, error: abortFailure(toolName, request.signal) };
 		if (!response.ok) {
 			if (response.status === 401 || response.status === 403)
-				return { ok: false, error: requestFailure(toolName, "authentication", "authentication failed.") };
-			if (response.status === 429)
-				return { ok: false, error: requestFailure(toolName, "rate_limit", "rate limit exceeded.") };
+				return { ok: false, error: failure("authentication", "authentication failed.") };
+			if (response.status === 429) return { ok: false, error: failure("rate_limit", "rate limit exceeded.") };
 			return {
 				ok: false,
-				error: requestFailure(toolName, "upstream", `request failed (HTTP ${response.status}).`),
+				error: failure("upstream", `request failed (HTTP ${response.status}).`),
 			};
 		}
 		try {
-			return { ok: true, value: await response.json() };
+			const value = await response.json();
+			return request.signal.aborted
+				? { ok: false, error: abortFailure(toolName, request.signal) }
+				: { ok: true, value };
 		} catch {
-			return { ok: false, error: requestFailure(toolName, "malformed_response", "received a malformed response.") };
+			return {
+				ok: false,
+				error: request.signal.aborted
+					? abortFailure(toolName, request.signal)
+					: failure("malformed_response", "received a malformed response."),
+			};
 		}
 	} catch {
 		return {
 			ok: false,
 			error: request.signal.aborted
 				? abortFailure(toolName, request.signal)
-				: requestFailure(toolName, "transport", "network request failed."),
+				: failure("transport", "network request failed."),
 		};
 	} finally {
 		clearTimeout(timeout);

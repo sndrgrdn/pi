@@ -1,7 +1,13 @@
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
-import { createExaDependencies, type ExaDependencies, requestExaJson } from "./exa.ts";
+import {
+	type CodedToolError,
+	createCodedToolErrorFactory,
+	createExaDependencies,
+	type ExaDependencies,
+	requestExaJson,
+} from "./exa.ts";
 
 interface WebSearchResult {
 	title: string;
@@ -48,15 +54,10 @@ interface ExaSearchRequest {
 }
 
 type WebSearchFailureCode = "invalid_input" | "malformed_response" | "empty_results";
+type WebSearchError = CodedToolError<WebSearchFailureCode>;
 
-class WebSearchError extends Error {
-	readonly code: WebSearchFailureCode;
-	constructor(code: WebSearchFailureCode, message: string) {
-		super(message);
-		this.name = "WebSearchError";
-		this.code = code;
-	}
-}
+const failure: (code: WebSearchFailureCode, message: string) => WebSearchError =
+	createCodedToolErrorFactory<WebSearchFailureCode>("web_search", "WebSearchError");
 
 function formatResult(result: WebSearchResult, index: number): string {
 	const heading = `## ${index + 1}. ${result.title}`;
@@ -69,10 +70,6 @@ function formatResult(result: WebSearchResult, index: number): string {
 			? [`**Highlights:**\n${result.highlights.map((highlight) => `- ${highlight}`).join("\n")}`]
 			: []),
 	].join("\n\n");
-}
-
-function failure(code: WebSearchFailureCode, message: string): WebSearchError {
-	return new WebSearchError(code, `web_search ${message}`);
 }
 
 function parseSearchResponse(value: unknown): WebSearchResult[] {

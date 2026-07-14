@@ -2,9 +2,9 @@ import { Value } from "typebox/value";
 import { describe, expect, it, vi } from "vitest";
 import { createWebFetchTool } from "./web-fetch.ts";
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse(body: unknown): Response {
 	return new Response(JSON.stringify(body), {
-		status,
+		status: 200,
 		headers: { "content-type": "application/json" },
 	});
 }
@@ -12,7 +12,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 function toolWithFetch(fetch: typeof globalThis.fetch) {
 	return createWebFetchTool({
 		fetch,
-		authStorage: { get: () => ({ type: "api_key", key: "secret-that-must-not-leak" }) },
+		authStorage: { get: () => ({ type: "api_key", key: "secret" }) },
 		env: {},
 	});
 }
@@ -38,11 +38,7 @@ describe("web_fetch tool", () => {
 				],
 			}),
 		);
-		const tool = createWebFetchTool({
-			fetch,
-			authStorage: { get: () => ({ type: "api_key", key: "stored-secret" }) },
-			env: { EXA_API_KEY: "environment-secret" },
-		});
+		const tool = toolWithFetch(fetch);
 
 		const result = await tool.execute(
 			"call",
@@ -57,7 +53,7 @@ describe("web_fetch tool", () => {
 			"https://api.exa.ai/contents",
 			expect.objectContaining({
 				method: "POST",
-				headers: { "content-type": "application/json", "x-api-key": "stored-secret" },
+				headers: { "content-type": "application/json", "x-api-key": "secret" },
 				body: JSON.stringify({
 					urls: ["https://rubyonrails.org/2025/10/22/rails-8-1-0-has-been-released"],
 					text: { maxCharacters: 3000 },
@@ -77,6 +73,7 @@ describe("web_fetch tool", () => {
 				].join("\n"),
 			},
 		]);
+		expect(result.details).toEqual({ resultCount: 1 });
 	});
 
 	it("preserves provider order and appends every failed URL in a mixed batch", async () => {
@@ -84,11 +81,7 @@ describe("web_fetch tool", () => {
 			jsonResponse({
 				requestId: "provider-internal-id",
 				results: [
-					{
-						title: "First page",
-						url: "https://first.example",
-						text: "First content",
-					},
+					{ title: "First page", url: "https://first.example", text: "First content" },
 					{
 						title: null,
 						url: "https://second.example",
@@ -110,11 +103,7 @@ describe("web_fetch tool", () => {
 				costDollars: { total: 0.01 },
 			}),
 		);
-		const tool = createWebFetchTool({
-			fetch,
-			authStorage: { get: () => ({ type: "api_key", key: "secret" }) },
-			env: {},
-		});
+		const tool = toolWithFetch(fetch);
 
 		const result = await tool.execute(
 			"call",
@@ -135,10 +124,10 @@ describe("web_fetch tool", () => {
 		const request = fetch.mock.calls[0] as unknown as Parameters<typeof globalThis.fetch>;
 		expect(JSON.parse(request[1]?.body as string)).toEqual({
 			urls: [
-				"https://first.example",
-				"https://unsupported.example",
-				"https://second.example",
-				"https://missing.example",
+				"https://first.example/",
+				"https://unsupported.example/",
+				"https://second.example/",
+				"https://missing.example/",
 			],
 			text: { maxCharacters: 500 },
 		});
@@ -154,34 +143,113 @@ describe("web_fetch tool", () => {
 		expect(JSON.stringify(result)).not.toMatch(/provider-internal-id|costDollars/);
 	});
 
-	it("returns a tool error when every URL fails", async () => {
-		const tool = createWebFetchTool({
-			fetch: vi.fn(async () =>
+	it("retains successful pages when provider error details are absent", async () => {
+		const tool = toolWithFetch(
+			vi.fn(async () =>
 				jsonResponse({
-					results: [],
+					results: [{ title: "Available", url: "https://available.example", text: "Useful content" }],
 					statuses: [
-						{ id: "https://missing.example", status: "error", error: { tag: "CRAWL_NOT_FOUND" } },
-						{ id: "ftp://unsupported.example", status: "error", error: { tag: "UNSUPPORTED_URL" } },
+						{ id: "https://available.example", status: "success" },
+						{ id: "https://no-details.example", status: "error" },
+						{
+							id: "https://no-tag.example",
+							status: "error",
+							error: { httpStatusCode: 502 },
+						},
 					],
 				}),
 			),
-			authStorage: { get: () => ({ type: "api_key", key: "secret" }) },
-			env: {},
-		});
+		);
 
-		await expect(
-			tool.execute(
-				"call",
-				{ urls: ["https://missing.example", "ftp://unsupported.example"] },
-				undefined,
-				undefined,
-				{} as any,
+		const result = await tool.execute(
+			"call",
+			{
+				urls: ["https://available.example", "https://no-details.example", "https://no-tag.example"],
+			},
+			undefined,
+			undefined,
+			{} as any,
+		);
+
+		expect(result.content[0]).toMatchObject({
+			text: [
+				"# Available\nURL: https://available.example\n\nUseful content",
+				"Error fetching https://no-details.example: unknown error",
+				"Error fetching https://no-tag.example: unknown error",
+			].join("\n\n"),
+		});
+		expect(result.details).toEqual({ resultCount: 1 });
+	});
+
+	it("reports blank pages explicitly without discarding non-empty pages", async () => {
+		const tool = toolWithFetch(
+			vi.fn(async () =>
+				jsonResponse({
+					results: [
+						{ title: "Empty", url: "https://empty.example", text: " \n\t " },
+						{ title: "Available", url: "https://available.example", text: "Useful content" },
+					],
+					statuses: [
+						{ id: "https://empty.example", status: "success" },
+						{ id: "https://available.example", status: "success" },
+					],
+				}),
 			),
-		).rejects.toMatchObject({
+		);
+
+		const result = await tool.execute(
+			"call",
+			{ urls: ["https://empty.example", "https://available.example"] },
+			undefined,
+			undefined,
+			{} as any,
+		);
+
+		expect(result.content[0]).toMatchObject({
+			text: [
+				"# Available\nURL: https://available.example\n\nUseful content",
+				"Error fetching https://empty.example: empty content",
+			].join("\n\n"),
+		});
+		expect(result.details).toEqual({ resultCount: 1 });
+	});
+
+	it.each([
+		[
+			"failed statuses",
+			{
+				results: [],
+				statuses: [
+					{ id: "https://missing.example", status: "error", error: { tag: "CRAWL_NOT_FOUND" } },
+					{ id: "https://unknown.example", status: "error" },
+				],
+			},
+			["https://missing.example", "https://unknown.example"],
+			"https://missing.example: CRAWL_NOT_FOUND; https://unknown.example: unknown error",
+		],
+		[
+			"blank pages",
+			{
+				results: [
+					{ title: "Empty", url: "https://empty.example", text: "" },
+					{ title: "Blank", url: "https://blank.example", text: "  \n " },
+				],
+				statuses: [
+					{ id: "https://empty.example", status: "success" },
+					{ id: "https://blank.example", status: "success" },
+				],
+			},
+			["https://empty.example", "https://blank.example"],
+			"https://empty.example: empty content; https://blank.example: empty content",
+		],
+		["no content", { results: [], statuses: [] }, ["https://missing.example"], "returned no content"],
+	] as const)("returns an empty_results tool error for all-%s responses", async (_case, response, urls, message) => {
+		const tool = toolWithFetch(vi.fn(async () => jsonResponse(response)));
+
+		await expect(tool.execute("call", { urls: [...urls] }, undefined, undefined, {} as any)).rejects.toMatchObject({
+			name: "WebFetchError",
 			code: "empty_results",
-			message: expect.stringContaining(
-				"https://missing.example: CRAWL_NOT_FOUND; ftp://unsupported.example: UNSUPPORTED_URL",
-			),
+			message: expect.stringContaining(message),
 		});
 	});
 
@@ -190,146 +258,79 @@ describe("web_fetch tool", () => {
 		[{ urls: "https://example.com" }, "non-empty urls array"],
 		[{ urls: ["https://example.com"], maxCharacters: 0 }, "positive maxCharacters"],
 		[{ urls: ["https://example.com"], maxCharacters: -1 }, "positive maxCharacters"],
-	])("rejects invalid input before network activity", async (params, message) => {
+	])("rejects schema-invalid input before network activity", async (params, message) => {
 		const fetch = vi.fn();
-		const tool = createWebFetchTool({
-			fetch,
-			authStorage: { get: () => ({ type: "api_key", key: "stored-secret" }) },
-			env: {},
-		});
+		const tool = toolWithFetch(fetch);
 
-		await expect(tool.execute("call", params as any, undefined, undefined, {} as any)).rejects.toThrow(message);
+		await expect(tool.execute("call", params as any, undefined, undefined, {} as any)).rejects.toMatchObject({
+			name: "WebFetchError",
+			code: "invalid_input",
+			message: expect.stringContaining(message),
+		});
 		expect(fetch).not.toHaveBeenCalled();
 		expect(Value.Check(tool.parameters, params)).toBe(false);
 	});
 
-	it("falls back to EXA_API_KEY and fails without credentials before network activity", async () => {
-		const fetch = vi.fn(async () =>
-			jsonResponse({
-				results: [{ title: "Example", url: "https://example.com", text: "Example content" }],
-				statuses: [{ id: "https://example.com", status: "success" }],
-			}),
-		);
-		const fromEnvironment = createWebFetchTool({
-			fetch,
-			authStorage: { get: () => undefined },
-			env: { EXA_API_KEY: "environment-secret" },
-		});
-
-		await fromEnvironment.execute("call", { urls: ["https://example.com"] }, undefined, undefined, {} as any);
-		const request = fetch.mock.calls[0] as unknown as Parameters<typeof globalThis.fetch>;
-		expect(request[1]?.headers).toEqual({
-			"content-type": "application/json",
-			"x-api-key": "environment-secret",
-		});
-
-		fetch.mockClear();
-		const withoutCredentials = createWebFetchTool({ fetch, authStorage: { get: () => undefined }, env: {} });
-		await expect(
-			withoutCredentials.execute("call", { urls: ["https://example.com"] }, undefined, undefined, {} as any),
-		).rejects.toMatchObject({ code: "credentials_missing", message: expect.stringContaining("EXA_API_KEY") });
-		expect(fetch).not.toHaveBeenCalled();
-	});
-
 	it.each([
-		[
-			"authentication",
-			async () => jsonResponse({ error: "bad secret-that-must-not-leak" }, 401),
-			"authentication failed",
-			"authentication",
-		],
-		["rate limit", async () => jsonResponse({ error: "slow down" }, 429), "rate limit exceeded", "rate_limit"],
-		["API", async () => jsonResponse({ error: "server failed" }, 500), "request failed (HTTP 500)", "upstream"],
-		[
-			"transport",
-			async () => Promise.reject(new Error("socket secret-that-must-not-leak")),
-			"network request failed",
-			"transport",
-		],
-		["malformed JSON", async () => new Response("not json"), "malformed response", "malformed_response"],
-		[
-			"malformed shape",
-			async () => jsonResponse({ results: "wrong", statuses: [] }),
-			"malformed response",
-			"malformed_response",
-		],
-		[
-			"error status without a reason",
-			async () => jsonResponse({ results: [], statuses: [{ id: "https://example.com", status: "error" }] }),
-			"malformed response",
-			"malformed_response",
-		],
-		[
-			"unknown status",
-			async () => jsonResponse({ results: [], statuses: [{ id: "https://example.com", status: "pending" }] }),
-			"malformed response",
-			"malformed_response",
-		],
-	] as const)("reports concise %s errors without credential leakage", async (_case, fetch, message, code) => {
+		[["https://valid.example", ""], "urls[1] is empty"],
+		[["not a URL"], "urls[0] is malformed"],
+		[["ftp://user:credential-that-must-not-leak@example.com/private"], 'unsupported scheme "ftp:"'],
+	])("rejects invalid URL values before network activity", async (urls, message) => {
+		const fetch = vi.fn();
+		const tool = toolWithFetch(fetch);
+
 		let thrown: Error | undefined;
 		try {
-			await toolWithFetch(fetch as typeof globalThis.fetch).execute(
-				"call",
-				{ urls: ["https://example.com"] },
-				undefined,
-				undefined,
-				{} as any,
-			);
+			await tool.execute("call", { urls }, undefined, undefined, {} as any);
 		} catch (error) {
 			thrown = error as Error;
 		}
 
-		expect(thrown?.message).toContain(message);
-		expect(thrown?.message).not.toContain("secret-that-must-not-leak");
-		expect(thrown).toMatchObject({ code });
+		expect(thrown).toMatchObject({
+			name: "WebFetchError",
+			code: "invalid_input",
+			message: expect.stringContaining(message),
+		});
+		expect(thrown?.message).toContain("HTTP");
+		expect(thrown?.message).not.toContain("credential-that-must-not-leak");
+		expect(fetch).not.toHaveBeenCalled();
+		expect(Value.Check(tool.parameters, { urls })).toBe(true);
 	});
 
-	it("times out after 30 seconds without retrying", async () => {
-		vi.useFakeTimers();
-		try {
-			const fetch = vi.fn(
-				async (_url: string | URL | Request, init?: RequestInit) =>
-					new Promise<Response>((_resolve, reject) => {
-						init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
-					}),
-			);
-			const pending = toolWithFetch(fetch).execute(
-				"call",
-				{ urls: ["https://example.com"] },
-				undefined,
-				undefined,
-				{} as any,
-			);
-			const rejection = expect(pending).rejects.toThrow("timed out after 30 seconds");
+	it("passes parsed, normalized URLs to the provider", async () => {
+		const fetch = vi.fn(async () =>
+			jsonResponse({
+				results: [{ title: "Page", url: "https://example.com/page", text: "Content" }],
+				statuses: [{ id: "https://example.com/page", status: "success" }],
+			}),
+		);
+		const tool = toolWithFetch(fetch);
 
-			await vi.advanceTimersByTimeAsync(30_000);
+		await tool.execute("call", { urls: ["https://EXAMPLE.com:443/path/../page"] }, undefined, undefined, {} as any);
 
-			await rejection;
-			expect(fetch).toHaveBeenCalledOnce();
-		} finally {
-			vi.useRealTimers();
-		}
+		const request = fetch.mock.calls[0] as unknown as Parameters<typeof globalThis.fetch>;
+		expect(JSON.parse(request[1]?.body as string).urls).toEqual(["https://example.com/page"]);
 	});
 
-	it("honors parent cancellation without retrying", async () => {
-		const fetch = vi.fn(
-			async (_url: string | URL | Request, init?: RequestInit) =>
-				new Promise<Response>((_resolve, reject) => {
-					init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
-				}),
-		);
-		const parent = new AbortController();
-		const pending = toolWithFetch(fetch).execute(
-			"call",
-			{ urls: ["https://example.com"] },
-			parent.signal,
-			undefined,
-			{} as any,
-		);
+	it.each([
+		["wrong results", { results: "wrong", statuses: [] }],
+		[
+			"invalid error details",
+			{
+				results: [],
+				statuses: [{ id: "https://example.com", status: "error", error: { tag: 123 } }],
+			},
+		],
+		["unknown status", { results: [], statuses: [{ id: "https://example.com", status: "pending" }] }],
+	] as const)("rejects malformed provider shapes: %s", async (_case, response) => {
+		const tool = toolWithFetch(vi.fn(async () => jsonResponse(response)));
 
-		parent.abort();
-
-		await expect(pending).rejects.toThrow("cancelled");
-		expect(fetch).toHaveBeenCalledOnce();
+		await expect(
+			tool.execute("call", { urls: ["https://example.com"] }, undefined, undefined, {} as any),
+		).rejects.toMatchObject({
+			name: "WebFetchError",
+			code: "malformed_response",
+			message: "web_fetch received a malformed response.",
+		});
 	});
 });

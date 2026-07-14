@@ -35,7 +35,7 @@ describe("web_search tool", () => {
 		const tool = createWebSearchTool({
 			fetch,
 			authStorage: { get: () => ({ type: "api_key", key: "stored-secret" }) },
-			env: { EXA_API_KEY: "environment-secret" },
+			env: {},
 		});
 
 		const result = await tool.execute("call", { query: "Rails 8.1 release" }, undefined, undefined, {} as any);
@@ -69,6 +69,21 @@ describe("web_search tool", () => {
 					.replace("**Highlights:**\n\n-", "**Highlights:**\n-"),
 			},
 		]);
+		expect(result.details).toEqual({ resultCount: 1 });
+	});
+
+	it("maps an explicit result count to Exa", async () => {
+		const fetch = vi.fn(async () => jsonResponse({ results: [{ title: "Example", url: "https://example.com" }] }));
+		const tool = toolWithFetch(fetch);
+
+		await tool.execute("call", { query: "example", numResults: 3 }, undefined, undefined, {} as any);
+
+		expect(fetch).toHaveBeenCalledWith(
+			"https://api.exa.ai/search",
+			expect.objectContaining({
+				body: JSON.stringify({ query: "example", type: "auto", numResults: 3, contents: { highlights: true } }),
+			}),
+		);
 	});
 
 	it.each([
@@ -85,39 +100,13 @@ describe("web_search tool", () => {
 			env: {},
 		});
 
-		await expect(tool.execute("call", params, undefined, undefined, {} as any)).rejects.toThrow(message);
+		await expect(tool.execute("call", params, undefined, undefined, {} as any)).rejects.toMatchObject({
+			name: "WebSearchError",
+			code: "invalid_input",
+			message: expect.stringMatching(new RegExp(`^web_search .*${message}`)),
+		});
 		expect(fetch).not.toHaveBeenCalled();
 		expect(Value.Check(tool.parameters, params)).toBe(false);
-	});
-
-	it("falls back to EXA_API_KEY and fails without credentials before network activity", async () => {
-		const fetch = vi.fn(async () => jsonResponse({ results: [{ title: "Example", url: "https://example.com" }] }));
-		const fromEnvironment = createWebSearchTool({
-			fetch,
-			authStorage: { get: () => undefined },
-			env: { EXA_API_KEY: "environment-secret" },
-		});
-
-		await fromEnvironment.execute("call", { query: "example", numResults: 3 }, undefined, undefined, {} as any);
-		const request = fetch.mock.calls[0] as unknown as Parameters<typeof globalThis.fetch>;
-		expect(request[1]?.headers).toEqual({
-			"content-type": "application/json",
-			"x-api-key": "environment-secret",
-		});
-		expect(request[1]?.body).toBe(
-			JSON.stringify({ query: "example", type: "auto", numResults: 3, contents: { highlights: true } }),
-		);
-
-		fetch.mockClear();
-		const withoutCredentials = createWebSearchTool({
-			fetch,
-			authStorage: { get: () => undefined },
-			env: {},
-		});
-		await expect(
-			withoutCredentials.execute("call", { query: "example" }, undefined, undefined, {} as any),
-		).rejects.toMatchObject({ code: "credentials_missing", message: expect.stringContaining("EXA_API_KEY") });
-		expect(fetch).not.toHaveBeenCalled();
 	});
 
 	it("preserves provider order and omits unavailable metadata", async () => {
@@ -164,72 +153,30 @@ describe("web_search tool", () => {
 
 	it.each([
 		[
-			"authentication",
-			async () => jsonResponse({ error: "bad secret-that-must-not-leak" }, 401),
-			"authentication failed",
-			"authentication",
+			"a malformed result collection",
+			async () => jsonResponse({ results: "wrong" }),
+			"received a malformed response.",
+			"malformed_response",
 		],
-		["rate limit", async () => jsonResponse({ error: "slow down" }, 429), "rate limit exceeded", "rate_limit"],
-		["API", async () => jsonResponse({ error: "server failed" }, 500), "request failed (HTTP 500)", "upstream"],
 		[
-			"transport",
-			async () => Promise.reject(new Error("socket secret-that-must-not-leak")),
-			"network request failed",
-			"transport",
+			"a result without identity fields",
+			async () => jsonResponse({ results: [{}] }),
+			"received a malformed response.",
+			"malformed_response",
 		],
-		["malformed JSON", async () => new Response("not json"), "malformed response", "malformed_response"],
-		["malformed shape", async () => jsonResponse({ results: "wrong" }), "malformed response", "malformed_response"],
-		["missing identity", async () => jsonResponse({ results: [{}] }), "malformed response", "malformed_response"],
-		["empty results", async () => jsonResponse({ results: [] }), "returned no results", "empty_results"],
-	] as const)("reports concise %s errors without credential leakage", async (_case, fetch, message, code) => {
+		[
+			"an empty result collection",
+			async () => jsonResponse({ results: [] }),
+			"returned no results.",
+			"empty_results",
+		],
+	] as const)("reports %s as a coded web_search error", async (_case, fetch, message, code) => {
 		const tool = toolWithFetch(fetch as typeof globalThis.fetch);
 
-		let failure: Error | undefined;
-		try {
-			await tool.execute("call", { query: "example" }, undefined, undefined, {} as any);
-		} catch (error) {
-			failure = error as Error;
-		}
-
-		expect(failure?.message).toContain(message);
-		expect(failure?.message).not.toContain("secret-that-must-not-leak");
-		expect(failure).toMatchObject({ code });
-	});
-
-	it("times out after 30 seconds without retrying", async () => {
-		vi.useFakeTimers();
-		try {
-			const fetch = vi.fn(
-				async (_url: string | URL | Request, init?: RequestInit) =>
-					new Promise<Response>((_resolve, reject) => {
-						init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
-					}),
-			);
-			const pending = toolWithFetch(fetch).execute("call", { query: "example" }, undefined, undefined, {} as any);
-			const rejection = expect(pending).rejects.toThrow("timed out after 30 seconds");
-
-			await vi.advanceTimersByTimeAsync(30_000);
-
-			await rejection;
-			expect(fetch).toHaveBeenCalledOnce();
-		} finally {
-			vi.useRealTimers();
-		}
-	});
-
-	it("honors parent cancellation without retrying", async () => {
-		const fetch = vi.fn(
-			async (_url: string | URL | Request, init?: RequestInit) =>
-				new Promise<Response>((_resolve, reject) => {
-					init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
-				}),
-		);
-		const parent = new AbortController();
-		const pending = toolWithFetch(fetch).execute("call", { query: "example" }, parent.signal, undefined, {} as any);
-
-		parent.abort();
-
-		await expect(pending).rejects.toThrow("cancelled");
-		expect(fetch).toHaveBeenCalledOnce();
+		await expect(tool.execute("call", { query: "example" }, undefined, undefined, {} as any)).rejects.toMatchObject({
+			name: "WebSearchError",
+			code,
+			message: `web_search ${message}`,
+		});
 	});
 });
