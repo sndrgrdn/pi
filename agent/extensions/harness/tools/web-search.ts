@@ -90,31 +90,6 @@ function parseSearchResponse(value: unknown): WebSearchResult[] {
 	return results;
 }
 
-async function searchExa(
-	dependencies: ExaDependencies,
-	params: ExaSearchRequest,
-	signal: AbortSignal | undefined,
-): Promise<{ ok: true; results: WebSearchResult[] } | { ok: false; error: Error }> {
-	const outcome = await requestExaJson(
-		"web_search",
-		"search",
-		{
-			query: params.query,
-			type: "auto",
-			numResults: params.numResults,
-			contents: { highlights: true },
-		},
-		dependencies,
-		signal,
-	);
-	if (!outcome.ok) return outcome;
-	try {
-		return { ok: true, results: parseSearchResponse(outcome.value) };
-	} catch (error) {
-		return { ok: false, error: error as Error };
-	}
-}
-
 export function createWebSearchTool(dependencies: ExaDependencies = createExaDependencies()) {
 	return defineTool({
 		name: "web_search",
@@ -129,11 +104,23 @@ export function createWebSearchTool(dependencies: ExaDependencies = createExaDep
 				query: params.query.trim(),
 				numResults: params.numResults ?? 10,
 			};
-			const outcome = await searchExa(dependencies, searchRequest, signal);
+			const outcome = await requestExaJson(
+				"web_search",
+				"search",
+				{
+					query: searchRequest.query,
+					type: "auto",
+					numResults: searchRequest.numResults,
+					contents: { highlights: true },
+				},
+				dependencies,
+				signal,
+			);
 			if (!outcome.ok) throw outcome.error;
+			const results = parseSearchResponse(outcome.value);
 			return {
-				content: [{ type: "text", text: outcome.results.map(formatResult).join("\n\n") }],
-				details: { resultCount: outcome.results.length },
+				content: [{ type: "text", text: results.map(formatResult).join("\n\n") }],
+				details: { resultCount: results.length },
 			};
 		},
 	});
