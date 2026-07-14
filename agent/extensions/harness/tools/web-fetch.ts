@@ -1,25 +1,9 @@
-import { type AuthStorage, defineTool } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
+import { defineTool } from "@earendil-works/pi-coding-agent";
+import { type Static, Type } from "typebox";
 import { Value } from "typebox/value";
-import { createHarnessAuthStorage } from "../runner.ts";
+import { createExaDependencies, type ExaDependencies, requestExaJson } from "./exa.ts";
 
-interface WebFetchDependencies {
-	fetch: typeof globalThis.fetch;
-	authStorage: Pick<AuthStorage, "get">;
-	env: { EXA_API_KEY?: string };
-}
-
-type WebFetchFailureCode =
-	| "invalid_input"
-	| "credentials_missing"
-	| "cancelled"
-	| "timeout"
-	| "authentication"
-	| "rate_limit"
-	| "upstream"
-	| "transport"
-	| "malformed_response"
-	| "empty_results";
+type WebFetchFailureCode = "invalid_input" | "malformed_response" | "empty_results";
 
 class WebFetchError extends Error {
 	readonly code: WebFetchFailureCode;
@@ -47,6 +31,19 @@ const parameters = Type.Object(
 );
 
 const optionalString = Type.Optional(Type.Union([Type.String(), Type.Null()]));
+const successStatus = Type.Object({
+	id: Type.String({ minLength: 1 }),
+	status: Type.Literal("success"),
+});
+const errorStatus = Type.Object({
+	id: Type.String({ minLength: 1 }),
+	status: Type.Literal("error"),
+	error: Type.Object({
+		tag: Type.String({ minLength: 1 }),
+		httpStatusCode: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+	}),
+});
+type ExaErrorStatus = Static<typeof errorStatus>;
 const exaResponse = Type.Object({
 	results: Type.Array(
 		Type.Object({
@@ -57,35 +54,33 @@ const exaResponse = Type.Object({
 			text: Type.String(),
 		}),
 	),
-	statuses: Type.Array(
-		Type.Object({
-			id: Type.String({ minLength: 1 }),
-			status: Type.String(),
-			error: Type.Optional(
-				Type.Object({
-					tag: Type.String({ minLength: 1 }),
-					httpStatusCode: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
-				}),
-			),
-		}),
-	),
+	statuses: Type.Array(Type.Union([successStatus, errorStatus])),
 });
 
-const defaultDependencies = (): WebFetchDependencies => ({
-	fetch: globalThis.fetch,
-	authStorage: createHarnessAuthStorage(),
-	env: process.env,
-});
+interface WebFetchRequest {
+	urls: string[];
+	maxCharacters: number;
+}
 
-const TIMEOUT_ABORT = Symbol("timeout abort");
-
-function formatPage(page: {
-	title?: string | null;
+interface WebFetchPage {
+	title?: string;
 	url: string;
-	publishedDate?: string | null;
-	author?: string | null;
+	publishedDate?: string;
+	author?: string;
 	text: string;
-}): string {
+}
+
+interface WebFetchFailure {
+	url: string;
+	reason: string;
+}
+
+interface WebFetchResult {
+	pages: WebFetchPage[];
+	failures: WebFetchFailure[];
+}
+
+function formatPage(page: WebFetchPage): string {
 	return [
 		`# ${page.title || "(no title)"}`,
 		`URL: ${page.url}`,
@@ -96,21 +91,31 @@ function formatPage(page: {
 	].join("\n");
 }
 
-function formatFailure(status: { id: string; error?: { tag: string } }): string {
-	return `Error fetching ${status.id}: ${status.error?.tag ?? "unknown error"}`;
+function formatFailure(failed: WebFetchFailure): string {
+	return `Error fetching ${failed.url}: ${failed.reason}`;
 }
 
 function failure(code: WebFetchFailureCode, message: string): WebFetchError {
 	return new WebFetchError(code, `web_fetch ${message}`);
 }
 
-function abortFailure(signal: AbortSignal): WebFetchError {
-	return signal.reason === TIMEOUT_ABORT
-		? failure("timeout", "timed out after 30 seconds.")
-		: failure("cancelled", "was cancelled.");
+function parseFetchResponse(value: unknown): WebFetchResult {
+	if (!Value.Check(exaResponse, value)) throw failure("malformed_response", "received a malformed response.");
+	return {
+		pages: value.results.map((page) => ({
+			...(page.title ? { title: page.title } : {}),
+			url: page.url,
+			...(page.publishedDate ? { publishedDate: page.publishedDate } : {}),
+			...(page.author ? { author: page.author } : {}),
+			text: page.text,
+		})),
+		failures: value.statuses
+			.filter((status): status is ExaErrorStatus => status.status === "error")
+			.map((status) => ({ url: status.id, reason: status.error.tag })),
+	};
 }
 
-export function createWebFetchTool(dependencies: WebFetchDependencies = defaultDependencies()) {
+export function createWebFetchTool(dependencies: ExaDependencies = createExaDependencies()) {
 	return defineTool({
 		name: "web_fetch",
 		label: "web_fetch",
@@ -120,66 +125,32 @@ export function createWebFetchTool(dependencies: WebFetchDependencies = defaultD
 		async execute(_id, params, signal) {
 			if (!Value.Check(parameters, params))
 				throw failure("invalid_input", "requires a non-empty urls array and a positive maxCharacters.");
-			const credential = dependencies.authStorage.get("exa");
-			const apiKey = credential?.type === "api_key" ? credential.key : dependencies.env.EXA_API_KEY;
-			if (!apiKey)
-				throw failure("credentials_missing", "requires an `exa` API key in Pi AuthStorage or EXA_API_KEY.");
-			if (signal?.aborted) throw failure("cancelled", "was cancelled.");
-			const request = new AbortController();
-			const cancel = () => request.abort();
-			signal?.addEventListener("abort", cancel, { once: true });
-			const timeout = setTimeout(() => request.abort(TIMEOUT_ABORT), 30_000);
-			try {
-				let value: unknown;
-				try {
-					const response = await dependencies.fetch("https://api.exa.ai/contents", {
-						method: "POST",
-						headers: { "content-type": "application/json", "x-api-key": apiKey },
-						body: JSON.stringify({
-							urls: params.urls,
-							text: { maxCharacters: params.maxCharacters ?? 3000 },
-						}),
-						signal: request.signal,
-					});
-					if (!response.ok) {
-						if (response.status === 401 || response.status === 403)
-							throw failure("authentication", "authentication failed.");
-						if (response.status === 429) throw failure("rate_limit", "rate limit exceeded.");
-						throw failure("upstream", `request failed (HTTP ${response.status}).`);
-					}
-					try {
-						value = await response.json();
-					} catch {
-						throw failure("malformed_response", "received a malformed response.");
-					}
-				} catch (error) {
-					if (request.signal.aborted) throw abortFailure(request.signal);
-					throw error instanceof WebFetchError ? error : failure("transport", "network request failed.");
-				}
-				if (!Value.Check(exaResponse, value)) throw failure("malformed_response", "received a malformed response.");
-				const failures = value.statuses.filter((status) => status.status === "error");
-				if (value.results.length === 0) {
-					const reasons = failures
-						.map((status) => `${status.id}: ${status.error?.tag ?? "unknown error"}`)
-						.join("; ");
-					throw failure(
-						"empty_results",
-						reasons ? `failed to fetch every URL: ${reasons}.` : "returned no content.",
-					);
-				}
-				return {
-					content: [
-						{
-							type: "text",
-							text: [...value.results.map(formatPage), ...failures.map(formatFailure)].join("\n\n"),
-						},
-					],
-					details: { resultCount: value.results.length },
-				};
-			} finally {
-				clearTimeout(timeout);
-				signal?.removeEventListener("abort", cancel);
+			const fetchRequest: WebFetchRequest = {
+				urls: [...params.urls],
+				maxCharacters: params.maxCharacters ?? 3000,
+			};
+			const outcome = await requestExaJson(
+				"web_fetch",
+				"contents",
+				{ urls: fetchRequest.urls, text: { maxCharacters: fetchRequest.maxCharacters } },
+				dependencies,
+				signal,
+			);
+			if (!outcome.ok) throw outcome.error;
+			const result = parseFetchResponse(outcome.value);
+			if (result.pages.length === 0) {
+				const reasons = result.failures.map((failed) => `${failed.url}: ${failed.reason}`).join("; ");
+				throw failure("empty_results", reasons ? `failed to fetch every URL: ${reasons}.` : "returned no content.");
 			}
+			return {
+				content: [
+					{
+						type: "text",
+						text: [...result.pages.map(formatPage), ...result.failures.map(formatFailure)].join("\n\n"),
+					},
+				],
+				details: { resultCount: result.pages.length },
+			};
 		},
 	});
 }

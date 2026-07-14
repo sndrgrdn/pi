@@ -253,6 +253,18 @@ describe("web_fetch tool", () => {
 			"malformed response",
 			"malformed_response",
 		],
+		[
+			"error status without a reason",
+			async () => jsonResponse({ results: [], statuses: [{ id: "https://example.com", status: "error" }] }),
+			"malformed response",
+			"malformed_response",
+		],
+		[
+			"unknown status",
+			async () => jsonResponse({ results: [], statuses: [{ id: "https://example.com", status: "pending" }] }),
+			"malformed response",
+			"malformed_response",
+		],
 	] as const)("reports concise %s errors without credential leakage", async (_case, fetch, message, code) => {
 		let thrown: Error | undefined;
 		try {
