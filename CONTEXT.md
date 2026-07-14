@@ -4,16 +4,12 @@ This context describes the language for local Pi agent extensions, especially de
 
 ## Language
 
-**Pi Harness**:
-The maintained layer over Pi core comprising profiles, prompts, custom tools, the subagent runtime, skills, session workflows, and instrumentation. Pi core, model providers, and external MCP servers are dependencies, not Pi Harness components.
-_Avoid_: Pi core, agent configuration
-
 **Agent Profile**:
 A Profile resolves model, reasoning, tools, and posture prompt per fixed Mode (low/medium/high).
 _Avoid_: mode, model preset
 
 **Main Agent Tool Surface**:
-The set of model-visible tools available to the main agent. Pi Harness V2 designs this surface from an empty baseline, admitting each tool only through an explicit capability decision.
+The set of model-visible tools available to the main agent. The extension layer designs this surface from an empty baseline, admitting each tool only through an explicit capability decision.
 _Avoid_: profile tools, default tools
 
 **MCP Gateway**:
@@ -21,27 +17,27 @@ The single model-facing `mcp` tool supplied by `pi-mcp-adapter`; its behavior re
 _Avoid_: MCP tools, MCP integration
 
 **Minimal High-Quality Primitive**:
-A model-facing interface that is cohesive, predictable, composable, and materially useful. V2 minimizes total cognitive and schema surface rather than raw tool count; responsibilities with distinct lifecycles or authority boundaries remain separate.
+A model-facing interface that is cohesive, predictable, composable, and materially useful. The design minimizes total cognitive and schema surface rather than raw tool count; responsibilities with distinct lifecycles or authority boundaries remain separate.
 _Avoid_: fewest tools, merged gateway, convenience tool
 
 **Empty Tool Baseline**:
-The starting state for Pi Harness V2 design in which the main agent has zero model-visible tools. It is a reasoning baseline, not a claim that the finished harness should remain tool-less.
+The starting state for tool-surface design in which the main agent has zero model-visible tools. It is a reasoning baseline, not a claim that the finished harness should remain tool-less.
 _Avoid_: minimal toolset, default Pi tools
 
 **Baseline Assets**:
-Existing resources preserved while V2 redesigns model-visible capabilities: `SYSTEM.md`, `APPEND_SYSTEM.md`, `AGENTS.md`, skills, the external `pi-mcp-adapter` package, MCP configuration and integrations, and Pi settings. Preservation does not imply that an asset receives model-visible access.
-_Avoid_: V1 harness, inherited toolset
+Existing resources preserved while redesigning model-visible capabilities: `SYSTEM.md`, `APPEND_SYSTEM.md`, `AGENTS.md`, skills, the external `pi-mcp-adapter` package, MCP configuration and integrations, and Pi settings. Preservation does not imply that an asset receives model-visible access.
+_Avoid_: inherited extension, inherited toolset
 
 **Bankrupt Extension Estate**:
-All local code under `extensions/`, treated as carrying no assumed V2 contracts, architecture, or implementation value. It may supply evidence, but each capability must be justified and designed anew before any code is reused.
+All local code under `extensions/`, treated as carrying no assumed contracts, architecture, or implementation value. It may supply evidence, but each capability must be justified and designed anew before any code is reused.
 _Avoid_: extension migration, inherited extensions
 
 **Skill Corpus**:
-The existing collection under `skills/`, preserved as V2 content independently of how agents discover or load it.
+The existing collection under `skills/`, preserved as content independently of how agents discover or load it.
 _Avoid_: skill tool, skill runtime
 
 **Skill Delivery**:
-The V2 mechanism by which agents discover and load the Skill Corpus. Existing built-in and custom mechanisms carry no presumption of reuse.
+The mechanism by which agents discover and load the Skill Corpus. Existing built-in and custom mechanisms carry no presumption of reuse.
 _Avoid_: skill corpus, inherited skill tool
 
 **Agent Tool**:

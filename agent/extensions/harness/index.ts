@@ -1,5 +1,5 @@
 /**
- * Pi Harness V2 — extension entry point.
+ * Agent extension entry point.
  *
  * Wires all harness modules onto pi.
  */

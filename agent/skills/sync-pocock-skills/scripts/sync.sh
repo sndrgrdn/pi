@@ -212,10 +212,10 @@ done < "$OUR_LIST"
 # --- Section 3: Scan for Claude Code-specific patterns needing patches ---
 echo ""
 echo "=== UNPATCHED_PATTERNS ==="
-# Only flag Claude Code-specific syntax, not generic "subagent" references
-# (pi has native subagent support). Slash skill refs (`/skill-name`) are NOT
-# flagged: the pi skill extension accepts them natively, no translation needed.
-PATTERNS='Agent tool|subagent_type|CLAUDE\.md'
+# Flag Claude Code-specific delegation and project-instruction assumptions.
+# Generic "subagent" references and slash skill refs (`/skill-name`) are not
+# sufficient on their own: both can be valid in Pi skill prose.
+PATTERNS='Agent tool|subagent_type|CLAUDE\.md|general-purpose|background agent|/research.*subagent|research subagents'
 while IFS=$'\t' read -r name our_path; do
   while IFS= read -r file; do
     rel_path="${file#"$our_path"/}"

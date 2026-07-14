@@ -1,6 +1,6 @@
 ---
 name: sync-pocock-skills
-description: Sync Matt Pocock's skills from upstream (github.com/mattpocock/skills), apply pi-specific patches that translate Claude Code sub-agent references to Pi's subagent tool, and flag new skills or unpatched patterns. Use when user says "sync skills", "update pocock skills", or "check for skill updates".
+description: Sync Matt Pocock's skills from upstream, apply Pi compatibility patches, and flag new skills or unpatched patterns. Use when the user asks to sync or update Pocock skills.
 disable-model-invocation: true
 ---
 
@@ -129,17 +129,19 @@ When replacing Claude Code-specific patterns, use these Pi equivalents:
 
 | Claude Code pattern | Pi replacement |
 |---|---|
-| `Agent tool with subagent_type=Explore` | `subagent({ agent: "explore" })` |
-| `Spawn N sub-agents in parallel using the Agent tool` | `subagent({ tasks: [{ agent: "general", task: "..." }, ...] })` |
-| `sub-agent` / `subagent` (generic, Claude Code context) | Translate to Pi `subagent()` tool syntax |
-| `CLAUDE.md` checked first | `AGENTS.md` checked first, `CLAUDE.md` as fallback |
+| Explore agent | `finder` |
+| Independent design agent | `task` |
+| Independent code reviewer | `oracle` |
+| Agent that writes or modifies files | `task` |
+| Research agent that writes a report | `task` |
+| Read-only external research agent | `librarian` |
+| `CLAUDE.md` project instructions | Remove; inspect and edit `AGENTS.md` only |
 
 **No longer patched:**
 
 - **Slash skill refs (`/skill-name`)** — the pi skill extension (`extensions/skill.ts`) accepts `/name` and `$name` inline refs natively, including inside skill bodies. Upstream files keep their slashes; do not translate to `$name`.
 - **`disable-model-invocation` frontmatter** — ignored by the pi skill stack (`skill.ts` + `disable-invocation.ts` make all skills invisible until user-invoked). Keep upstream frontmatter as-is.
 
-**Note:** Pi has native subagent support. Unlike setups without subagents, we translate the syntax rather than removing the concept. Generic uses of "subagent" that aren't Claude Code-specific do not need patching.
 
 ## Tracking
 
@@ -160,6 +162,5 @@ sync-pocock-skills/
 └── patches/
     ├── ignored.txt                             # Skills explicitly declined
     ├── sync-excludes.txt                       # Per-skill file exclusions (keep local-only / omit upstream)
-    ├── setup-matt-pocock-skills__SKILL.md.patch
-    └── tdd__SKILL.md.patch
+    └── <skill>__<path>.patch                   # Pi compatibility patches
 ```

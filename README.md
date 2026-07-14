@@ -2,14 +2,14 @@
 
 Personal configuration and extension code for [pi](https://github.com/earendil-works/pi-mono/tree/main/packages/coding-agent), a terminal coding agent by Mario Zechner.
 
-This repository implements **Pi Harness V2**: a constrained main-agent tool surface, mode-based model profiles, delegated specialist agents, local skills, and custom terminal UI. The Git repository lives at `~/.pi`; Pi's runtime configuration remains under `~/.pi/agent`, where Pi discovers it.
+This repository contains a constrained main-agent tool surface, mode-based model profiles, delegated specialist agents, local skills, and custom terminal UI. The Git repository lives at `~/.pi`; Pi's runtime configuration remains under `~/.pi/agent`, where Pi discovers it.
 
 ## Layout
 
 ```text
 ~/.pi/
 ├── AGENTS.md                 # repository-level agent instructions
-├── CONTEXT.md                # canonical Pi Harness terminology
+├── CONTEXT.md                # canonical extension terminology
 ├── README.md
 ├── docs/agents/              # issue tracker, triage, and domain guidance
 └── agent/                    # Pi's global agent directory
@@ -29,7 +29,7 @@ This repository implements **Pi Harness V2**: a constrained main-agent tool surf
     └── npm/                  # npm-specific local state
 ```
 
-## Pi Harness V2
+## Agent extensions
 
 `agent/extensions/harness/` is the main extension package. It resolves the active mode, validates profiles, registers tools, manages background processes, and runs delegated agents in isolated sessions.
 

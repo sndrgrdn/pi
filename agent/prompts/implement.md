@@ -8,11 +8,12 @@ $@
 
 ## Process
 
-1. Read the work, its source spec or tickets, and the repository guidance. Record the acceptance criteria, the current `HEAD` as the review fixed point, and any pre-existing working-tree changes. Ask only about ambiguity that would materially change the implementation.
-2. Identify the public seams that need tests and agree them with the user. Use `/tdd` to implement one vertical slice at a time. When TDD does not fit the work, state why and choose the closest behavior-level verification.
-3. For every slice, make its focused test pass and run the relevant typecheck before starting the next slice. Keep the implementation within the acceptance criteria.
-4. Once every slice passes its focused checks, commit only the work from this task to the current branch.
-5. Run `/deep-review` against the recorded fixed point and the original spec or tickets. Resolve every valid finding, then rerun the affected focused checks.
-6. Run the full test suite once, after review fixes. Commit any remaining task changes.
+Implement the work described by the spec or tickets.
 
-The work is complete when every acceptance criterion is implemented, review findings are resolved or explicitly accounted for, focused checks and the final suite pass, all task changes are committed, and pre-existing changes remain untouched.
+Before changing code, record the current `HEAD` as the review fixed point and note any pre-existing changes.
+
+Use `/tdd` where possible, at pre-agreed seams. Run focused tests and typechecking regularly, and the full test suite once at the end.
+
+Commit only this task's changes, then run `/deep-review` with the Design and Craft judges against the fixed point and original work. Resolve or account for every finding and rerun affected checks.
+
+Commit any review fixes to the current branch. Leave pre-existing changes untouched.

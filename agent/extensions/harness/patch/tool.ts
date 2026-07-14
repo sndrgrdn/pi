@@ -1,5 +1,5 @@
 /**
- * `apply_patch` — the sole editor on the V2 surface.
+ * `apply_patch` — the sole editor on the model-visible surface.
  *
  * Plain JSON tool, schema `{patch}`. The model sees a summary-only A/M/D
  * result; Trace View renders one collapsed lifecycle row while expansion

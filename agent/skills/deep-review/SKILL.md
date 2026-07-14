@@ -1,15 +1,17 @@
 ---
 name: deep-review
-description: Panel review of a branch — four isolated judges (Design, Craft, Fitness, Stability) convicting on evidence, gated mechanically.
+description: Selectable panel review of a branch — Design, Craft, Fitness, and Stability judges convicting on evidence, gated mechanically.
 disable-model-invocation: true
 ---
 
-Deep review of the diff between `HEAD` and a fixed point: four **judges**, each answering one question in an isolated subagent context. This session **dispatches** — it gathers the evidence, briefs the judges, and tallies the gate; it never judges.
+Deep review of the diff between `HEAD` and a fixed point. Four **judges** are available, each answering one question in an isolated task run. Use the subset named by the caller; default to all four. This session **dispatches** — it gathers the evidence, briefs the selected judges, and applies the gate to their reports; it never judges.
 
 - **Design** — are these the right modules? (reconstruction)
 - **Craft** — is the code inside built right? (rules + smells)
 - **Fitness** — should this exist, in this shape, at all? (prosecution)
 - **Stability** — what does it break? (blast radius)
+
+A requested subset defines the review's scope. Unselected judges are omitted, not missing; a selected judge that fails to report is missing.
 
 ## Severity
 
@@ -27,7 +29,7 @@ The fixed point is whatever the user supplied — commit SHA, branch, tag, `HEAD
 
 Capture once: `git diff <fixed-point>...HEAD` (three-dot, against the merge-base) and `git log <fixed-point>..HEAD --oneline`.
 
-Done when the ref resolves (`git rev-parse <fixed-point>`) and the diff is non-empty — a bad ref or empty diff fails here, not inside four parallel judges.
+Done when the ref resolves (`git rev-parse <fixed-point>`) and the diff is non-empty — a bad ref or empty diff fails here, not inside the selected judges.
 
 ### 2. Build the census
 
@@ -44,9 +46,9 @@ Done when all six entries exist and contain only facts.
 
 ### 3. Convene the judges
 
-Read `references/design.md`, `references/craft.md`, `references/fitness.md`, `references/stability.md` now — each is a complete rubric to paste verbatim into its judge's prompt.
+Read the selected judges' rubrics now — `references/design.md`, `references/craft.md`, `references/fitness.md`, or `references/stability.md`. Each is complete and goes verbatim into its judge's prompt.
 
-Spawn all four in one call: `subagent({ tasks: [...] })`, agent `general` for each. Design and Fitness run on the strongest reasoning model available; Craft and Stability run one tier down. Charitable drift lives in the judging seats, so reserve the strongest reasoning for them.
+Convene the selected judges as separate `task` calls in parallel, scoped to review and a judge report. Run Design and Fitness with `mode: "high"`; run Craft and Stability with `mode: "medium"`. Charitable drift lives in the judging seats, so reserve the strongest reasoning for Design and Fitness.
 
 Every prompt carries the diff command, commit list, Severity block above, its rubric, this reporting contract, and its evidence packet:
 
@@ -57,23 +59,23 @@ Every prompt carries the diff command, commit list, Severity block above, its ru
 - **Fitness** — the census in full.
 - **Stability** — stated purpose and premises.
 
-Done when four judges are spawned in one call, each prompt carrying the five shared items and its complete evidence packet.
+Done when every selected judge is spawned in one call, each prompt carrying the five shared items and its complete evidence packet.
 
 ### 4. Report and gate
 
-The four full judge reports in the subagent result are the **audit trail**. Keep them there; surface any seat's full report when the user asks. The default response is a **decision brief** targeting 1,000 words:
+The selected judges' full task reports are the **audit trail**. Keep them there; surface any selected seat's full report when the user asks. The default response is a **decision brief** targeting 1,000 words:
 
-1. `# Deep Review — PASS|FAIL|INCOMPLETE` — the single verdict.
+1. `# Deep Review — PASS|FAIL|INCOMPLETE` for the full panel, or `# Deep Review (Design + Craft) — PASS|FAIL|INCOMPLETE` for a subset — the single scoped verdict.
 2. `## Charges` — every distinct blocking charge, each under 100 words: name the filing and corroborating seats, cite the decisive evidence (file:line where source-backed), state the required remedy, and compress Brady disclosure to one sentence. Write `None` when there are no blockers.
 3. `## Unchecked obligations` — every unchecked presumptive-blocker rule, grouped by seat with the reason. Omit this section when none exist.
-4. `## Seat summary` — one table row per seat: blocking count, non-blocking count, and the first finding in that judge's order, or `—` when it filed none.
-5. `## Judgment calls` — the first three non-blocking findings per seat in judge order, one line each. When a seat has more, append `<N> more in the full <Seat> report.` Evidence stays in the audit trail.
+4. `## Seat summary` — one table row per selected seat: blocking count, non-blocking count, and the first finding in that judge's order, or `—` when it filed none.
+5. `## Judgment calls` — the first three non-blocking findings per selected seat in judge order, one line each. When a seat has more, append `<N> more in the full <Seat> report.` Evidence stays in the audit trail.
 6. `## Full reports` — state that the complete reconstruction tables, premise tables, evidence, disclosures, and proof-obligation ledgers remain available by seat on request.
 
 Merge findings only when they share one root cause and one required remedy, naming every corroborating seat. Findings on the same artifact with distinct causes or remedies remain distinct charges. The charge count, not the raw finding count, is the verdict's weight.
 
 Before gating, audit blocker provenance mechanically: every blocking finding must name a rubric rule explicitly tagged **presumptive blocker** and show that rule's evidence bar is met. A finding under an untagged rule is non-blocking regardless of the judge's label.
 
-The gate resolves in order: **FAIL** when any blocking finding exists; otherwise **INCOMPLETE** when any presumptive-blocker rule is unchecked; otherwise **PASS**. A missing judge leaves all of its presumptive-blocker rules unchecked. Charge completeness outranks the word target: when the complete charge list would exceed it, compress each charge to one line and leave supporting detail in the audit trail.
+The gate resolves over the selected judges, in order: **FAIL** when any blocking finding exists; otherwise **INCOMPLETE** when any presumptive-blocker rule is unchecked; otherwise **PASS**. A missing selected judge leaves all of its presumptive-blocker rules unchecked. Charge completeness outranks the word target: when the complete charge list would exceed it, compress each charge to one line and leave supporting detail in the audit trail.
 
-Done when every charge traces to a tagged presumptive-blocker rule with its evidence bar met, every blocking finding maps to a charge, every unchecked presumptive-blocker rule appears under Unchecked obligations, every seat has a summary row, every omitted non-blocking finding is included in its seat's count, and the headline verdict matches the gate rule.
+Done when every charge traces to a tagged presumptive-blocker rule with its evidence bar met, every blocking finding maps to a charge, every unchecked presumptive-blocker rule appears under Unchecked obligations, every selected seat has a summary row, every omitted non-blocking finding is included in its seat's count, and the headline names the selected scope and matches its gate.
