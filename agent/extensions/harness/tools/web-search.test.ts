@@ -1,3 +1,4 @@
+import { Value } from "typebox/value";
 import { describe, expect, it, vi } from "vitest";
 import { createWebSearchTool } from "./web-search.ts";
 
@@ -86,6 +87,7 @@ describe("web_search tool", () => {
 
 		await expect(tool.execute("call", params, undefined, undefined, {} as any)).rejects.toThrow(message);
 		expect(fetch).not.toHaveBeenCalled();
+		expect(Value.Check(tool.parameters, params)).toBe(false);
 	});
 
 	it("falls back to EXA_API_KEY and fails without credentials before network activity", async () => {
@@ -114,7 +116,7 @@ describe("web_search tool", () => {
 		});
 		await expect(
 			withoutCredentials.execute("call", { query: "example" }, undefined, undefined, {} as any),
-		).rejects.toThrow("requires Exa credentials");
+		).rejects.toMatchObject({ code: "credentials_missing", message: expect.stringContaining("EXA_API_KEY") });
 		expect(fetch).not.toHaveBeenCalled();
 	});
 
@@ -157,18 +159,20 @@ describe("web_search tool", () => {
 			"authentication",
 			async () => jsonResponse({ error: "bad secret-that-must-not-leak" }, 401),
 			"authentication failed",
+			"authentication",
 		],
-		["rate limit", async () => jsonResponse({ error: "slow down" }, 429), "rate limit exceeded"],
-		["API", async () => jsonResponse({ error: "server failed" }, 500), "Exa request failed (HTTP 500)"],
+		["rate limit", async () => jsonResponse({ error: "slow down" }, 429), "rate limit exceeded", "rate_limit"],
+		["API", async () => jsonResponse({ error: "server failed" }, 500), "request failed (HTTP 500)", "upstream"],
 		[
 			"transport",
 			async () => Promise.reject(new Error("socket secret-that-must-not-leak")),
 			"network request failed",
+			"transport",
 		],
-		["malformed JSON", async () => new Response("not json"), "malformed response"],
-		["malformed shape", async () => jsonResponse({ results: "wrong" }), "malformed response"],
-		["empty results", async () => jsonResponse({ results: [] }), "returned no results"],
-	] as const)("reports concise %s errors without credential leakage", async (_case, fetch, message) => {
+		["malformed JSON", async () => new Response("not json"), "malformed response", "malformed_response"],
+		["malformed shape", async () => jsonResponse({ results: "wrong" }), "malformed response", "malformed_response"],
+		["empty results", async () => jsonResponse({ results: [] }), "returned no results", "empty_results"],
+	] as const)("reports concise %s errors without credential leakage", async (_case, fetch, message, code) => {
 		const tool = toolWithFetch(fetch as typeof globalThis.fetch);
 
 		let failure: Error | undefined;
@@ -180,6 +184,7 @@ describe("web_search tool", () => {
 
 		expect(failure?.message).toContain(message);
 		expect(failure?.message).not.toContain("secret-that-must-not-leak");
+		expect(failure).toMatchObject({ code });
 	});
 
 	it("times out after 30 seconds without retrying", async () => {
