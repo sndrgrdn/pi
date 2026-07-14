@@ -71,7 +71,7 @@ Let them edit before writing.
 
 ### 4. Write
 
-Write `AGENTS.md`, creating it when absent; Step 3 approved its complete contents.
+Edit `AGENTS.md`. If it does not exist, ask before creating it.
 
 If an `## Agent skills` block already exists in `AGENTS.md`, update its contents in-place rather than appending a duplicate. Don't overwrite user edits to the surrounding sections.
 

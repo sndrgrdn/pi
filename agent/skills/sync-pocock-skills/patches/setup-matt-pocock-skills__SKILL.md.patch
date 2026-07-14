@@ -22,7 +22,7 @@
  ### 4. Write
  
 -**Pick the file to edit:**
-+Write `AGENTS.md`, creating it when absent; Step 3 approved its complete contents.
++Edit `AGENTS.md`. If it does not exist, ask before creating it.
  
 -- If `CLAUDE.md` exists, edit it.
 -- Else if `AGENTS.md` exists, edit it.
