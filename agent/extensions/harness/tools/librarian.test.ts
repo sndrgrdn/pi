@@ -42,6 +42,7 @@ describe("librarian tool", () => {
 				"shell_command_status",
 				"shell_command_cancel",
 				"web_search",
+				"web_fetch",
 			],
 		});
 		expect(options?.toolbox?.(new BackgroundShellRegistry()).map((tool) => tool.name)).toEqual([
@@ -50,7 +51,10 @@ describe("librarian tool", () => {
 			"shell_command_status",
 			"shell_command_cancel",
 			"web_search",
+			"web_fetch",
 		]);
+		expect(options?.definition.tools).not.toContain("web_search_exa");
+		expect(options?.definition.tools).not.toContain("web_fetch_exa");
 	});
 
 	it("formats a query without context", async () => {

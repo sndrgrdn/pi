@@ -8,6 +8,7 @@ import type { ResolvedProfiles } from "../profiles.ts";
 import type { SubagentRunner } from "../runner.ts";
 import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
 import { createCheckoutTool } from "./checkout.ts";
+import { createWebFetchTool } from "./web-fetch.ts";
 import { createWebSearchTool } from "./web-search.ts";
 
 const prompt = readFileSync(
@@ -44,7 +45,12 @@ const spec: AgentToolSpec<LibrarianParams, "librarian"> = {
 	plan: (params) => ({
 		systemPrompt: prompt,
 		message: librarianMessage(params),
-		toolbox: (processes) => [createCheckoutTool(), ...createShellToolbox(processes), createWebSearchTool()],
+		toolbox: (processes) => [
+			createCheckoutTool(),
+			...createShellToolbox(processes),
+			createWebSearchTool(),
+			createWebFetchTool(),
+		],
 	}),
 	finalize: (answer) => ({ content: answer }),
 	recover: (error) => {
@@ -52,7 +58,7 @@ const spec: AgentToolSpec<LibrarianParams, "librarian"> = {
 		throw mapLibrarianError(error);
 	},
 	presentation: { action: "librarian", target: (params) => params.query },
-	tools: ["checkout", "grep", "find", "read", ...SHELL_TOOLBOX_NAMES, "web_search"],
+	tools: ["checkout", "grep", "find", "read", ...SHELL_TOOLBOX_NAMES, "web_search", "web_fetch"],
 	allowMcp: false,
 };
 
