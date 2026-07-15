@@ -70,11 +70,15 @@ export function isSubagentAbortError(error: unknown): error is SubagentAbortErro
 	return error instanceof SubagentAbortError;
 }
 
+export interface SubagentRecordConfig {
+	parentSession: string;
+	name: string;
+}
+
 export interface ChildSessionConfig {
 	definition: AgentDefinition;
 	cwd: string;
-	parentSession?: string;
-	recordName?: string;
+	record?: SubagentRecordConfig;
 	toolbox?: ChildToolboxFactory;
 }
 
@@ -85,8 +89,7 @@ export interface RunOptions {
 	definition: AgentDefinition;
 	cwd: string;
 	message: string;
-	parentSession?: string;
-	recordName?: string;
+	record?: SubagentRecordConfig;
 	onAction?(toolName: string): void;
 	toolbox?: ChildToolboxFactory;
 	signal?: AbortSignal;
@@ -140,8 +143,7 @@ export class SubagentRunner {
 			child = await this.createChild({
 				definition: options.definition,
 				cwd: options.cwd,
-				...(options.parentSession ? { parentSession: options.parentSession } : {}),
-				...(options.recordName ? { recordName: options.recordName } : {}),
+				...(options.record ? { record: options.record } : {}),
 				...(options.toolbox ? { toolbox: options.toolbox } : {}),
 			});
 			if (options.onAction && child.onAction) unsubscribe = child.onAction(options.onAction);
@@ -183,14 +185,14 @@ export function resolveConfiguredModel(registry: Pick<ModelRegistry, "find">, mo
 
 /** Build the native session backing a Subagent Record, following caller persistence. */
 export function createSubagentSessionManager(
-	config: Pick<ChildSessionConfig, "cwd" | "parentSession" | "recordName">,
+	config: Pick<ChildSessionConfig, "cwd" | "record">,
 	agentDir = getAgentDir(),
 ): SessionManager {
-	if (!config.parentSession) return SessionManager.inMemory(config.cwd);
+	if (!config.record) return SessionManager.inMemory(config.cwd);
 	const sessionManager = SessionManager.create(config.cwd, join(agentDir, "sessions", "subagent"), {
-		parentSession: config.parentSession,
+		parentSession: config.record.parentSession,
 	});
-	if (config.recordName) sessionManager.appendSessionInfo(config.recordName);
+	sessionManager.appendSessionInfo(config.record.name);
 	return sessionManager;
 }
 

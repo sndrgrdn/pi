@@ -55,15 +55,13 @@ describe("shared subagent runner", () => {
 			definition,
 			cwd: "/parent/worktree",
 			message: "Review: check locking",
-			parentSession: "/sessions/parent.jsonl",
-			recordName: "oracle: check locking",
+			record: { parentSession: "/sessions/parent.jsonl", name: "oracle: check locking" },
 		});
 
 		expect(create).toHaveBeenCalledWith({
 			definition,
 			cwd: "/parent/worktree",
-			parentSession: "/sessions/parent.jsonl",
-			recordName: "oracle: check locking",
+			record: { parentSession: "/sessions/parent.jsonl", name: "oracle: check locking" },
 		});
 		expect(child.prompt).toHaveBeenCalledWith("Review: check locking");
 		expect(result).toEqual({ sessionID: "child-7", answer: "Final advice", toolLog: [] });
@@ -180,8 +178,7 @@ describe("Subagent Record session boundary", () => {
 		const session = createSubagentSessionManager(
 			{
 				cwd: "/repo",
-				parentSession: "/sessions/parent.jsonl",
-				recordName: "oracle: check locking",
+				record: { parentSession: "/sessions/parent.jsonl", name: "oracle: check locking" },
 			},
 			agentDir,
 		);
@@ -197,7 +194,7 @@ describe("Subagent Record session boundary", () => {
 		const agentDir = mkdtempSync(join(tmpdir(), "subagent-record-"));
 		dirs.push(agentDir);
 
-		const session = createSubagentSessionManager({ cwd: "/repo", recordName: "oracle: check locking" }, agentDir);
+		const session = createSubagentSessionManager({ cwd: "/repo" }, agentDir);
 
 		expect(session.isPersisted()).toBe(false);
 		expect(session.getSessionFile()).toBeUndefined();

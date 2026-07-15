@@ -199,13 +199,12 @@ describe("task tool", () => {
 		} as any);
 
 		expect(run).toHaveBeenCalledTimes(2);
-		expect(run.mock.calls[0]![0]).toMatchObject({
+		expect(run.mock.calls[0]![0].record).toEqual({
 			parentSession: "/sessions/parent.jsonl",
-			recordName: "task: work",
+			name: "task: work",
 		});
 		expect(run.mock.calls[1]![0].signal).toBe(controller.signal);
-		expect(run.mock.calls[1]![0]).not.toHaveProperty("parentSession");
-		expect(run.mock.calls[1]![0]).not.toHaveProperty("recordName");
+		expect(run.mock.calls[1]![0]).not.toHaveProperty("record");
 		expect(result.content[0]).toEqual({
 			type: "text",
 			text: '<task_error sessionID="task-failed">\nChanged app.ts; verification did not run.\n</task_error>',

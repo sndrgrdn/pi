@@ -70,8 +70,7 @@ describe("agent tool factory", () => {
 		});
 		expect(options?.message).toBe("Do: probe it");
 		expect(options?.cwd).toBe("/repo");
-		expect(options).not.toHaveProperty("parentSession");
-		expect(options).not.toHaveProperty("recordName");
+		expect(options).not.toHaveProperty("record");
 	});
 
 	it("attributes a persistent Subagent Record to its immediate caller", async () => {
@@ -83,9 +82,9 @@ describe("agent tool factory", () => {
 			sessionManager: { getSessionFile: () => "/sessions/parent.jsonl" },
 		} as any);
 
-		expect(run.mock.calls[0]?.[0]).toMatchObject({
+		expect(run.mock.calls[0]?.[0].record).toEqual({
 			parentSession: "/sessions/parent.jsonl",
-			recordName: "task: inspect durable lineage",
+			name: "task: inspect durable lineage",
 		});
 	});
 
@@ -98,7 +97,7 @@ describe("agent tool factory", () => {
 			sessionManager: { getSessionFile: () => "/sessions/parent.jsonl" },
 		} as any);
 
-		expect(run.mock.calls[0]?.[0].recordName).toBe(`task: ${"x".repeat(114)}`);
+		expect(run.mock.calls[0]?.[0].record?.name).toBe(`task: ${"x".repeat(114)}`);
 	});
 
 	it("runs high-mode assignments on the high route", async () => {

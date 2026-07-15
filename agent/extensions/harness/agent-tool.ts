@@ -165,9 +165,11 @@ function finalizeAnswer<TParams, K extends AgentKey>(
 	}
 }
 
+const MAX_SUBAGENT_RECORD_NAME_LENGTH = 120;
+
 function subagentRecordName<TParams, K extends AgentKey>(spec: AgentToolSpec<TParams, K>, params: TParams): string {
 	const target = spec.presentation.target(params)?.replace(/\s+/g, " ").trim();
-	return (target ? `${spec.key}: ${target}` : spec.key).slice(0, 120);
+	return (target ? `${spec.key}: ${target}` : spec.key).slice(0, MAX_SUBAGENT_RECORD_NAME_LENGTH);
 }
 
 /** Turn a declarative agent spec into the delegation tool callers register. */
@@ -211,7 +213,7 @@ export function createAgentTool<TParams, K extends AgentKey>(
 					message: planned.message,
 					signal,
 					onAction: recordAction,
-					...(parentSession ? { parentSession, recordName: subagentRecordName(spec, params) } : {}),
+					...(parentSession ? { record: { parentSession, name: subagentRecordName(spec, params) } } : {}),
 					...(planned.toolbox ? { toolbox: planned.toolbox } : {}),
 				});
 				const finalized = finalizeAnswer(spec, child);
