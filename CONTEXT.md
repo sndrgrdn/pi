@@ -5,7 +5,7 @@ This context describes the language for local Pi agent extensions, especially de
 ## Language
 
 **Agent Profile**:
-A Profile resolves model, reasoning, tools, and posture prompt per fixed Mode (low/medium/high).
+A Profile resolves model and reasoning routes per fixed Mode (low/medium/high/ultra).
 _Avoid_: mode, model preset
 
 **Main Agent Tool Surface**:
@@ -15,6 +15,10 @@ _Avoid_: profile tools, default tools
 **MCP Gateway**:
 The single model-facing `mcp` tool supplied by `pi-mcp-adapter`; its behavior remains adapter-owned. This is distinct from MCP-backed tools pinned as static members of a specific agent toolbox.
 _Avoid_: MCP tools, MCP integration
+
+**Web Research Tool**:
+A Harness-owned, provider-neutral tool for discovering or retrieving public web content. Its model-facing contract remains stable independently of the current upstream provider.
+_Avoid_: Exa tool, MCP web tool, direct MCP tool
 
 **Minimal High-Quality Primitive**:
 A model-facing interface that is cohesive, predictable, composable, and materially useful. The design minimizes total cognitive and schema surface rather than raw tool count; responsibilities with distinct lifecycles or authority boundaries remain separate.
