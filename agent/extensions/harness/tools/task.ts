@@ -9,7 +9,7 @@ import {
 	createAgentTool,
 } from "../agent-tool.ts";
 import { createApplyPatchTool } from "../patch/tool.ts";
-import { type Mode, type ResolvedProfiles, resolveAgentRoute, TASK_POSTURE } from "../profiles.ts";
+import { MODES, type Mode, type ResolvedProfiles, resolveAgentRoute } from "../profiles.ts";
 import { projectContextPrompt } from "../project-context.ts";
 import { isSubagentAbortError, SubagentRunError, type SubagentRunner, type ToolLogEntry } from "../runner.ts";
 import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
@@ -128,9 +128,12 @@ export function createTaskTool(
 			}),
 			description: Type.String({ description: "Short TUI description of the delegated work." }),
 			mode: Type.Optional(
-				Type.Union([Type.Literal("low"), Type.Literal("medium"), Type.Literal("high")], {
-					description: "Route: low = Sol/low; medium = Sol/high; high = Fable 5/high. Defaults to low.",
-				}),
+				Type.Union(
+					MODES.map((mode) => Type.Literal(mode)),
+					{
+						description: "Capability level for the delegated task. Use the lowest level sufficient for the work.",
+					},
+				),
 			),
 		}),
 		mode: taskMode,
@@ -142,15 +145,7 @@ export function createTaskTool(
 				skills.map((skill) => skill.name),
 			);
 			return {
-				systemPrompt: [
-					base.system,
-					base.appendSystem,
-					base.projectContext,
-					profiles.modes[taskMode(params)].posture,
-					TASK_POSTURE,
-				]
-					.filter(Boolean)
-					.join("\n\n"),
+				systemPrompt: [base.system, base.appendSystem, base.projectContext].filter(Boolean).join("\n\n"),
 				message: refs.length ? `${buildDirective(refs)}\n\n${params.prompt}` : params.prompt,
 				toolbox: (processes) => [
 					...createShellToolbox(processes),

@@ -1,42 +1,46 @@
 /**
- * Modes — session Mode state, `/mode` + alt+s entry points, editor-border
- * indicator (published for prompt-box to render), persistence, and posture
- * injection.
+ * Modes — session Mode state, `/mode` + alt+m entry points, editor-border
+ * indicator (published for prompt-box to render), and persistence.
  *
- * Three fixed Modes (low/medium/high, default medium). Switching a Mode
+ * Four fixed Modes (low/medium/high/ultra, default medium). Switching a Mode
  * re-routes Main's model/reasoning through the Profile layer. Manual model
  * or reasoning changes remain ordinary pi behavior and select `null` — the
- * absence of a named Mode, never a fourth `custom` Mode.
+ * absence of a named Mode, never a named `custom` Mode.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CustomEntry, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { DynamicBorder, getAgentDir } from "@earendil-works/pi-coding-agent";
+import { Container, type SelectItem, SelectList, Text } from "@earendil-works/pi-tui";
 import {
 	DEFAULT_MODE,
 	isMode,
 	loadProfiles,
 	MODES,
 	type Mode,
+	type ModeState,
+	parseMode,
+	parseModeState,
 	type ResolvedProfiles,
 	resolveAgentRoute,
 	resolveMainRoute,
-	selectPosture,
 } from "./profiles.ts";
 
 // ── Pure helpers (unit-tested) ────────────────────────────────────
 
 /**
  * Initial Mode precedence: the session's recorded Mode (resume) wins
- * over the globally persisted Mode; default `medium`. Unknown values are
- * ignored — Modes are exactly three.
+ * over the globally persisted Mode; absent state defaults to `medium`.
+ * Invalid state is a contract violation, not absence.
  */
-export function pickInitialMode(recorded: unknown, global: unknown): Mode | null {
-	if (recorded === null) return null;
-	if (isMode(recorded)) return recorded;
-	if (global === null) return null;
-	if (isMode(global)) return global;
+export function pickInitialMode(recorded: unknown, global: unknown): ModeState {
+	if (recorded !== undefined) return parseModeState(recorded);
+	if (global !== undefined) return parseModeState(global);
 	return DEFAULT_MODE;
+}
+
+export function modeSelectorIndex(active: Mode | null): number {
+	return MODES.indexOf(active ?? DEFAULT_MODE);
 }
 
 /**
@@ -48,7 +52,7 @@ export function describeModeCommand(profiles: ResolvedProfiles): string {
 	const perMode = (route: (m: Mode) => { model: string; reasoning: string }) =>
 		MODES.map((m) => fmt(route(m))).join(" · ");
 	// Finder/Librarian are Mode-invariant by schema (flat overrides only), so
-	// one Mode's route describes all three.
+	// one Mode's route describes all Modes.
 	const flat = (agent: "finder" | "librarian") => fmt(resolveAgentRoute(profiles, agent, DEFAULT_MODE));
 	return (
 		`Switch Mode (${MODES.join("/")}). Routes — ` +
@@ -67,26 +71,35 @@ function globalModePath(): string {
 	return join(getAgentDir(), "harness-mode.json");
 }
 
-function readGlobalMode(): unknown {
+export function parsePersistedMode(contents: string): ModeState {
+	const parsed = JSON.parse(contents) as unknown;
+	const value = typeof parsed === "object" && parsed !== null ? (parsed as { mode?: unknown }).mode : undefined;
+	return parseModeState(value);
+}
+
+function readGlobalMode(): ModeState | undefined {
+	const path = globalModePath();
+	if (!existsSync(path)) return undefined;
 	try {
-		const path = globalModePath();
-		if (!existsSync(path)) return undefined;
-		return (JSON.parse(readFileSync(path, "utf8")) as { mode?: unknown }).mode;
-	} catch {
-		return undefined;
+		return parsePersistedMode(readFileSync(path, "utf8"));
+	} catch (error) {
+		throw new Error(
+			`Invalid persisted Mode state (${path}): ${error instanceof Error ? error.message : String(error)}`,
+		);
 	}
 }
 
-function writeGlobalMode(mode: Mode | null): void {
+function writeGlobalMode(mode: ModeState): void {
 	writeFileSync(globalModePath(), `${JSON.stringify({ mode }, null, "\t")}\n`);
 }
 
-function recordedSessionMode(ctx: ExtensionContext): unknown {
+function recordedSessionMode(ctx: ExtensionContext): ModeState | undefined {
 	const last = ctx.sessionManager
 		.getEntries()
 		.filter((e): e is CustomEntry => e.type === "custom" && e.customType === MODE_ENTRY_TYPE)
 		.pop();
-	return (last?.data as { mode?: unknown } | undefined)?.mode;
+	if (!last) return undefined;
+	return parseModeState((last.data as { mode?: unknown } | undefined)?.mode);
 }
 
 // ── Cross-extension Mode indicator (events bus) ───────────────────
@@ -151,8 +164,37 @@ export function registerModes(pi: ExtensionAPI): RegisteredModes {
 	}
 
 	async function selectAndSwitch(ctx: ExtensionContext): Promise<void> {
-		const choice = await ctx.ui.select(`Mode (active: ${mode ?? "custom"})`, [...MODES]);
-		if (choice && choice !== mode) await switchMode(choice as Mode, ctx);
+		const items: SelectItem[] = MODES.map((candidate) => ({ value: candidate, label: candidate }));
+		const choice = await ctx.ui.custom<Mode | null>((tui, theme, _keybindings, done) => {
+			const container = new Container();
+			container.addChild(new DynamicBorder((text) => theme.fg("accent", text)));
+			container.addChild(new Text(theme.fg("accent", theme.bold(`Mode (active: ${mode ?? "custom"})`))));
+
+			const selectList = new SelectList(items, items.length, {
+				selectedPrefix: (text) => theme.fg("accent", text),
+				selectedText: (text) => theme.fg("accent", text),
+				description: (text) => theme.fg("muted", text),
+				scrollInfo: (text) => theme.fg("dim", text),
+				noMatch: (text) => theme.fg("warning", text),
+			});
+			selectList.setSelectedIndex(modeSelectorIndex(mode));
+			selectList.onSelect = (item) => done(parseMode(item.value));
+			selectList.onCancel = () => done(null);
+			container.addChild(selectList);
+
+			container.addChild(new Text(theme.fg("dim", "↑↓ navigate • enter select • esc cancel")));
+			container.addChild(new DynamicBorder((text) => theme.fg("accent", text)));
+
+			return {
+				render: (width) => container.render(width),
+				invalidate: () => container.invalidate(),
+				handleInput: (data) => {
+					selectList.handleInput(data);
+					tui.requestRender();
+				},
+			};
+		});
+		if (choice && choice !== mode) await switchMode(choice, ctx);
 	}
 
 	function selectCustomMode(): void {
@@ -179,18 +221,11 @@ export function registerModes(pi: ExtensionAPI): RegisteredModes {
 		},
 	});
 
-	pi.registerShortcut("alt+s", {
+	pi.registerShortcut("alt+m", {
 		description: "Switch Mode",
 		handler: async (ctx) => {
 			await selectAndSwitch(ctx);
 		},
-	});
-
-	// Posture injection at session build: append the active
-	// Mode's posture block to the system prompt.
-	pi.on("before_agent_start", async (event) => {
-		const posture = selectPosture(profiles, mode);
-		if (posture) return { systemPrompt: `${event.systemPrompt}\n\n${posture}` };
 	});
 
 	pi.on("model_select", async (event) => {

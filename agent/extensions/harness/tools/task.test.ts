@@ -3,28 +3,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Text } from "@earendil-works/pi-tui";
 import { describe, expect, it, vi } from "vitest";
-import { BUILTIN_PROFILES, POSTURES, TASK_POSTURE } from "../profiles.ts";
+import { BUILTIN_PROFILES } from "../profiles.ts";
 import { type RunOptions, SubagentAbortError, SubagentRunError } from "../runner.ts";
 import { BackgroundShellRegistry } from "../shell/registry.ts";
 import { createTaskTool } from "./task.ts";
 
 describe("task tool", () => {
-	it("keeps the restraint-first delegation contract in the Task child prompt", async () => {
+	it("uses the stable system prompt verbatim in the Task child prompt", async () => {
 		const system = readFileSync(join(import.meta.dirname, "../../../SYSTEM.md"), "utf8");
-		const delegation = `## Delegation
-
-- default: do it yourself. delegate only when it beats direct work:
-  parallel independent items, a large noisy search worth isolating,
-  or a bounded sub-task worth its own context
-- never delegate single-response work: one lookup, one read, a
-  question you can answer directly
-- fan out in one message for independent items; serialize dependent ones
-- the child sees none of this conversation: the brief must be complete —
-  context, paths, constraints, verification steps
-- summarize results for the user; they cannot see subagent output
-- trust subagent results; do not re-check them just to verify`;
 		const run = vi.fn(async (options: RunOptions) => {
-			expect(options.definition.systemPrompt).toContain(delegation);
+			expect(options.definition.systemPrompt).toBe(`${system}\n\nA\n\nC`);
 			return { sessionID: "task-1", answer: "Done", toolLog: [] };
 		});
 		const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
@@ -40,7 +28,8 @@ describe("task tool", () => {
 		[undefined, "openai-codex/gpt-5.6-sol", "low"],
 		["low", "openai-codex/gpt-5.6-sol", "low"],
 		["medium", "openai-codex/gpt-5.6-sol", "high"],
-		["high", "anthropic/claude-fable-5", "high"],
+		["high", "openai-codex/gpt-5.6-sol", "high"],
+		["ultra", "anthropic/claude-fable-5", "high"],
 	] as const)("routes mode %s independently and exposes the exact Task toolbox", async (mode, model, reasoning) => {
 		const run = vi.fn(async (options: RunOptions) => {
 			options.onAction?.("apply_patch");
@@ -72,7 +61,7 @@ describe("task tool", () => {
 				"librarian",
 			],
 		});
-		expect(options.definition.systemPrompt).toBe(`S\n\nA\n\nC\n\n${POSTURES[mode ?? "low"]}\n\n${TASK_POSTURE}`);
+		expect(options.definition.systemPrompt).toBe("S\n\nA\n\nC");
 		expect(options.message).toBe("Implement it");
 		expect(options.toolbox!(new BackgroundShellRegistry()).map((entry) => entry.name)).toEqual([
 			"shell_command",
@@ -101,7 +90,7 @@ describe("task tool", () => {
 		});
 	});
 
-	it.each([undefined, "low", "medium", "high"] as const)("always renders selected Mode %s", (mode) => {
+	it.each([undefined, "low", "medium", "high", "ultra"] as const)("always renders selected Mode %s", (mode) => {
 		const tool = createTaskTool({ run: vi.fn() } as any, BUILTIN_PROFILES);
 		const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
 		const args = { prompt: "Work", description: "fix renderer", ...(mode ? { mode } : {}) };

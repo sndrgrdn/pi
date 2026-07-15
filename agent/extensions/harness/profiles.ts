@@ -1,23 +1,37 @@
 /**
  * Profiles — built-in resolved bundles + profiles.json load/validate/merge.
  *
- * A Profile is an internal resolved bundle: model, reasoning, and posture per
- * Mode for Main, plus per-agent routes. Route tables for Mode-dependent
+ * A Profile is an internal resolved bundle: model and reasoning per Mode for
+ * Main, plus per-agent routes. Route tables for Mode-dependent
  * agents (Oracle, Task) live here, not in the agent registry. The optional
  * global `~/.pi/agent/profiles.json` is a strict two-section partial
  * override; validation failures are loud and precise, with no fallback.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
-export type Mode = "low" | "medium" | "high";
-export const MODES = ["low", "medium", "high"] as const satisfies readonly Mode[];
+export type Mode = "low" | "medium" | "high" | "ultra";
+export type ModeState = Mode | null;
+export const MODES = ["low", "medium", "high", "ultra"] as const satisfies readonly Mode[];
 export const DEFAULT_MODE: Mode = "medium";
 
-/** Type guard: is `value` one of the three fixed Modes? */
+/** Type guard: is `value` one of the fixed Modes? */
 export function isMode(value: unknown): value is Mode {
 	return typeof value === "string" && (MODES as readonly string[]).includes(value);
+}
+
+export function parseMode(value: unknown): Mode {
+	if (isMode(value)) return value;
+	throw new Error(`Invalid Mode: ${String(value)}`);
+}
+
+/** Parse Mode state crossing an untyped boundary; invalid states are contract violations. */
+export function parseModeState(value: unknown): ModeState {
+	if (value === null) return null;
+	try {
+		return parseMode(value);
+	} catch {
+		throw new Error(`Invalid Mode state: ${String(value)}`);
+	}
 }
 
 export type ReasoningLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
@@ -30,11 +44,6 @@ export interface Route {
 	reasoning: ReasoningLevel;
 }
 
-/** Main's per-Mode bundle: route + posture prompt block. */
-export interface ModeProfile extends Route {
-	posture: string;
-}
-
 export type AgentKey = "finder" | "librarian" | "oracle" | "task";
 
 /**
@@ -44,7 +53,7 @@ export type AgentKey = "finder" | "librarian" | "oracle" | "task";
  * not a resolved-bundle fact.
  */
 export interface ResolvedProfiles {
-	modes: Record<Mode, ModeProfile>;
+	modes: Record<Mode, Route>;
 	agents: Record<AgentKey, Record<Mode, Route>>;
 }
 
@@ -55,32 +64,17 @@ const SOL = "openai-codex/gpt-5.6-sol";
 const FABLE = "anthropic/claude-fable-5";
 const HAIKU = "anthropic/claude-haiku-4-5";
 
-const PROMPTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "agents", "prompts");
-
-function readPrompt(name: string): string {
-	return readFileSync(join(PROMPTS_DIR, name), "utf8").trim();
-}
-
-/** Posture blocks tune depth/initiative/verification only. */
-export const POSTURES: Record<Mode, string> = {
-	low: readPrompt("posture-low.md"),
-	medium: readPrompt("posture-medium.md"),
-	high: readPrompt("posture-high.md"),
-};
-
-/** Task posture block, appended to Task child prompts. */
-export const TASK_POSTURE = readPrompt("task-posture.md");
-
 /** A Mode-invariant agent routes identically under every Mode. */
 function invariantRoute(route: Route): Record<Mode, Route> {
-	return { low: { ...route }, medium: { ...route }, high: { ...route } };
+	return { low: { ...route }, medium: { ...route }, high: { ...route }, ultra: { ...route } };
 }
 
 export const BUILTIN_PROFILES: ResolvedProfiles = {
 	modes: {
-		low: { model: TERRA, reasoning: "low", posture: POSTURES.low },
-		medium: { model: SOL, reasoning: "medium", posture: POSTURES.medium },
-		high: { model: SOL, reasoning: "xhigh", posture: POSTURES.high },
+		low: { model: TERRA, reasoning: "low" },
+		medium: { model: SOL, reasoning: "medium" },
+		high: { model: SOL, reasoning: "xhigh" },
+		ultra: { model: FABLE, reasoning: "high" },
 	},
 	agents: {
 		finder: invariantRoute({ model: HAIKU, reasoning: "minimal" }),
@@ -89,11 +83,13 @@ export const BUILTIN_PROFILES: ResolvedProfiles = {
 			low: { model: SOL, reasoning: "high" },
 			medium: { model: SOL, reasoning: "high" },
 			high: { model: FABLE, reasoning: "high" },
+			ultra: { model: SOL, reasoning: "high" },
 		},
 		task: {
 			low: { model: SOL, reasoning: "low" },
 			medium: { model: SOL, reasoning: "high" },
-			high: { model: FABLE, reasoning: "high" },
+			high: { model: SOL, reasoning: "high" },
+			ultra: { model: FABLE, reasoning: "high" },
 		},
 	},
 };
@@ -122,12 +118,8 @@ export interface RouteOverride {
 	reasoning?: ReasoningLevel;
 }
 
-export interface ModeOverride extends RouteOverride {
-	posture?: string;
-}
-
 export interface ProfilesOverride {
-	modes?: Partial<Record<Mode, ModeOverride>>;
+	modes?: Partial<Record<Mode, RouteOverride>>;
 	agents?: {
 		finder?: RouteOverride;
 		librarian?: RouteOverride;
@@ -158,8 +150,8 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 	const errors: string[] = [];
 	const fail = (path: string, why: string) => errors.push(`${path}: ${why}`);
 
-	const parseRouteFields = (path: string, value: unknown, allowed: readonly string[]): ModeOverride => {
-		const out: ModeOverride = {};
+	const parseRouteFields = (path: string, value: unknown, allowed: readonly string[]): RouteOverride => {
+		const out: RouteOverride = {};
 		if (!isPlainObject(value)) {
 			fail(path, "expected an object");
 			return out;
@@ -181,12 +173,6 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 					);
 				} else {
 					out.reasoning = fieldValue as ReasoningLevel;
-				}
-			} else if (field === "posture") {
-				if (typeof fieldValue !== "string") {
-					fail(`${path}.posture`, "expected a string");
-				} else {
-					out.posture = fieldValue;
 				}
 			}
 		}
@@ -214,7 +200,7 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 				if (!isMode(mode)) {
 					fail("modes", `unknown Mode "${mode}" (expected ${MODES.join(", ")})`);
 				} else {
-					parsed.modes[mode] = parseRouteFields(`modes.${mode}`, value, ["model", "reasoning", "posture"]);
+					parsed.modes[mode] = parseRouteFields(`modes.${mode}`, value, ["model", "reasoning"]);
 				}
 			}
 		}
@@ -263,7 +249,7 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 
 // ── Merge (partial override over built-in defaults) ───────────────
 
-function mergeRoute<T extends Route>(base: T, override: RouteOverride | ModeOverride | undefined): T {
+function mergeRoute<T extends Route>(base: T, override: RouteOverride | undefined): T {
 	return override ? { ...base, ...override } : { ...base };
 }
 
@@ -275,12 +261,13 @@ function mergePerRoute(
 		low: mergeRoute(base.low, override?.low),
 		medium: mergeRoute(base.medium, override?.medium),
 		high: mergeRoute(base.high, override?.high),
+		ultra: mergeRoute(base.ultra, override?.ultra),
 	};
 }
 
 /** A flat (Mode-invariant) agent override applies under every Mode. */
 function flatOverride(override: RouteOverride | undefined): Partial<Record<Mode, RouteOverride>> | undefined {
-	return override ? { low: override, medium: override, high: override } : undefined;
+	return override ? { low: override, medium: override, high: override, ultra: override } : undefined;
 }
 
 /** Field-level merge of a validated override over the built-in defaults. */
@@ -290,6 +277,7 @@ export function mergeProfiles(base: ResolvedProfiles, override: ProfilesOverride
 			low: mergeRoute(base.modes.low, override.modes?.low),
 			medium: mergeRoute(base.modes.medium, override.modes?.medium),
 			high: mergeRoute(base.modes.high, override.modes?.high),
+			ultra: mergeRoute(base.modes.ultra, override.modes?.ultra),
 		},
 		agents: {
 			finder: mergePerRoute(base.agents.finder, flatOverride(override.agents?.finder)),
@@ -298,13 +286,6 @@ export function mergeProfiles(base: ResolvedProfiles, override: ProfilesOverride
 			task: mergePerRoute(base.agents.task, override.agents?.task),
 		},
 	};
-}
-
-// ── Posture selection ─────────────────────────────────────────────
-
-/** The posture block appended for a named Mode; custom (`null`) has none. */
-export function selectPosture(profiles: ResolvedProfiles, mode: Mode | null): string | undefined {
-	return mode === null ? undefined : profiles.modes[mode].posture;
 }
 
 // ── Load (startup seam) ───────────────────────────────────────────

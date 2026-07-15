@@ -9,7 +9,8 @@
  * tl: (empty)       tr: model · thinking
  * bl: tokens · metrics  br: cwd (branch)
  */
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, ThemeColor } from "@earendil-works/pi-coding-agent";
+import { type Mode, type ModeState, parseModeState } from "../harness/profiles.js";
 import { getEditorPaddingX, PromptBoxEditor } from "./editor.js";
 import { getMetrics, onUpdate, register as registerMetrics } from "./metrics.js";
 
@@ -25,9 +26,15 @@ const THINK_LABEL: Record<string, string> = {
 	max: "max",
 };
 
-/** Named Mode replaces model/thinking; null preserves prompt-box's display. */
-export function selectTopRightParts(parts: string[], mode: string | null): string[] {
-	return mode === null ? parts : [mode];
+const HARNESS_MODE_COLORS: Record<Mode, ThemeColor> = {
+	low: "thinkingLow",
+	medium: "thinkingMedium",
+	high: "thinkingHigh",
+	ultra: "thinkingXhigh",
+};
+
+export function harnessModeColor(mode: Mode): ThemeColor {
+	return HARNESS_MODE_COLORS[mode];
 }
 
 // ── Extension ────────────────────────────────
@@ -36,14 +43,14 @@ export default function promptBox(pi: ExtensionAPI) {
 	let editor: PromptBoxEditor | undefined;
 	let branch: string | null = null;
 	let unsubMetrics: (() => void) | undefined;
-	let harnessMode: string | null = null;
+	let harnessMode: ModeState = null;
 
 	// Wire up the metrics module
 	registerMetrics(pi);
 
 	// Active harness Mode (published by extensions/harness modes.ts).
 	pi.events.on("harness:mode", (mode: unknown) => {
-		harnessMode = typeof mode === "string" ? mode : null;
+		harnessMode = parseModeState(mode);
 		editor?.refresh();
 	});
 
@@ -51,6 +58,8 @@ export default function promptBox(pi: ExtensionAPI) {
 
 	const tr = (ctx: ExtensionContext) => {
 		const theme = ctx.ui.theme;
+		if (harnessMode !== null) return theme.fg(harnessModeColor(harnessMode), harnessMode);
+
 		const dot = theme.fg("dim", " · ");
 		const parts: string[] = [];
 
@@ -65,9 +74,7 @@ export default function promptBox(pi: ExtensionAPI) {
 			parts.push(colorFn(label));
 		}
 
-		const displayed = selectTopRightParts(parts, harnessMode);
-		if (harnessMode !== null) displayed[0] = theme.fg("accent", harnessMode);
-		return displayed.join(dot);
+		return parts.join(dot);
 	};
 
 	// ── bl: tokens + metrics ─────────

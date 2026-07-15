@@ -5,10 +5,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
 	BUILTIN_PROFILES,
 	loadProfiles,
+	MODES,
 	mergeProfiles,
+	parseMode,
+	parseModeState,
 	resolveAgentRoute,
 	resolveMainRoute,
-	selectPosture,
 	validateProfilesOverride,
 } from "./profiles.ts";
 
@@ -17,6 +19,29 @@ const SOL = "openai-codex/gpt-5.6-sol";
 const FABLE = "anthropic/claude-fable-5";
 const HAIKU = "anthropic/claude-haiku-4-5";
 
+describe("parseModeState", () => {
+	it("accepts every legal Mode state", () => {
+		expect(parseModeState("low")).toBe("low");
+		expect(parseModeState("medium")).toBe("medium");
+		expect(parseModeState("high")).toBe("high");
+		expect(parseModeState("ultra")).toBe("ultra");
+		expect(parseModeState(null)).toBeNull();
+	});
+
+	it("rejects invalid Mode state", () => {
+		expect(() => parseModeState("unknown")).toThrow("Invalid Mode state: unknown");
+		expect(() => parseModeState(undefined)).toThrow("Invalid Mode state: undefined");
+	});
+});
+
+describe("parseMode", () => {
+	it("accepts named Modes and rejects null or unknown values", () => {
+		expect(parseMode("ultra")).toBe("ultra");
+		expect(() => parseMode(null)).toThrow("Invalid Mode: null");
+		expect(() => parseMode("extreme")).toThrow("Invalid Mode: extreme");
+	});
+});
+
 // ── Route resolution ──────────────────────────────────────────────
 
 describe("route resolution", () => {
@@ -24,10 +49,11 @@ describe("route resolution", () => {
 		expect(resolveMainRoute(BUILTIN_PROFILES, "low")).toEqual({ model: TERRA, reasoning: "low" });
 		expect(resolveMainRoute(BUILTIN_PROFILES, "medium")).toEqual({ model: SOL, reasoning: "medium" });
 		expect(resolveMainRoute(BUILTIN_PROFILES, "high")).toEqual({ model: SOL, reasoning: "xhigh" });
+		expect(resolveMainRoute(BUILTIN_PROFILES, "ultra")).toEqual({ model: FABLE, reasoning: "high" });
 	});
 
 	it("keeps Finder lightweight regardless of the selected Mode", () => {
-		for (const mode of ["low", "medium", "high"] as const) {
+		for (const mode of MODES) {
 			expect(resolveAgentRoute(BUILTIN_PROFILES, "finder", mode)).toEqual({
 				model: HAIKU,
 				reasoning: "minimal",
@@ -36,7 +62,7 @@ describe("route resolution", () => {
 	});
 
 	it("keeps Librarian on its research route regardless of the selected Mode", () => {
-		for (const mode of ["low", "medium", "high"] as const) {
+		for (const mode of MODES) {
 			expect(resolveAgentRoute(BUILTIN_PROFILES, "librarian", mode)).toEqual({
 				model: SOL,
 				reasoning: "off",
@@ -48,12 +74,14 @@ describe("route resolution", () => {
 		expect(resolveAgentRoute(BUILTIN_PROFILES, "oracle", "low")).toEqual({ model: SOL, reasoning: "high" });
 		expect(resolveAgentRoute(BUILTIN_PROFILES, "oracle", "medium")).toEqual({ model: SOL, reasoning: "high" });
 		expect(resolveAgentRoute(BUILTIN_PROFILES, "oracle", "high")).toEqual({ model: FABLE, reasoning: "high" });
+		expect(resolveAgentRoute(BUILTIN_PROFILES, "oracle", "ultra")).toEqual({ model: SOL, reasoning: "high" });
 	});
 
 	it("scales delegated tasks with their per-call Mode", () => {
 		expect(resolveAgentRoute(BUILTIN_PROFILES, "task", "low")).toEqual({ model: SOL, reasoning: "low" });
 		expect(resolveAgentRoute(BUILTIN_PROFILES, "task", "medium")).toEqual({ model: SOL, reasoning: "high" });
-		expect(resolveAgentRoute(BUILTIN_PROFILES, "task", "high")).toEqual({ model: FABLE, reasoning: "high" });
+		expect(resolveAgentRoute(BUILTIN_PROFILES, "task", "high")).toEqual({ model: SOL, reasoning: "high" });
+		expect(resolveAgentRoute(BUILTIN_PROFILES, "task", "ultra")).toEqual({ model: FABLE, reasoning: "high" });
 	});
 });
 
@@ -67,7 +95,7 @@ describe("validateProfilesOverride", () => {
 
 	it("accepts a valid partial override", () => {
 		const raw = {
-			modes: { high: { model: "anthropic/claude-fable-5", reasoning: "high", posture: "go deep" } },
+			modes: { ultra: { model: "anthropic/claude-fable-5", reasoning: "high" } },
 			agents: {
 				finder: { model: "anthropic/claude-haiku-4-5" },
 				oracle: { high: { reasoning: "xhigh" } },
@@ -88,8 +116,8 @@ describe("validateProfilesOverride", () => {
 	});
 
 	it("rejects unknown Mode keys — no extra Modes", () => {
-		expect(() => validateProfilesOverride({ modes: { ultra: {} } })).toThrow(
-			/modes: unknown Mode "ultra" \(expected low, medium, high\)/,
+		expect(() => validateProfilesOverride({ modes: { extreme: {} } })).toThrow(
+			/modes: unknown Mode "extreme" \(expected low, medium, high, ultra\)/,
 		);
 	});
 
@@ -101,11 +129,14 @@ describe("validateProfilesOverride", () => {
 
 	it("rejects unknown fields in a mode override", () => {
 		expect(() => validateProfilesOverride({ modes: { high: { tools: [] } } })).toThrow(
-			/modes\.high: unknown field "tools" \(expected model, reasoning, posture\)/,
+			/modes\.high: unknown field "tools" \(expected model, reasoning\)/,
 		);
 	});
 
-	it("rejects posture on agent overrides — model/reasoning only", () => {
+	it("rejects removed posture overrides", () => {
+		expect(() => validateProfilesOverride({ modes: { high: { posture: "x" } } })).toThrow(
+			/modes\.high: unknown field "posture" \(expected model, reasoning\)/,
+		);
 		expect(() => validateProfilesOverride({ agents: { finder: { posture: "x" } } })).toThrow(
 			/agents\.finder: unknown field "posture" \(expected model, reasoning\)/,
 		);
@@ -116,7 +147,7 @@ describe("validateProfilesOverride", () => {
 
 	it("rejects flat model/reasoning on per-route agents", () => {
 		expect(() => validateProfilesOverride({ agents: { oracle: { model: "a/b" } } })).toThrow(
-			/agents\.oracle: unknown route "model" \(expected low, medium, high\)/,
+			/agents\.oracle: unknown route "model" \(expected low, medium, high, ultra\)/,
 		);
 	});
 
@@ -141,23 +172,17 @@ describe("validateProfilesOverride", () => {
 		);
 	});
 
-	it("rejects non-string posture", () => {
-		expect(() => validateProfilesOverride({ modes: { high: { posture: 7 } } })).toThrow(
-			/modes\.high\.posture: expected a string/,
-		);
-	});
-
 	it("collects all errors so one fix pass suffices", () => {
 		let message = "";
 		try {
 			validateProfilesOverride({
-				modes: { ultra: {}, low: { model: "bad" } },
+				modes: { extreme: {}, low: { model: "bad" } },
 				agents: { builder: {} },
 			});
 		} catch (err) {
 			message = (err as Error).message;
 		}
-		expect(message).toMatch(/unknown Mode "ultra"/);
+		expect(message).toMatch(/unknown Mode "extreme"/);
 		expect(message).toMatch(/modes\.low\.model: invalid model id "bad"/);
 		expect(message).toMatch(/unknown agent "builder"/);
 	});
@@ -187,7 +212,7 @@ describe("mergeProfiles", () => {
 			},
 		});
 		// a flat override is Mode-invariant: it applies under every Mode
-		for (const mode of ["low", "medium", "high"] as const) {
+		for (const mode of MODES) {
 			expect(resolveAgentRoute(merged, "finder", mode)).toEqual({
 				model: HAIKU,
 				reasoning: "low",
@@ -201,37 +226,10 @@ describe("mergeProfiles", () => {
 		expect(merged.agents.oracle).toEqual(BUILTIN_PROFILES.agents.oracle);
 	});
 
-	it("overrides posture text", () => {
-		const merged = mergeProfiles(BUILTIN_PROFILES, {
-			modes: { low: { posture: "custom posture" } },
-		});
-		expect(merged.modes.low.posture).toBe("custom posture");
-		expect(merged.modes.low.model).toBe(BUILTIN_PROFILES.modes.low.model);
-	});
-
 	it("does not mutate the defaults", () => {
 		const before = structuredClone(BUILTIN_PROFILES);
 		mergeProfiles(BUILTIN_PROFILES, { modes: { low: { model: "a/b" } } });
 		expect(BUILTIN_PROFILES).toEqual(before);
-	});
-});
-
-// ── Posture selection ─────────────────────────────────────────────
-
-describe("selectPosture", () => {
-	it("selects the active Mode's posture block", () => {
-		for (const mode of ["low", "medium", "high"] as const) {
-			expect(selectPosture(BUILTIN_PROFILES, mode)).toBe(BUILTIN_PROFILES.modes[mode].posture);
-		}
-	});
-
-	it("reflects a posture override after merge", () => {
-		const merged = mergeProfiles(BUILTIN_PROFILES, { modes: { medium: { posture: "brief" } } });
-		expect(selectPosture(merged, "medium")).toBe("brief");
-	});
-
-	it("selects no posture for a null Mode", () => {
-		expect(selectPosture(BUILTIN_PROFILES, null)).toBeUndefined();
 	});
 });
 
@@ -269,7 +267,7 @@ describe("loadProfiles", () => {
 	});
 
 	it("fails loudly on an invalid override", () => {
-		const path = write(JSON.stringify({ modes: { ultra: {} } }));
-		expect(() => loadProfiles(path)).toThrow(/unknown Mode "ultra"/);
+		const path = write(JSON.stringify({ modes: { extreme: {} } }));
+		expect(() => loadProfiles(path)).toThrow(/unknown Mode "extreme"/);
 	});
 });

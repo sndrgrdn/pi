@@ -109,7 +109,7 @@ describe("agent tool factory", () => {
 		} as any);
 
 		expect(run.mock.calls[0]?.[0]?.definition).toMatchObject({
-			model: "anthropic/claude-fable-5",
+			model: "openai-codex/gpt-5.6-sol",
 			reasoningEffort: "high",
 		});
 	});

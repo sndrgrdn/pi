@@ -64,6 +64,7 @@ describe("oracle tool", () => {
 		["low", "openai-codex/gpt-5.6-sol"],
 		["medium", "openai-codex/gpt-5.6-sol"],
 		["high", "anthropic/claude-fable-5"],
+		["ultra", "openai-codex/gpt-5.6-sol"],
 	] as const)("resolves the %s parent Mode route at invocation", async (mode, model) => {
 		const run = vi.fn(async (_options: RunOptions) => ({
 			sessionID: "oracle-1",

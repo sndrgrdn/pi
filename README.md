@@ -18,7 +18,7 @@ This repository contains a constrained main-agent tool surface, mode-based model
     ├── settings.json         # Pi settings and package configuration
     ├── models.json           # provider and model overrides
     ├── profiles.json         # mode and delegated-agent model routing
-    ├── harness-mode.json     # active low/medium/high mode
+    ├── harness-mode.json     # active low/medium/high/ultra mode
     ├── extensions/           # TypeScript extensions and tests
     ├── skills/               # skill corpus loaded on demand
     ├── research/             # implementation research and evidence
@@ -49,7 +49,7 @@ The locked main-agent tool surface is:
 | `task` | Delegate a bounded implementation task |
 | `mcp` | Access MCP-backed integrations through `pi-mcp-adapter` |
 
-Modes (`low`, `medium`, and `high`) select main-agent model and reasoning settings. `agent/profiles.json` independently routes `finder`, `oracle`, `librarian`, and `task`; `agent/harness-mode.json` stores the active mode.
+Modes (`low`, `medium`, `high`, and `ultra`) select main-agent model and reasoning settings. `agent/profiles.json` independently routes `finder`, `oracle`, `librarian`, and `task`; `agent/harness-mode.json` stores the active mode.
 
 ## Extensions
 
