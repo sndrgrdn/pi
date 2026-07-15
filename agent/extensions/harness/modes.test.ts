@@ -1,44 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { describeModeCommand, modeSelectorIndex, parsePersistedMode, pickInitialMode } from "./modes.ts";
+import { describeModeCommand, modeSelectorIndex, parsePersistedMode } from "./modes.ts";
 import { BUILTIN_PROFILES, mergeProfiles } from "./profiles.ts";
-
-// ── Initial Mode precedence ──────────────────────────────────────
-
-describe("pickInitialMode", () => {
-	it("prefers the session-recorded Mode (resume restores its Mode)", () => {
-		expect(pickInitialMode("high", "low")).toBe("high");
-	});
-
-	it("falls back to the global Mode when the session has none", () => {
-		expect(pickInitialMode(undefined, "low")).toBe("low");
-	});
-
-	it("preserves an explicit null Mode from the session or global setting", () => {
-		expect(pickInitialMode(null, "high")).toBeNull();
-		expect(pickInitialMode(undefined, null)).toBeNull();
-	});
-
-	it("defaults to medium when nothing is recorded", () => {
-		expect(pickInitialMode(undefined, undefined)).toBe("medium");
-	});
-
-	it("accepts ultra and rejects invalid persisted state", () => {
-		expect(pickInitialMode("ultra", "high")).toBe("ultra");
-		expect(() => pickInitialMode("extreme", "high")).toThrow("Invalid Mode state: extreme");
-		expect(() => pickInitialMode(undefined, 42)).toThrow("Invalid Mode state: 42");
-	});
-});
 
 describe("parsePersistedMode", () => {
 	it("accepts every persisted Mode state", () => {
 		expect(parsePersistedMode('{"mode":"ultra"}')).toBe("ultra");
-		expect(parsePersistedMode('{"mode":null}')).toBeNull();
+		expect(parsePersistedMode('{"mode":"custom"}')).toBe("custom");
 	});
 
-	it("rejects malformed or invalid persisted state", () => {
+	it("rejects malformed JSON", () => {
 		expect(() => parsePersistedMode("{ nope")).toThrow();
-		expect(() => parsePersistedMode("{}")).toThrow("Invalid Mode state: undefined");
-		expect(() => parsePersistedMode('{"mode":"extreme"}')).toThrow("Invalid Mode state: extreme");
 	});
 });
 
@@ -49,7 +20,7 @@ describe("modeSelectorIndex", () => {
 	});
 
 	it("selects medium when the active Mode is custom", () => {
-		expect(modeSelectorIndex(null)).toBe(1);
+		expect(modeSelectorIndex("custom")).toBe(1);
 	});
 });
 

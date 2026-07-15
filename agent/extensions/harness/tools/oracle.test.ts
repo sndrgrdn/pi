@@ -109,12 +109,12 @@ describe("oracle tool", () => {
 		expect(run.mock.calls[1]?.[0].definition.model).toBe("anthropic/claude-fable-5");
 	});
 
-	it("uses the medium route when no named parent Mode is active", async () => {
+	it("uses the medium route when the parent Mode is custom", async () => {
 		const run = vi.fn(async (options: RunOptions) => {
 			options.onAction?.("finder");
 			return { sessionID: "oracle-1", answer: "Advice", toolLog: [] };
 		});
-		const tool = createOracleTool({ run } as any, BUILTIN_PROFILES, () => null);
+		const tool = createOracleTool({ run } as any, BUILTIN_PROFILES, () => "custom");
 		const updates: any[] = [];
 		const result = await tool.execute(
 			"call",

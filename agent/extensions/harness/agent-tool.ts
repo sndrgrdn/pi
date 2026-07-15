@@ -7,7 +7,7 @@
  */
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { buildEnvelope, type EnvelopeInput, parseEnvelope } from "./envelopes.ts";
-import { type AgentKey, type Mode, type ResolvedProfiles, resolveAgentRoute } from "./profiles.ts";
+import { type AgentKey, type ProfileMode, type ResolvedProfiles, resolveAgentRoute } from "./profiles.ts";
 import {
 	type AgentDefinition,
 	type ChildToolboxFactory,
@@ -66,7 +66,7 @@ export interface AgentToolSpec<TParams, K extends AgentKey> {
 	name: string;
 	description: string;
 	parameters: unknown;
-	mode(params: TParams): Mode;
+	mode(params: TParams): ProfileMode;
 	plan(params: TParams, ctx: { cwd: string }): AgentToolPlan | Promise<AgentToolPlan>;
 	finalize(answer: string): AgentToolResult<K>;
 	recover?(error: unknown, ctx: AgentToolRecoverContext<TParams>): AgentToolRecovery | Promise<AgentToolRecovery>;

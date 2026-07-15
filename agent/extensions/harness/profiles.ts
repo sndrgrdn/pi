@@ -9,30 +9,10 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 
-export type Mode = "low" | "medium" | "high" | "ultra";
-export type ModeState = Mode | null;
-export const MODES = ["low", "medium", "high", "ultra"] as const satisfies readonly Mode[];
-export const DEFAULT_MODE: Mode = "medium";
-
-/** Type guard: is `value` one of the fixed Modes? */
-export function isMode(value: unknown): value is Mode {
-	return typeof value === "string" && (MODES as readonly string[]).includes(value);
-}
-
-export function parseMode(value: unknown): Mode {
-	if (isMode(value)) return value;
-	throw new Error(`Invalid Mode: ${String(value)}`);
-}
-
-/** Parse Mode state crossing an untyped boundary; invalid states are contract violations. */
-export function parseModeState(value: unknown): ModeState {
-	if (value === null) return null;
-	try {
-		return parseMode(value);
-	} catch {
-		throw new Error(`Invalid Mode state: ${String(value)}`);
-	}
-}
+export type ProfileMode = "low" | "medium" | "high" | "ultra";
+export type Mode = ProfileMode | "custom";
+export const MODES = ["low", "medium", "high", "ultra"] as const satisfies readonly ProfileMode[];
+export const DEFAULT_MODE: ProfileMode = "medium";
 
 export type ReasoningLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 const REASONING_LEVELS: readonly string[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
@@ -47,14 +27,14 @@ export interface Route {
 export type AgentKey = "finder" | "librarian" | "oracle" | "task";
 
 /**
- * Resolved bundles. Agents are uniformly `Record<Mode, Route>`: Mode-invariant
+ * Resolved bundles. Agents are uniformly `Record<ProfileMode, Route>`: Mode-invariant
  * agents (Finder, Librarian) simply carry the same route under every Mode —
  * the flat-vs-per-route distinction is a profiles.json schema fact,
  * not a resolved-bundle fact.
  */
 export interface ResolvedProfiles {
-	modes: Record<Mode, Route>;
-	agents: Record<AgentKey, Record<Mode, Route>>;
+	modes: Record<ProfileMode, Route>;
+	agents: Record<AgentKey, Record<ProfileMode, Route>>;
 }
 
 // ── Built-in defaults ─────────────────────────────────────────────
@@ -65,7 +45,7 @@ const FABLE = "anthropic/claude-fable-5";
 const HAIKU = "anthropic/claude-haiku-4-5";
 
 /** A Mode-invariant agent routes identically under every Mode. */
-function invariantRoute(route: Route): Record<Mode, Route> {
+function invariantRoute(route: Route): Record<ProfileMode, Route> {
 	return { low: { ...route }, medium: { ...route }, high: { ...route }, ultra: { ...route } };
 }
 
@@ -97,7 +77,7 @@ export const BUILTIN_PROFILES: ResolvedProfiles = {
 // ── Route resolution ──────────────────────────────────────────────
 
 /** Main's route for a Mode. */
-export function resolveMainRoute(profiles: ResolvedProfiles, mode: Mode): Route {
+export function resolveMainRoute(profiles: ResolvedProfiles, mode: ProfileMode): Route {
 	const { model, reasoning } = profiles.modes[mode];
 	return { model, reasoning };
 }
@@ -106,7 +86,7 @@ export function resolveMainRoute(profiles: ResolvedProfiles, mode: Mode): Route 
  * An agent's route. Finder/Librarian are Mode-invariant; Oracle routes from
  * the parent's Mode, Task from its per-call `mode` param.
  */
-export function resolveAgentRoute(profiles: ResolvedProfiles, agent: AgentKey, mode: Mode): Route {
+export function resolveAgentRoute(profiles: ResolvedProfiles, agent: AgentKey, mode: ProfileMode): Route {
 	return profiles.agents[agent][mode];
 }
 
@@ -119,12 +99,12 @@ export interface RouteOverride {
 }
 
 export interface ProfilesOverride {
-	modes?: Partial<Record<Mode, RouteOverride>>;
+	modes?: Partial<Record<ProfileMode, RouteOverride>>;
 	agents?: {
 		finder?: RouteOverride;
 		librarian?: RouteOverride;
-		oracle?: Partial<Record<Mode, RouteOverride>>;
-		task?: Partial<Record<Mode, RouteOverride>>;
+		oracle?: Partial<Record<ProfileMode, RouteOverride>>;
+		task?: Partial<Record<ProfileMode, RouteOverride>>;
 	};
 }
 
@@ -197,10 +177,10 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 		} else {
 			parsed.modes = {};
 			for (const [mode, value] of Object.entries(raw.modes)) {
-				if (!isMode(mode)) {
+				if (!(MODES as readonly string[]).includes(mode)) {
 					fail("modes", `unknown Mode "${mode}" (expected ${MODES.join(", ")})`);
 				} else {
-					parsed.modes[mode] = parseRouteFields(`modes.${mode}`, value, ["model", "reasoning"]);
+					parsed.modes[mode as ProfileMode] = parseRouteFields(`modes.${mode}`, value, ["model", "reasoning"]);
 				}
 			}
 		}
@@ -218,12 +198,12 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 					if (!isPlainObject(value)) {
 						fail(`agents.${agent}`, "expected an object");
 					} else {
-						const routes: Partial<Record<Mode, RouteOverride>> = {};
+						const routes: Partial<Record<ProfileMode, RouteOverride>> = {};
 						for (const [route, routeValue] of Object.entries(value)) {
-							if (!isMode(route)) {
+							if (!(MODES as readonly string[]).includes(route)) {
 								fail(`agents.${agent}`, `unknown route "${route}" (expected ${MODES.join(", ")})`);
 							} else {
-								routes[route] = parseRouteFields(`agents.${agent}.${route}`, routeValue, [
+								routes[route as ProfileMode] = parseRouteFields(`agents.${agent}.${route}`, routeValue, [
 									"model",
 									"reasoning",
 								]);
@@ -254,9 +234,9 @@ function mergeRoute<T extends Route>(base: T, override: RouteOverride | undefine
 }
 
 function mergePerRoute(
-	base: Record<Mode, Route>,
-	override: Partial<Record<Mode, RouteOverride>> | undefined,
-): Record<Mode, Route> {
+	base: Record<ProfileMode, Route>,
+	override: Partial<Record<ProfileMode, RouteOverride>> | undefined,
+): Record<ProfileMode, Route> {
 	return {
 		low: mergeRoute(base.low, override?.low),
 		medium: mergeRoute(base.medium, override?.medium),
@@ -266,7 +246,7 @@ function mergePerRoute(
 }
 
 /** A flat (Mode-invariant) agent override applies under every Mode. */
-function flatOverride(override: RouteOverride | undefined): Partial<Record<Mode, RouteOverride>> | undefined {
+function flatOverride(override: RouteOverride | undefined): Partial<Record<ProfileMode, RouteOverride>> | undefined {
 	return override ? { low: override, medium: override, high: override, ultra: override } : undefined;
 }
 

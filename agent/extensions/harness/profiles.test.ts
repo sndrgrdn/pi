@@ -7,8 +7,6 @@ import {
 	loadProfiles,
 	MODES,
 	mergeProfiles,
-	parseMode,
-	parseModeState,
 	resolveAgentRoute,
 	resolveMainRoute,
 	validateProfilesOverride,
@@ -18,29 +16,6 @@ const TERRA = "openai-codex/gpt-5.6-terra";
 const SOL = "openai-codex/gpt-5.6-sol";
 const FABLE = "anthropic/claude-fable-5";
 const HAIKU = "anthropic/claude-haiku-4-5";
-
-describe("parseModeState", () => {
-	it("accepts every legal Mode state", () => {
-		expect(parseModeState("low")).toBe("low");
-		expect(parseModeState("medium")).toBe("medium");
-		expect(parseModeState("high")).toBe("high");
-		expect(parseModeState("ultra")).toBe("ultra");
-		expect(parseModeState(null)).toBeNull();
-	});
-
-	it("rejects invalid Mode state", () => {
-		expect(() => parseModeState("unknown")).toThrow("Invalid Mode state: unknown");
-		expect(() => parseModeState(undefined)).toThrow("Invalid Mode state: undefined");
-	});
-});
-
-describe("parseMode", () => {
-	it("accepts named Modes and rejects null or unknown values", () => {
-		expect(parseMode("ultra")).toBe("ultra");
-		expect(() => parseMode(null)).toThrow("Invalid Mode: null");
-		expect(() => parseMode("extreme")).toThrow("Invalid Mode: extreme");
-	});
-});
 
 // ── Route resolution ──────────────────────────────────────────────
 
@@ -118,6 +93,9 @@ describe("validateProfilesOverride", () => {
 	it("rejects unknown Mode keys — no extra Modes", () => {
 		expect(() => validateProfilesOverride({ modes: { extreme: {} } })).toThrow(
 			/modes: unknown Mode "extreme" \(expected low, medium, high, ultra\)/,
+		);
+		expect(() => validateProfilesOverride({ modes: { custom: {} } })).toThrow(
+			/modes: unknown Mode "custom" \(expected low, medium, high, ultra\)/,
 		);
 	});
 

@@ -38,7 +38,7 @@ function oracleMessage(params: OracleParams, cwd: string): string {
 	return sections.join("\n\n");
 }
 
-type ActiveMode = () => Mode | null;
+type ActiveMode = () => Mode;
 
 export function createOracleTool(
 	runner: Pick<SubagentRunner, "run">,
@@ -56,7 +56,10 @@ export function createOracleTool(
 				Type.Array(Type.String(), { description: "Files whose readable contents should be supplied." }),
 			),
 		}),
-		mode: () => activeMode() ?? DEFAULT_MODE,
+		mode: () => {
+			const activeModeValue = activeMode();
+			return activeModeValue === "custom" ? DEFAULT_MODE : activeModeValue;
+		},
 		plan: (params, ctx) => ({
 			systemPrompt: `${prompt}\n\nWorking directory: ${ctx.cwd}\nCurrent date: ${new Date().toISOString().slice(0, 10)}`,
 			message: oracleMessage(params, ctx.cwd),

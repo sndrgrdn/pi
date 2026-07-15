@@ -9,7 +9,7 @@ import {
 	createAgentTool,
 } from "../agent-tool.ts";
 import { createApplyPatchTool } from "../patch/tool.ts";
-import { MODES, type Mode, type ResolvedProfiles, resolveAgentRoute } from "../profiles.ts";
+import { MODES, type ProfileMode, type ResolvedProfiles, resolveAgentRoute } from "../profiles.ts";
 import { projectContextPrompt } from "../project-context.ts";
 import { isSubagentAbortError, SubagentRunError, type SubagentRunner, type ToolLogEntry } from "../runner.ts";
 import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
@@ -22,7 +22,7 @@ import { createHarnessReadTool } from "./read.ts";
 interface TaskInput {
 	prompt: string;
 	description: string;
-	mode?: Mode;
+	mode?: ProfileMode;
 }
 
 export interface TaskBasePrompts {
@@ -31,7 +31,7 @@ export interface TaskBasePrompts {
 	projectContext: string;
 }
 
-function taskMode(params: TaskInput): Mode {
+function taskMode(params: TaskInput): ProfileMode {
 	return params.mode ?? "low";
 }
 
