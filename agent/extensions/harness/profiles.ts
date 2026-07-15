@@ -14,6 +14,14 @@ export type Mode = ProfileMode | "custom";
 export const MODES = ["low", "medium", "high", "ultra"] as const satisfies readonly ProfileMode[];
 export const DEFAULT_MODE: ProfileMode = "medium";
 
+export function isProfileMode(value: unknown): value is ProfileMode {
+	return MODES.some((mode) => mode === value);
+}
+
+export function isMode(value: unknown): value is Mode {
+	return value === "custom" || isProfileMode(value);
+}
+
 export type ReasoningLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 const REASONING_LEVELS: readonly string[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
 
@@ -177,10 +185,10 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 		} else {
 			parsed.modes = {};
 			for (const [mode, value] of Object.entries(raw.modes)) {
-				if (!(MODES as readonly string[]).includes(mode)) {
+				if (!isProfileMode(mode)) {
 					fail("modes", `unknown Mode "${mode}" (expected ${MODES.join(", ")})`);
 				} else {
-					parsed.modes[mode as ProfileMode] = parseRouteFields(`modes.${mode}`, value, ["model", "reasoning"]);
+					parsed.modes[mode] = parseRouteFields(`modes.${mode}`, value, ["model", "reasoning"]);
 				}
 			}
 		}
@@ -200,10 +208,10 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 					} else {
 						const routes: Partial<Record<ProfileMode, RouteOverride>> = {};
 						for (const [route, routeValue] of Object.entries(value)) {
-							if (!(MODES as readonly string[]).includes(route)) {
+							if (!isProfileMode(route)) {
 								fail(`agents.${agent}`, `unknown route "${route}" (expected ${MODES.join(", ")})`);
 							} else {
-								routes[route as ProfileMode] = parseRouteFields(`agents.${agent}.${route}`, routeValue, [
+								routes[route] = parseRouteFields(`agents.${agent}.${route}`, routeValue, [
 									"model",
 									"reasoning",
 								]);

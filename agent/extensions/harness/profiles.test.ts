@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
 	BUILTIN_PROFILES,
+	isMode,
+	isProfileMode,
 	loadProfiles,
 	MODES,
 	mergeProfiles,
@@ -16,6 +18,16 @@ const TERRA = "openai-codex/gpt-5.6-terra";
 const SOL = "openai-codex/gpt-5.6-sol";
 const FABLE = "anthropic/claude-fable-5";
 const HAIKU = "anthropic/claude-haiku-4-5";
+
+describe("Mode predicates", () => {
+	it("distinguishes profile routes from custom Mode state", () => {
+		expect(isProfileMode("ultra")).toBe(true);
+		expect(isProfileMode("custom")).toBe(false);
+		expect(isProfileMode(null)).toBe(false);
+		expect(isMode("custom")).toBe(true);
+		expect(isMode("extreme")).toBe(false);
+	});
+});
 
 // ── Route resolution ──────────────────────────────────────────────
 

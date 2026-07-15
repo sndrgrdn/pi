@@ -1,6 +1,6 @@
 /**
- * Modes — session Mode state, `/mode` + alt+m entry points, editor-border
- * indicator (published for prompt-box to render), and persistence.
+ * Modes — session Mode state, alt+m selector, editor-border indicator
+ * (published for prompt-box to render), and persistence.
  *
  * Four fixed Modes (low/medium/high/ultra, default medium). Switching a Mode
  * re-routes Main's model/reasoning through the Profile layer. Manual model
@@ -13,12 +13,12 @@ import { DynamicBorder, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { Container, type SelectItem, SelectList, Text } from "@earendil-works/pi-tui";
 import {
 	DEFAULT_MODE,
+	isMode,
 	loadProfiles,
 	MODES,
 	type Mode,
 	type ProfileMode,
 	type ResolvedProfiles,
-	resolveAgentRoute,
 	resolveMainRoute,
 } from "./profiles.ts";
 
@@ -26,26 +26,6 @@ import {
 
 export function modeSelectorIndex(active: Mode): number {
 	return active === "custom" ? MODES.indexOf(DEFAULT_MODE) : MODES.indexOf(active);
-}
-
-/**
- * `/mode` agent route tables are documented here, not in the selector, and
- * derived from the loaded Profiles so overrides never go stale.
- */
-export function describeModeCommand(profiles: ResolvedProfiles): string {
-	const fmt = (r: { model: string; reasoning: string }) => `${r.model.split("/").pop()}/${r.reasoning}`;
-	const perMode = (route: (m: ProfileMode) => { model: string; reasoning: string }) =>
-		MODES.map((m) => fmt(route(m))).join(" · ");
-	// Finder/Librarian are Mode-invariant by schema (flat overrides only), so
-	// one Mode's route describes all Modes.
-	const flat = (agent: "finder" | "librarian") => fmt(resolveAgentRoute(profiles, agent, DEFAULT_MODE));
-	return (
-		`Switch Mode (${MODES.join("/")}). Routes — ` +
-		`Main: ${perMode((m) => resolveMainRoute(profiles, m))}; ` +
-		`Oracle: ${perMode((m) => resolveAgentRoute(profiles, "oracle", m))}; ` +
-		`Task (per-call mode): ${perMode((m) => resolveAgentRoute(profiles, "task", m))}; ` +
-		`Finder: ${flat("finder")}; Librarian: ${flat("librarian")}`
-	);
 }
 
 // ── Persistence ───────────────────────────────────────────────────
@@ -56,8 +36,20 @@ function globalModePath(): string {
 	return join(getAgentDir(), "harness-mode.json");
 }
 
+function parseMode(value: unknown): Mode {
+	if (isMode(value)) return value;
+	throw new Error(`Invalid Mode state: ${String(value)}`);
+}
+
+function parseModeRecord(value: unknown): Mode {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+		throw new Error(`Invalid Mode record: ${String(value)}`);
+	}
+	return parseMode((value as { mode?: unknown }).mode);
+}
+
 export function parsePersistedMode(contents: string): Mode {
-	return (JSON.parse(contents) as { mode: Mode }).mode;
+	return parseModeRecord(JSON.parse(contents));
 }
 
 function readGlobalMode(): Mode {
@@ -82,7 +74,7 @@ function recordedSessionMode(ctx: ExtensionContext, fallback: Mode): Mode {
 		.filter((e): e is CustomEntry => e.type === "custom" && e.customType === MODE_ENTRY_TYPE)
 		.pop();
 	if (!last) return fallback;
-	return (last.data as { mode: Mode }).mode;
+	return parseModeRecord(last.data);
 }
 
 // ── Cross-extension Mode indicator (events bus) ───────────────────
@@ -187,22 +179,6 @@ export function registerModes(pi: ExtensionAPI): RegisteredModes {
 		pi.appendEntry(MODE_ENTRY_TYPE, { mode: "custom" });
 		announceMode();
 	}
-
-	pi.registerCommand("mode", {
-		description: describeModeCommand(profiles),
-		handler: async (args, ctx) => {
-			const arg = args?.trim();
-			if (arg) {
-				if (!(MODES as readonly string[]).includes(arg)) {
-					ctx.ui.notify(`Unknown Mode "${arg}" (expected ${MODES.join(", ")})`, "error");
-					return;
-				}
-				if (arg !== mode) await switchMode(arg as ProfileMode, ctx);
-				return;
-			}
-			await selectAndSwitch(ctx);
-		},
-	});
 
 	pi.registerShortcut("alt+m", {
 		description: "Switch Mode",
