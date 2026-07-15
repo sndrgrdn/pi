@@ -70,6 +70,35 @@ describe("agent tool factory", () => {
 		});
 		expect(options?.message).toBe("Do: probe it");
 		expect(options?.cwd).toBe("/repo");
+		expect(options).not.toHaveProperty("parentSession");
+		expect(options).not.toHaveProperty("recordName");
+	});
+
+	it("attributes a persistent Subagent Record to its immediate caller", async () => {
+		const run = fakeRun("all done");
+		const tool = createAgentTool(probeSpec(), { run } as any, BUILTIN_PROFILES);
+
+		await tool.execute("call", { assignment: "  inspect\n durable   lineage  " }, undefined, undefined, {
+			cwd: "/repo",
+			sessionManager: { getSessionFile: () => "/sessions/parent.jsonl" },
+		} as any);
+
+		expect(run.mock.calls[0]?.[0]).toMatchObject({
+			parentSession: "/sessions/parent.jsonl",
+			recordName: "task: inspect durable lineage",
+		});
+	});
+
+	it("caps the complete Subagent Record name at 120 characters", async () => {
+		const run = fakeRun("all done");
+		const tool = createAgentTool(probeSpec(), { run } as any, BUILTIN_PROFILES);
+
+		await tool.execute("call", { assignment: "x".repeat(200) }, undefined, undefined, {
+			cwd: "/repo",
+			sessionManager: { getSessionFile: () => "/sessions/parent.jsonl" },
+		} as any);
+
+		expect(run.mock.calls[0]?.[0].recordName).toBe(`task: ${"x".repeat(114)}`);
 	});
 
 	it("runs high-mode assignments on the high route", async () => {

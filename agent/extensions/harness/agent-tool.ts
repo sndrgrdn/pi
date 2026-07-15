@@ -165,6 +165,11 @@ function finalizeAnswer<TParams, K extends AgentKey>(
 	}
 }
 
+function subagentRecordName<TParams, K extends AgentKey>(spec: AgentToolSpec<TParams, K>, params: TParams): string {
+	const target = spec.presentation.target(params)?.replace(/\s+/g, " ").trim();
+	return (target ? `${spec.key}: ${target}` : spec.key).slice(0, 120);
+}
+
 /** Turn a declarative agent spec into the delegation tool callers register. */
 export function createAgentTool<TParams, K extends AgentKey>(
 	spec: AgentToolSpec<TParams, K>,
@@ -183,7 +188,7 @@ export function createAgentTool<TParams, K extends AgentKey>(
 			params: TParams,
 			signal: AbortSignal | undefined,
 			onUpdate: ToolUpdate | undefined,
-			ctx: { cwd: string },
+			ctx: { cwd: string; sessionManager?: { getSessionFile(): string | undefined } },
 		) {
 			const traceDetails = spec.traceDetails?.(params);
 			const recordAction = createProgressSignal(onUpdate, traceDetails);
@@ -198,6 +203,7 @@ export function createAgentTool<TParams, K extends AgentKey>(
 				model: route.model,
 				reasoningEffort: route.reasoning,
 			};
+			const parentSession = ctx.sessionManager?.getSessionFile();
 			try {
 				const child = await runner.run({
 					definition,
@@ -205,6 +211,7 @@ export function createAgentTool<TParams, K extends AgentKey>(
 					message: planned.message,
 					signal,
 					onAction: recordAction,
+					...(parentSession ? { parentSession, recordName: subagentRecordName(spec, params) } : {}),
 					...(planned.toolbox ? { toolbox: planned.toolbox } : {}),
 				});
 				const finalized = finalizeAnswer(spec, child);

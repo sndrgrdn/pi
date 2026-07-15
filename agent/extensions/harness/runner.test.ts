@@ -1,6 +1,15 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Model } from "@earendil-works/pi-ai";
-import { describe, expect, it, vi } from "vitest";
-import { type AgentDefinition, type ChildSession, resolveConfiguredModel, SubagentRunner } from "./runner.ts";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+	type AgentDefinition,
+	type ChildSession,
+	createSubagentSessionManager,
+	resolveConfiguredModel,
+	SubagentRunner,
+} from "./runner.ts";
 import { BackgroundShellRegistry } from "./shell/registry.ts";
 
 const definition: AgentDefinition = {
@@ -46,9 +55,16 @@ describe("shared subagent runner", () => {
 			definition,
 			cwd: "/parent/worktree",
 			message: "Review: check locking",
+			parentSession: "/sessions/parent.jsonl",
+			recordName: "oracle: check locking",
 		});
 
-		expect(create).toHaveBeenCalledWith({ definition, cwd: "/parent/worktree" });
+		expect(create).toHaveBeenCalledWith({
+			definition,
+			cwd: "/parent/worktree",
+			parentSession: "/sessions/parent.jsonl",
+			recordName: "oracle: check locking",
+		});
 		expect(child.prompt).toHaveBeenCalledWith("Review: check locking");
 		expect(result).toEqual({ sessionID: "child-7", answer: "Final advice", toolLog: [] });
 		expect(child.processes.killAll).toHaveBeenCalledOnce();
@@ -148,5 +164,43 @@ describe("resolved child model", () => {
 		expect(() => resolveConfiguredModel({ find: () => undefined }, "custom/missing")).toThrow(
 			'resolved model "custom/missing" is not configured',
 		);
+	});
+});
+
+describe("Subagent Record session boundary", () => {
+	const dirs: string[] = [];
+	afterEach(() => {
+		for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+	});
+
+	it("creates a named native session linked to the immediate caller", () => {
+		const agentDir = mkdtempSync(join(tmpdir(), "subagent-record-"));
+		dirs.push(agentDir);
+
+		const session = createSubagentSessionManager(
+			{
+				cwd: "/repo",
+				parentSession: "/sessions/parent.jsonl",
+				recordName: "oracle: check locking",
+			},
+			agentDir,
+		);
+
+		expect(session.isPersisted()).toBe(true);
+		expect(session.getSessionDir()).toBe(join(agentDir, "sessions", "subagent"));
+		expect(session.getHeader()).toMatchObject({ parentSession: "/sessions/parent.jsonl" });
+		expect(session.getSessionName()).toBe("oracle: check locking");
+		expect(session.getSessionFile()).not.toBe("/sessions/parent.jsonl");
+	});
+
+	it("keeps the Subagent ephemeral when its caller has no session file", () => {
+		const agentDir = mkdtempSync(join(tmpdir(), "subagent-record-"));
+		dirs.push(agentDir);
+
+		const session = createSubagentSessionManager({ cwd: "/repo", recordName: "oracle: check locking" }, agentDir);
+
+		expect(session.isPersisted()).toBe(false);
+		expect(session.getSessionFile()).toBeUndefined();
+		expect(session.getSessionName()).toBeUndefined();
 	});
 });

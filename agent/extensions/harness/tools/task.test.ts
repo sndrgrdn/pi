@@ -195,10 +195,17 @@ describe("task tool", () => {
 		});
 		const result = await tool.execute("call", { prompt: "Work", description: "work" }, controller.signal, undefined, {
 			cwd: "/repo",
+			sessionManager: { getSessionFile: () => "/sessions/parent.jsonl" },
 		} as any);
 
 		expect(run).toHaveBeenCalledTimes(2);
+		expect(run.mock.calls[0]![0]).toMatchObject({
+			parentSession: "/sessions/parent.jsonl",
+			recordName: "task: work",
+		});
 		expect(run.mock.calls[1]![0].signal).toBe(controller.signal);
+		expect(run.mock.calls[1]![0]).not.toHaveProperty("parentSession");
+		expect(run.mock.calls[1]![0]).not.toHaveProperty("recordName");
 		expect(result.content[0]).toEqual({
 			type: "text",
 			text: '<task_error sessionID="task-failed">\nChanged app.ts; verification did not run.\n</task_error>',

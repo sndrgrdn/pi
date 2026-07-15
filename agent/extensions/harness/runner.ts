@@ -73,6 +73,8 @@ export function isSubagentAbortError(error: unknown): error is SubagentAbortErro
 export interface ChildSessionConfig {
 	definition: AgentDefinition;
 	cwd: string;
+	parentSession?: string;
+	recordName?: string;
 	toolbox?: ChildToolboxFactory;
 }
 
@@ -83,6 +85,8 @@ export interface RunOptions {
 	definition: AgentDefinition;
 	cwd: string;
 	message: string;
+	parentSession?: string;
+	recordName?: string;
 	onAction?(toolName: string): void;
 	toolbox?: ChildToolboxFactory;
 	signal?: AbortSignal;
@@ -136,6 +140,8 @@ export class SubagentRunner {
 			child = await this.createChild({
 				definition: options.definition,
 				cwd: options.cwd,
+				...(options.parentSession ? { parentSession: options.parentSession } : {}),
+				...(options.recordName ? { recordName: options.recordName } : {}),
 				...(options.toolbox ? { toolbox: options.toolbox } : {}),
 			});
 			if (options.onAction && child.onAction) unsubscribe = child.onAction(options.onAction);
@@ -175,7 +181,20 @@ export function resolveConfiguredModel(registry: Pick<ModelRegistry, "find">, mo
 	return resolved;
 }
 
-/** Production adapter: a fresh in-memory pi SDK session, never a fork/resume. */
+/** Build the native session backing a Subagent Record, following caller persistence. */
+export function createSubagentSessionManager(
+	config: Pick<ChildSessionConfig, "cwd" | "parentSession" | "recordName">,
+	agentDir = getAgentDir(),
+): SessionManager {
+	if (!config.parentSession) return SessionManager.inMemory(config.cwd);
+	const sessionManager = SessionManager.create(config.cwd, join(agentDir, "sessions", "subagent"), {
+		parentSession: config.parentSession,
+	});
+	if (config.recordName) sessionManager.appendSessionInfo(config.recordName);
+	return sessionManager;
+}
+
+/** Production adapter: a fresh pi SDK session, never a fork/resume. */
 export async function createSdkChildSession(config: ChildSessionConfig): Promise<ChildSession> {
 	const processes = new BackgroundShellRegistry();
 	const agentDir = getAgentDir();
@@ -189,7 +208,7 @@ export async function createSdkChildSession(config: ChildSessionConfig): Promise
 		thinkingLevel: config.definition.reasoningEffort,
 		tools: [...config.definition.tools, ...(config.definition.allowMcp ? ["mcp"] : [])],
 		customTools: config.toolbox?.(processes) ?? [],
-		sessionManager: SessionManager.inMemory(config.cwd),
+		sessionManager: createSubagentSessionManager(config, agentDir),
 	};
 	let session: Awaited<ReturnType<typeof createAgentSession>>["session"];
 	try {

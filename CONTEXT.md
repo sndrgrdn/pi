@@ -49,8 +49,16 @@ The shared local store of partial clones of remote repositories at `~/.cache/che
 _Avoid_: clone dir, temp checkout
 
 **Subagent**:
-A delegated agent run started by the primary agent to complete a bounded assignment with its own context.
+A one-shot delegated agent run started by the primary agent to complete a bounded assignment with its own context.
 _Avoid_: child bot, worker agent
+
+**Subagent Record**:
+The durable history of a Subagent, retained for inspection independently of its final result.
+_Avoid_: task log, embedded transcript
+
+**Delegation Lineage**:
+The parent-child relationship linking each Subagent Record to the session that directly delegated it. Each remains a separate session.
+_Avoid_: shared session, nested transcript
 
 **Trace View**:
 A compact presentation of tool activity that preserves full evidence behind expansion rather than changing or discarding tool output.
