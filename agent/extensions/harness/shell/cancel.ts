@@ -23,8 +23,8 @@ interface ShellCancelParams {
 }
 
 const description = [
-	"Kill a background process started by shell_command. SIGKILLs the whole process tree immediately.",
-	"Returns any output produced since the last read and forgets the id.",
+	"Kill the entire process tree of a background shell_command immediately with SIGKILL.",
+	"Return output produced since the last read, then forget the id.",
 	"An in-flight shell_command_status wait on the same id resolves immediately with output-so-far and a cancelled marker.",
 ].join(" ");
 

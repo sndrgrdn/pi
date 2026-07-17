@@ -45,12 +45,13 @@ export function createOracleTool(
 	const spec: AgentToolSpec<OracleParams, "oracle"> = {
 		key: "oracle",
 		name: "oracle",
-		description: "Get a read-only senior advisor's second opinion on a bounded technical question.",
+		description:
+			"Consult a read-only senior advisor for an independent second opinion on a bounded, high-judgment review, cross-module bug, architecture or plan tradeoff, or API/type design. Use Finder for code location, Librarian for external research, and direct work or another agent for implementation.",
 		parameters: Type.Object({
-			task: Type.String({ description: "The review, debugging, architecture, or design question." }),
-			context: Type.Optional(Type.String({ description: "Relevant constraints or background." })),
+			task: Type.String({ description: "Bounded question or decision the advisor should resolve." }),
+			context: Type.Optional(Type.String({ description: "Constraints, desired outcome, and relevant background." })),
 			files: Type.Optional(
-				Type.Array(Type.String(), { description: "Files whose readable contents should be supplied." }),
+				Type.Array(Type.String(), { description: "Specific files to include as direct evidence." }),
 			),
 		}),
 		route: () => profiles.agents.oracle,

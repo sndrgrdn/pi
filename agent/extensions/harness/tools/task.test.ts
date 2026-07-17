@@ -11,8 +11,9 @@ import { createTaskTool } from "./task.ts";
 describe("task tool", () => {
 	it("uses the stable system prompt verbatim in the Task child prompt", async () => {
 		const system = readFileSync(join(import.meta.dirname, "../../../SYSTEM.md"), "utf8");
+		const worker = readFileSync(join(import.meta.dirname, "../agents/prompts/task.md"), "utf8").trim();
 		const run = vi.fn(async (options: RunOptions) => {
-			expect(options.definition.systemPrompt).toBe(`${system}\n\nA\n\nC`);
+			expect(options.definition.systemPrompt).toBe(`${system}\n\nA\n\nC\n\n${worker}`);
 			return { sessionID: "task-1", answer: "Done", toolLog: [] };
 		});
 		const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
@@ -43,6 +44,7 @@ describe("task tool", () => {
 				cwd: "/repo",
 			} as any);
 			const options = run.mock.calls[0]![0];
+			const worker = readFileSync(join(import.meta.dirname, "../agents/prompts/task.md"), "utf8").trim();
 
 			expect(options.definition).toMatchObject({
 				key: "task",
@@ -59,7 +61,7 @@ describe("task tool", () => {
 					"librarian",
 				],
 			});
-			expect(options.definition.systemPrompt).toBe("S\n\nA\n\nC");
+			expect(options.definition.systemPrompt).toBe(`S\n\nA\n\nC\n\n${worker}`);
 			expect(options.message).toBe("Implement it");
 			expect(options.toolbox!(new BackgroundShellRegistry()).map((entry) => entry.name)).toEqual([
 				"shell_command",

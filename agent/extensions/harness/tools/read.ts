@@ -17,22 +17,21 @@ interface ReadParams {
 }
 
 const schema = Type.Object({
-	path: Type.String({ description: "Path to a file (relative or absolute)." }),
+	path: Type.String({ description: "File path, relative or absolute." }),
 	offset: Type.Optional(
-		Type.Number({ description: "Start from this line/entry number (1-indexed). Use to continue after truncation." }),
+		Type.Number({ description: "First line or entry to return, 1-indexed. Continue from here after truncation." }),
 	),
 	limit: Type.Optional(
 		Type.Number({
-			description: "Maximum lines or entries to return. Prefer larger windows over tiny repeated chunks.",
+			description: "Maximum lines or entries to return. Prefer one large window to many small reads.",
 		}),
 	),
 });
 
 const description = [
-	"Read the contents of a file.",
-	"Supports text files and images (jpg, png, gif, webp). Images are sent as attachments.",
+	"Read text files or inspect images (jpg, png, gif, webp). Images are returned as attachments.",
 	`Output truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB.`,
-	"Use offset/limit for large files; continue with offset until complete when needed.",
+	"Continue truncated files with offset and limit until the needed content is covered.",
 ].join(" ");
 
 function readTraceInvocation(args: ReadParams, cwd: string): TraceInvocation {

@@ -31,14 +31,14 @@ import {
 
 const schema = Type.Object({
 	command: Type.String({
-		description: "The shell command to execute. Do not use cd — use the workdir parameter instead.",
+		description: "Shell command to execute. Set workdir instead of changing directories in the command.",
 	}),
 	workdir: Type.Optional(
 		Type.String({ description: "Working directory to run the command in. Defaults to the session cwd." }),
 	),
 	timeout_ms: Type.Optional(
 		Type.Number({
-			description: `Foreground wait in milliseconds (default ${DEFAULT_TIMEOUT_MS}, max ${MAX_TIMEOUT_MS}). The command is NOT killed at the timeout — it keeps running in background and an id is returned for polling.`,
+			description: `Foreground wait in milliseconds (default ${DEFAULT_TIMEOUT_MS}, max ${MAX_TIMEOUT_MS}). At timeout, the command continues in the background and returns an id for polling.`,
 		}),
 	),
 });
@@ -50,11 +50,11 @@ interface ShellCommandParams {
 }
 
 const description = [
-	"Execute a non-interactive shell command. Returns stdout and stderr.",
+	"Execute a non-interactive shell command and return stdout and stderr.",
 	`Waits up to timeout_ms (default ${DEFAULT_TIMEOUT_MS / 1000}s, max ${MAX_TIMEOUT_MS / 1000}s) for completion.`,
-	"If the command is still running at the timeout it is NOT killed: the tool returns output-so-far plus a background id (e.g. shell-3).",
+	"At timeout, a running command continues in the background and returns output-so-far plus an id (e.g. shell-3).",
 	"Poll it with shell_command_status or kill it with shell_command_cancel.",
-	"Non-zero exit codes on a completed run fail the tool.",
+	"A completed command with a non-zero exit code fails the tool.",
 	"Output is truncated to the last 2000 lines or 50KB; full output is saved to a temp file whose path is included when truncated.",
 ].join(" ");
 

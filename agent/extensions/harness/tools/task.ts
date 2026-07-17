@@ -17,6 +17,8 @@ import { createFinderTool } from "./finder.ts";
 import { createLibrarianTool } from "./librarian.ts";
 import { createHarnessReadTool } from "./read.ts";
 
+const workerPrompt = readFileSync(join(import.meta.dirname, "..", "agents", "prompts", "task.md"), "utf8").trim();
+
 interface TaskInput {
 	prompt: string;
 	description: string;
@@ -121,18 +123,19 @@ export function createTaskTool(
 		key: "task",
 		name: "task",
 		description:
-			"Delegate a bounded mutation. Specify verification steps; summarize the returned report for the user.",
+			"Delegate one bounded worker job after the scope is known: implementation, test repair, or isolated verification. Supply self-contained context, constraints and non-goals, write scope, and validation; integrate and summarize the result yourself. Use Finder, Oracle, or Librarian for location, advice, or external research.",
 		parameters: Type.Object({
 			prompt: Type.String({
-				description: "Complete implementation brief, including constraints and verification steps.",
+				description:
+					"Self-contained worker brief with the outcome, scope, relevant context, constraints and non-goals, and validation steps.",
 			}),
-			description: Type.String({ description: "Short TUI description of the delegated work." }),
+			description: Type.String({ description: "Short TUI label for the delegated work." }),
 			effort: Type.Optional(
 				Type.Union(
 					TASK_EFFORTS.map((effort) => Type.Literal(effort)),
 					{
 						description:
-							"Effort for the delegated task. Use standard for routine or well-scoped work; use high for complex, ambiguous, cross-cutting, or risk-sensitive work.",
+							"Use standard for routine, well-scoped work; high for complex, ambiguous, cross-cutting, or risk-sensitive work.",
 					},
 				),
 			),
@@ -141,7 +144,9 @@ export function createTaskTool(
 		plan: async (params, ctx) => {
 			const base = await (dependencies.basePrompts ?? readBasePrompts)(ctx.cwd);
 			return {
-				systemPrompt: [base.system, base.appendSystem, base.projectContext].filter(Boolean).join("\n\n"),
+				systemPrompt: [base.system, base.appendSystem, base.projectContext, workerPrompt]
+					.filter(Boolean)
+					.join("\n\n"),
 				message: params.prompt,
 				toolbox: (processes) => [
 					...createShellToolbox(processes),

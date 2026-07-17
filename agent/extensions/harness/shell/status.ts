@@ -35,10 +35,10 @@ interface ShellStatusParams {
 }
 
 const description = [
-	"Poll a background process started by shell_command. Returns output produced since the last read (lossless cursor).",
+	"Poll a background process started by shell_command and return output produced since the last read (lossless cursor).",
 	`Waits up to timeout_ms (default ${DEFAULT_TIMEOUT_MS / 1000}s, max ${MAX_TIMEOUT_MS / 1000}s) for the process to exit; timeout_ms 0 returns an instant snapshot.`,
-	"Pure observation — never kills the process; use shell_command_cancel for that.",
-	"The read that observes exit reports the exit status exactly once and forgets the id; a nonzero exit is a tool error.",
+	"Observes without stopping the process; shell_command_cancel stops it.",
+	"The read that observes exit reports its status once and forgets the id; a nonzero exit fails the tool.",
 	"Output is truncated to the last 2000 lines or 50KB; the full output temp-file path is included when truncated.",
 ].join(" ");
 

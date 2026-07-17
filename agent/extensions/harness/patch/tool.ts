@@ -23,7 +23,7 @@ import { parsePatch } from "./parser.ts";
 const schema = Type.Object({
 	patch: Type.String({
 		description:
-			"The full patch envelope: '*** Begin Patch' ... '*** End Patch' with '*** Add File:', '*** Update File:' (optionally '*** Move to:'), and '*** Delete File:' hunks. Update hunks use @@ context markers and ' '/'-'/'+' prefixed lines.",
+			"Full Codex patch envelope, from '*** Begin Patch' through '*** End Patch'. Use '*** Add File:', '*** Update File:' (optionally followed by '*** Move to:'), or '*** Delete File:' hunks. Prefix added-file lines with '+'; in update chunks prefix context, removed, and added lines with ' ', '-', and '+'. Use '@@' with surrounding context to disambiguate repeated code and '*** End of File' to anchor the final chunk.",
 	}),
 });
 
@@ -40,13 +40,9 @@ export interface ApplyPatchDetails {
 }
 
 const description = [
-	"Edit files by applying a patch in the Codex envelope format.",
-	"The patch must start with '*** Begin Patch' and end with '*** End Patch'.",
-	"Hunks: '*** Add File: <path>' (every body line prefixed '+'), '*** Delete File: <path>' (no body),",
-	"'*** Update File: <path>' (optional '*** Move to: <new path>' line, then @@ context chunks with ' ' context, '-' removed, '+' added lines).",
-	"Use '@@' markers with surrounding context to disambiguate repeated code; '*** End of File' anchors a chunk at the end of the file.",
-	"Paths are cwd-relative (absolute allowed). The patch applies atomically: it either fully applies or nothing changes.",
-	"All preflight errors are reported together, so fix every reported problem in one retry.",
+	"Edit files atomically with a Codex patch envelope; every hunk applies or none do.",
+	"Paths are relative to the working directory unless absolute.",
+	"Preflight reports all errors together so they can be fixed in one retry.",
 ].join(" ");
 
 function patchTraceInvocation(args: ApplyPatchParams, cwd: string): TraceInvocation {

@@ -10,7 +10,7 @@ const parameters = Type.Object(
 	{
 		urls: Type.Array(Type.String(), {
 			minItems: 1,
-			description: "URLs to read. Batch multiple URLs in one call.",
+			description: "Absolute HTTP or HTTPS URLs to fetch. Batch independent URLs in one call.",
 		}),
 		maxCharacters: Type.Optional(
 			Type.Number({
@@ -144,7 +144,7 @@ export function createWebFetchTool(dependencies: ExaDependencies = createExaDepe
 		name: "web_fetch",
 		label: "web_fetch",
 		description:
-			"Read a webpage's full content as clean markdown. Use after web_search when highlights are insufficient or to read any URL.\n\nBest for: Extracting full content from known URLs. Batch multiple URLs in one call.\nReturns: Clean text content and metadata from the page(s).",
+			"Fetch Markdown content and metadata from known webpages. Use after web_search when its excerpts are insufficient.",
 		parameters,
 		async execute(_id, params, signal) {
 			if (!Value.Check(parameters, params))

@@ -40,10 +40,11 @@ export function createLibrarianTool(
 	const spec: AgentToolSpec<LibrarianParams, "librarian"> = {
 		key: "librarian",
 		name: "librarian",
-		description: "Delegate remote repository and web research. Returns source-linked findings.",
+		description:
+			"Research external repositories and the web with a read-only scout. Use Finder for the local workspace. Returns source-linked findings.",
 		parameters: Type.Object({
-			query: Type.String({ description: "The external research question." }),
-			context: Type.Optional(Type.String({ description: "Relevant context prepended to the research query." })),
+			query: Type.String({ description: "Question to research externally." }),
+			context: Type.Optional(Type.String({ description: "Constraints or background for the research." })),
 		}),
 		route: () => profiles.agents.librarian,
 		plan: (params) => ({

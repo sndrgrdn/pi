@@ -33,8 +33,10 @@ export function createFinderTool(
 		key: "finder",
 		name: "finder",
 		description:
-			"Delegate local codebase search to a read-only scout. Needle queries (known symbol, exact string, path) — grep yourself; use finder for broader discovery: behavior, flows, correlated patterns. Use parallel finder calls for independent queries.",
-		parameters: Type.Object({ query: Type.String({ description: "What to locate and the desired thoroughness." }) }),
+			"Search a local codebase with a read-only scout for behavior, flows, or correlated patterns. Use grep directly for a known symbol, exact string, or path; use Finder when discovery requires multiple searches or correlation. Run independent Finder queries in parallel.",
+		parameters: Type.Object({
+			query: Type.String({ description: "What to discover and how exhaustive the search should be." }),
+		}),
 		route: () => profiles.agents.finder,
 		plan: (params) => ({ systemPrompt: prompt, message: params.query }),
 		finalize: extractFinderAnswer,

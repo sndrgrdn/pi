@@ -22,7 +22,7 @@ const parameters = Type.Object(
 		query: Type.String({
 			minLength: 1,
 			pattern: "\\S",
-			description: "Natural-language description of the ideal page, not just keywords.",
+			description: "Natural-language description of the ideal source, including useful constraints.",
 		}),
 		numResults: Type.Optional(
 			Type.Integer({
@@ -92,7 +92,7 @@ export function createWebSearchTool(dependencies: ExaDependencies = createExaDep
 		name: "web_search",
 		label: "web_search",
 		description:
-			"Search the web for any topic and get clean, ready-to-use content. Best for finding current information, news, facts, people, companies, or answers. Describe the ideal page rather than using only keywords.",
+			"Search the web for relevant sources and highlighted excerpts. Describe the ideal source rather than supplying keywords alone.",
 		parameters,
 		async execute(_id, params, signal) {
 			if (!Value.Check(parameters, params))

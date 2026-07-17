@@ -155,10 +155,11 @@ export function createCheckoutTool(cache = new CheckoutCache()): ToolDefinition<
 	return {
 		name: "checkout",
 		label: "checkout",
-		description:
-			"Resolve, clone, or refresh a remote repository in the shared Checkout Cache. Never edit the returned path.",
+		description: "Clone or refresh a remote repository in the shared checkout cache for read-only inspection.",
 		parameters: Type.Object({
-			repo: Type.String({ description: "Repository URL, git SSH reference, owner/repo, or cached bare name." }),
+			repo: Type.String({
+				description: "Repository URL, Git SSH reference, owner/repo, or cached repository name.",
+			}),
 		}),
 		async execute(_id, params: { repo: string }) {
 			const path = await cache.checkout(params.repo);
