@@ -46,7 +46,7 @@ export function createOracleTool(
 		key: "oracle",
 		name: "oracle",
 		description:
-			"Consult a read-only senior advisor for an independent second opinion on a bounded, high-judgment review, cross-module bug, architecture or plan tradeoff, or API/type design. Use Finder for code location, Librarian for external research, and direct work or another agent for implementation.",
+			"Consult a read-only senior advisor for an independent second opinion on a bounded, high-judgment review, cross-module bug, architecture or plan tradeoff, or API/type design. Use Finder for location and Librarian for external research.",
 		parameters: Type.Object({
 			task: Type.String({ description: "Bounded question or decision the advisor should resolve." }),
 			context: Type.Optional(Type.String({ description: "Constraints, desired outcome, and relevant background." })),

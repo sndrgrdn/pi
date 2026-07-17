@@ -79,7 +79,7 @@ export interface TaskDependencies {
 }
 
 const SUMMARY_SYSTEM_PROMPT =
-	"Summarize a failed Task run from its tool log. Report accomplishments, files modified, findings, verification, and unfinished work. Do not invent facts.";
+	"Summarize a failed Task run using only facts in its tool log. Report accomplishments, files modified, findings, verification, and unfinished work.";
 
 export function createTaskTool(
 	runner: Pick<SubagentRunner, "run">,
@@ -123,11 +123,11 @@ export function createTaskTool(
 		key: "task",
 		name: "task",
 		description:
-			"Delegate one bounded worker job after the scope is known: implementation, test repair, or isolated verification. Supply self-contained context, constraints and non-goals, write scope, and validation; integrate and summarize the result yourself. Use Finder, Oracle, or Librarian for location, advice, or external research.",
+			"Delegate a bounded worker job after its scope is known. Use for implementation or isolated verification; use Finder, Oracle, or Librarian for location, advice, or external research.",
 		parameters: Type.Object({
 			prompt: Type.String({
 				description:
-					"Self-contained worker brief with the outcome, scope, relevant context, constraints and non-goals, and validation steps.",
+					"Self-contained worker brief: outcome, scope, relevant context, constraints and non-goals, and validation.",
 			}),
 			description: Type.String({ description: "Short TUI label for the delegated work." }),
 			effort: Type.Optional(

@@ -33,7 +33,7 @@ export function createFinderTool(
 		key: "finder",
 		name: "finder",
 		description:
-			"Search a local codebase with a read-only scout for behavior, flows, or correlated patterns. Use grep directly for a known symbol, exact string, or path; use Finder when discovery requires multiple searches or correlation. Run independent Finder queries in parallel.",
+			"Scout a local codebase for behavior, flows, or correlated patterns. Use when discovery requires multiple searches; use grep directly for a known symbol, exact string, or path.",
 		parameters: Type.Object({
 			query: Type.String({ description: "What to discover and how exhaustive the search should be." }),
 		}),
