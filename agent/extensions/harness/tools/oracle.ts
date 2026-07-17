@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { type AgentToolSpec, createAgentTool } from "../agent-tool.ts";
-import { type ResolvedProfiles, resolveAgentRoute } from "../profiles.ts";
+import type { ResolvedProfiles } from "../profiles.ts";
 import type { SubagentRunner } from "../runner.ts";
 import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
 import { createFinderTool } from "./finder.ts";
@@ -53,7 +53,7 @@ export function createOracleTool(
 				Type.Array(Type.String(), { description: "Files whose readable contents should be supplied." }),
 			),
 		}),
-		route: () => resolveAgentRoute(profiles, "oracle"),
+		route: () => profiles.agents.oracle,
 		plan: (params, ctx) => ({
 			systemPrompt: `${prompt}\n\nWorking directory: ${ctx.cwd}\nCurrent date: ${new Date().toISOString().slice(0, 10)}`,
 			message: oracleMessage(params, ctx.cwd),

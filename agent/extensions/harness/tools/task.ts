@@ -9,7 +9,7 @@ import {
 	createAgentTool,
 } from "../agent-tool.ts";
 import { createApplyPatchTool } from "../patch/tool.ts";
-import { type ResolvedProfiles, resolveTaskRoute, TASK_EFFORTS, type TaskEffort } from "../profiles.ts";
+import { type ResolvedProfiles, TASK_EFFORTS, type TaskEffort } from "../profiles.ts";
 import { projectContextPrompt } from "../project-context.ts";
 import { isSubagentAbortError, SubagentRunError, type SubagentRunner, type ToolLogEntry } from "../runner.ts";
 import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
@@ -94,7 +94,7 @@ export function createTaskTool(
 		}
 		if (!(error instanceof SubagentRunError)) throw error;
 		try {
-			const route = resolveTaskRoute(profiles, taskEffort(params));
+			const route = profiles.agents.task[taskEffort(params)];
 			const summary = await runner.run({
 				definition: {
 					key: "task",
@@ -135,7 +135,7 @@ export function createTaskTool(
 				),
 			),
 		}),
-		route: (params) => resolveTaskRoute(profiles, taskEffort(params)),
+		route: (params) => profiles.agents.task[taskEffort(params)],
 		plan: async (params, ctx) => {
 			const base = await (dependencies.basePrompts ?? readBasePrompts)(ctx.cwd);
 			return {

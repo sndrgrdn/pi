@@ -6,8 +6,6 @@ import {
 	BUILTIN_PROFILES,
 	loadProfiles,
 	mergeProfiles,
-	resolveAgentRoute,
-	resolveTaskRoute,
 	validateProfilesOverride,
 } from "./profiles.ts";
 
@@ -16,14 +14,14 @@ const HAIKU = "anthropic/claude-haiku-4-5";
 
 describe("agent routes", () => {
 	it("gives each fixed specialist one route", () => {
-		expect(resolveAgentRoute(BUILTIN_PROFILES, "finder")).toEqual({ model: HAIKU, reasoning: "minimal" });
-		expect(resolveAgentRoute(BUILTIN_PROFILES, "librarian")).toEqual({ model: SOL, reasoning: "off" });
-		expect(resolveAgentRoute(BUILTIN_PROFILES, "oracle")).toEqual({ model: SOL, reasoning: "high" });
+		expect(BUILTIN_PROFILES.agents.finder).toEqual({ model: HAIKU, reasoning: "minimal" });
+		expect(BUILTIN_PROFILES.agents.librarian).toEqual({ model: SOL, reasoning: "off" });
+		expect(BUILTIN_PROFILES.agents.oracle).toEqual({ model: SOL, reasoning: "high" });
 	});
 
 	it("gives Task standard and high effort routes", () => {
-		expect(resolveTaskRoute(BUILTIN_PROFILES, "standard")).toEqual({ model: SOL, reasoning: "low" });
-		expect(resolveTaskRoute(BUILTIN_PROFILES, "high")).toEqual({ model: SOL, reasoning: "high" });
+		expect(BUILTIN_PROFILES.agents.task.standard).toEqual({ model: SOL, reasoning: "low" });
+		expect(BUILTIN_PROFILES.agents.task.high).toEqual({ model: SOL, reasoning: "high" });
 	});
 });
 
@@ -62,13 +60,13 @@ describe("mergeProfiles", () => {
 			},
 		});
 
-		expect(resolveAgentRoute(merged, "finder")).toEqual({ model: HAIKU, reasoning: "low" });
-		expect(resolveAgentRoute(merged, "oracle")).toEqual({
+		expect(merged.agents.finder).toEqual({ model: HAIKU, reasoning: "low" });
+		expect(merged.agents.oracle).toEqual({
 			model: "anthropic/claude-fable-5",
 			reasoning: "high",
 		});
-		expect(resolveTaskRoute(merged, "high")).toEqual({ model: SOL, reasoning: "xhigh" });
-		expect(resolveTaskRoute(merged, "standard")).toEqual(resolveTaskRoute(BUILTIN_PROFILES, "standard"));
+		expect(merged.agents.task.high).toEqual({ model: SOL, reasoning: "xhigh" });
+		expect(merged.agents.task.standard).toEqual(BUILTIN_PROFILES.agents.task.standard);
 		expect(BUILTIN_PROFILES).toEqual(before);
 	});
 });
@@ -93,7 +91,7 @@ describe("loadProfiles", () => {
 
 	it("loads a partial override", () => {
 		const path = write(JSON.stringify({ agents: { task: { high: { reasoning: "xhigh" } } } }));
-		expect(resolveTaskRoute(loadProfiles(path), "high")).toEqual({ model: SOL, reasoning: "xhigh" });
+		expect(loadProfiles(path).agents.task.high).toEqual({ model: SOL, reasoning: "xhigh" });
 	});
 
 	it("fails loudly on malformed JSON, naming the file", () => {

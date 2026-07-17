@@ -34,14 +34,6 @@ export const BUILTIN_PROFILES: ResolvedProfiles = {
 	},
 };
 
-export function resolveAgentRoute(profiles: ResolvedProfiles, agent: FixedAgentKey): Route {
-	return profiles.agents[agent];
-}
-
-export function resolveTaskRoute(profiles: ResolvedProfiles, effort: TaskEffort): Route {
-	return profiles.agents.task[effort];
-}
-
 export interface RouteOverride {
 	model?: string;
 	reasoning?: ReasoningLevel;

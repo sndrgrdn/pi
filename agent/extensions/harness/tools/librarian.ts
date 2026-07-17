@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { type AgentToolSpec, createAgentTool } from "../agent-tool.ts";
-import { type ResolvedProfiles, resolveAgentRoute } from "../profiles.ts";
+import type { ResolvedProfiles } from "../profiles.ts";
 import type { SubagentRunner } from "../runner.ts";
 import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
 import { createCheckoutTool } from "./checkout.ts";
@@ -45,7 +45,7 @@ export function createLibrarianTool(
 			query: Type.String({ description: "The external research question." }),
 			context: Type.Optional(Type.String({ description: "Relevant context prepended to the research query." })),
 		}),
-		route: () => resolveAgentRoute(profiles, "librarian"),
+		route: () => profiles.agents.librarian,
 		plan: (params) => ({
 			systemPrompt: prompt,
 			message: librarianMessage(params),
