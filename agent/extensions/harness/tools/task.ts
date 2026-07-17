@@ -9,7 +9,7 @@ import {
 	createAgentTool,
 } from "../agent-tool.ts";
 import { createApplyPatchTool } from "../patch/tool.ts";
-import { MODES, type ProfileMode, type ResolvedProfiles, resolveAgentRoute } from "../profiles.ts";
+import { type ResolvedProfiles, resolveTaskRoute, TASK_EFFORTS, type TaskEffort } from "../profiles.ts";
 import { projectContextPrompt } from "../project-context.ts";
 import { isSubagentAbortError, SubagentRunError, type SubagentRunner, type ToolLogEntry } from "../runner.ts";
 import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
@@ -20,7 +20,7 @@ import { createHarnessReadTool } from "./read.ts";
 interface TaskInput {
 	prompt: string;
 	description: string;
-	mode?: ProfileMode;
+	effort?: TaskEffort;
 }
 
 export interface TaskBasePrompts {
@@ -29,8 +29,8 @@ export interface TaskBasePrompts {
 	projectContext: string;
 }
 
-function taskMode(params: TaskInput): ProfileMode {
-	return params.mode ?? "low";
+function taskEffort(params: TaskInput): TaskEffort {
+	return params.effort ?? "standard";
 }
 
 function cappedLines(value: string, cap: number): string {
@@ -94,7 +94,7 @@ export function createTaskTool(
 		}
 		if (!(error instanceof SubagentRunError)) throw error;
 		try {
-			const route = resolveAgentRoute(profiles, "task", taskMode(params));
+			const route = resolveTaskRoute(profiles, taskEffort(params));
 			const summary = await runner.run({
 				definition: {
 					key: "task",
@@ -125,16 +125,17 @@ export function createTaskTool(
 				description: "Complete implementation brief, including constraints and verification steps.",
 			}),
 			description: Type.String({ description: "Short TUI description of the delegated work." }),
-			mode: Type.Optional(
+			effort: Type.Optional(
 				Type.Union(
-					MODES.map((mode) => Type.Literal(mode)),
+					TASK_EFFORTS.map((effort) => Type.Literal(effort)),
 					{
-						description: "Capability level for the delegated task. Use the lowest level sufficient for the work.",
+						description:
+							"Effort for the delegated task. Use standard for routine or well-scoped work; use high for complex, ambiguous, cross-cutting, or risk-sensitive work.",
 					},
 				),
 			),
 		}),
-		mode: taskMode,
+		route: (params) => resolveTaskRoute(profiles, taskEffort(params)),
 		plan: async (params, ctx) => {
 			const base = await (dependencies.basePrompts ?? readBasePrompts)(ctx.cwd);
 			return {
@@ -152,12 +153,12 @@ export function createTaskTool(
 		finalize: (answer) => ({ content: answer }),
 		recover,
 		presentation: {
-			action: (params) => `task (${taskMode(params)})`,
+			action: (params) => `task (${taskEffort(params)})`,
 			target: (params) => params.description,
 		},
-		traceDetails: (params) => ({ mode: taskMode(params), description: params.description }),
+		traceDetails: (params) => ({ effort: taskEffort(params), description: params.description }),
 		tools: [...SHELL_TOOLBOX_NAMES, "read", "apply_patch", "finder", "librarian"],
 		allowMcp: true,
 	};
-	return createAgentTool(spec, runner, profiles);
+	return createAgentTool(spec, runner);
 }

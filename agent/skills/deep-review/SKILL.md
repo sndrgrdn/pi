@@ -57,7 +57,7 @@ Done when all six entries exist and contain only facts.
 
 Read the selected judges' rubrics now — `references/design.md`, `references/craft.md`, `references/fitness.md`, or `references/stability.md`. Each is complete and goes verbatim into its judge's prompt.
 
-Convene the selected judges as separate `task` calls in parallel, scoped to review and a judge report. Run Design and Fitness with `mode: "high"`; run Craft and Stability with `mode: "medium"`. Charitable drift lives in the judging seats, so reserve the strongest reasoning for Design and Fitness.
+Convene the selected judges as separate `task` calls in parallel, scoped to review and a judge report. Run Design and Fitness with `effort: "high"`; run Craft and Stability with `effort: "standard"`. Charitable drift lives in the judging seats, so reserve the strongest reasoning for Design and Fitness.
 
 Every prompt carries the diff command, commit list, Blocking policy above, its rubric, this reporting contract, and its evidence packet:
 

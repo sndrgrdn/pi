@@ -3,9 +3,10 @@
  *
  * Wires all harness modules onto pi.
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { registerModes } from "./modes.ts";
+import { join } from "node:path";
+import { type ExtensionAPI, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { registerApplyPatch } from "./patch/tool.ts";
+import { loadProfiles } from "./profiles.ts";
 import { isSubagentAbortError, SubagentRunner } from "./runner.ts";
 import { registerShellCancel } from "./shell/cancel.ts";
 import { registerShellCommand } from "./shell/command.ts";
@@ -49,14 +50,12 @@ export default function harness(pi: ExtensionAPI) {
 	registerApplyPatch(pi, traceTools.register);
 	registerRead(pi, traceTools.register);
 
-	// Modes + Profiles. Loads (and strictly validates)
-	// ~/.pi/agent/profiles.json — an invalid file fails startup loudly.
-	const modes = registerModes(pi);
-	const { profiles } = modes;
+	// Load profiles once at startup; invalid external configuration fails loudly.
+	const profiles = loadProfiles(join(getAgentDir(), "profiles.json"));
 	const runner = new SubagentRunner();
 	traceTools.register(createFinderTool(runner, profiles));
 	traceTools.register(createLibrarianTool(runner, profiles));
-	traceTools.register(createOracleTool(runner, profiles, modes.activeMode));
+	traceTools.register(createOracleTool(runner, profiles));
 	traceTools.register(createTaskTool(runner, profiles));
 
 	// Action methods become available only after pi binds the extension runtime.

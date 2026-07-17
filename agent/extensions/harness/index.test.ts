@@ -21,6 +21,8 @@ describe("harness extension entry", () => {
 
 		harness(pi);
 		expect(setActiveTools).not.toHaveBeenCalled();
+		expect(pi.registerShortcut).not.toHaveBeenCalled();
+		expect(pi.events.on).not.toHaveBeenCalled();
 
 		handlers.get("session_start")?.({}, {});
 

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { type AgentToolSpec, createAgentTool } from "../agent-tool.ts";
-import type { ResolvedProfiles } from "../profiles.ts";
+import { type ResolvedProfiles, resolveAgentRoute } from "../profiles.ts";
 import type { SubagentRunner } from "../runner.ts";
 import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
 import { createCheckoutTool } from "./checkout.ts";
@@ -33,38 +33,36 @@ function mapLibrarianError(error: unknown): Error {
 	return resolved;
 }
 
-const spec: AgentToolSpec<LibrarianParams, "librarian"> = {
-	key: "librarian",
-	name: "librarian",
-	description: "Delegate remote repository and web research. Returns source-linked findings.",
-	parameters: Type.Object({
-		query: Type.String({ description: "The external research question." }),
-		context: Type.Optional(Type.String({ description: "Relevant context prepended to the research query." })),
-	}),
-	mode: () => "medium",
-	plan: (params) => ({
-		systemPrompt: prompt,
-		message: librarianMessage(params),
-		toolbox: (processes) => [
-			createCheckoutTool(),
-			...createShellToolbox(processes),
-			createWebSearchTool(),
-			createWebFetchTool(),
-		],
-	}),
-	finalize: (answer) => ({ content: answer }),
-	recover: (error) => {
-		// Rethrow rather than return a recovery: librarian has no partial report worth salvaging.
-		throw mapLibrarianError(error);
-	},
-	presentation: { action: "librarian", target: (params) => params.query },
-	tools: ["checkout", "grep", "find", "read", ...SHELL_TOOLBOX_NAMES, "web_search", "web_fetch"],
-	allowMcp: false,
-};
-
 export function createLibrarianTool(
 	runner: Pick<SubagentRunner, "run">,
 	profiles: ResolvedProfiles,
 ): ToolDefinition<any, any, any> {
-	return createAgentTool(spec, runner, profiles);
+	const spec: AgentToolSpec<LibrarianParams, "librarian"> = {
+		key: "librarian",
+		name: "librarian",
+		description: "Delegate remote repository and web research. Returns source-linked findings.",
+		parameters: Type.Object({
+			query: Type.String({ description: "The external research question." }),
+			context: Type.Optional(Type.String({ description: "Relevant context prepended to the research query." })),
+		}),
+		route: () => resolveAgentRoute(profiles, "librarian"),
+		plan: (params) => ({
+			systemPrompt: prompt,
+			message: librarianMessage(params),
+			toolbox: (processes) => [
+				createCheckoutTool(),
+				...createShellToolbox(processes),
+				createWebSearchTool(),
+				createWebFetchTool(),
+			],
+		}),
+		finalize: (answer) => ({ content: answer }),
+		recover: (error) => {
+			throw mapLibrarianError(error);
+		},
+		presentation: { action: "librarian", target: (params) => params.query },
+		tools: ["checkout", "grep", "find", "read", ...SHELL_TOOLBOX_NAMES, "web_search", "web_fetch"],
+		allowMcp: false,
+	};
+	return createAgentTool(spec, runner);
 }

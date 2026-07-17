@@ -1,12 +1,11 @@
 import { Type } from "typebox";
 import { describe, expect, it, vi } from "vitest";
 import { type AgentToolSpec, createAgentTool } from "./agent-tool.ts";
-import { BUILTIN_PROFILES } from "./profiles.ts";
 import { type RunOptions, SubagentAbortError, SubagentRunError } from "./runner.ts";
 
 interface ProbeParams {
 	assignment: string;
-	mode?: "low" | "high";
+	effort?: "standard" | "high";
 }
 
 function probeSpec(overrides: Partial<AgentToolSpec<ProbeParams, "task">> = {}): AgentToolSpec<ProbeParams, "task"> {
@@ -15,7 +14,10 @@ function probeSpec(overrides: Partial<AgentToolSpec<ProbeParams, "task">> = {}):
 		name: "probe",
 		description: "Spine probe.",
 		parameters: Type.Object({ assignment: Type.String() }),
-		mode: (params) => params.mode ?? "low",
+		route: (params) => ({
+			model: "openai-codex/gpt-5.6-sol",
+			reasoning: params.effort === "high" ? "high" : "low",
+		}),
 		plan: (params) => ({ systemPrompt: "You are a probe.", message: `Do: ${params.assignment}` }),
 		finalize: (answer) => ({ content: answer.toUpperCase() }),
 		presentation: { action: "probe", target: (params) => params.assignment },
@@ -40,7 +42,7 @@ function deferred<T>() {
 describe("agent tool factory", () => {
 	it("wraps the finalized answer in a session-attributed envelope", async () => {
 		const run = fakeRun("all done");
-		const tool = createAgentTool(probeSpec(), { run } as any, BUILTIN_PROFILES);
+		const tool = createAgentTool(probeSpec(), { run } as any);
 
 		const result = await tool.execute("call", { assignment: "probe it" }, undefined, undefined, {
 			cwd: "/repo",
@@ -53,9 +55,9 @@ describe("agent tool factory", () => {
 		expect(result.details).toEqual({ trace: { state: "success" } });
 	});
 
-	it("runs the planned assignment on the low route by default", async () => {
+	it("runs the planned assignment on the route supplied by the spec", async () => {
 		const run = fakeRun("all done");
-		const tool = createAgentTool(probeSpec(), { run } as any, BUILTIN_PROFILES);
+		const tool = createAgentTool(probeSpec(), { run } as any);
 
 		await tool.execute("call", { assignment: "probe it" }, undefined, undefined, { cwd: "/repo" } as any);
 
@@ -75,7 +77,7 @@ describe("agent tool factory", () => {
 
 	it("attributes a persistent Subagent Record to its immediate caller", async () => {
 		const run = fakeRun("all done");
-		const tool = createAgentTool(probeSpec(), { run } as any, BUILTIN_PROFILES);
+		const tool = createAgentTool(probeSpec(), { run } as any);
 
 		await tool.execute("call", { assignment: "  inspect\n durable   lineage  " }, undefined, undefined, {
 			cwd: "/repo",
@@ -90,7 +92,7 @@ describe("agent tool factory", () => {
 
 	it("caps the complete Subagent Record name at 120 characters", async () => {
 		const run = fakeRun("all done");
-		const tool = createAgentTool(probeSpec(), { run } as any, BUILTIN_PROFILES);
+		const tool = createAgentTool(probeSpec(), { run } as any);
 
 		await tool.execute("call", { assignment: "x".repeat(200) }, undefined, undefined, {
 			cwd: "/repo",
@@ -100,11 +102,11 @@ describe("agent tool factory", () => {
 		expect(run.mock.calls[0]?.[0].record?.name).toBe(`task: ${"x".repeat(114)}`);
 	});
 
-	it("runs high-mode assignments on the high route", async () => {
+	it("runs high-effort assignments on their supplied route", async () => {
 		const run = fakeRun("all done");
-		const tool = createAgentTool(probeSpec(), { run } as any, BUILTIN_PROFILES);
+		const tool = createAgentTool(probeSpec(), { run } as any);
 
-		await tool.execute("call", { assignment: "probe it", mode: "high" }, undefined, undefined, {
+		await tool.execute("call", { assignment: "probe it", effort: "high" }, undefined, undefined, {
 			cwd: "/repo",
 		} as any);
 
@@ -120,7 +122,7 @@ describe("agent tool factory", () => {
 			options.onAction?.("read");
 			return { sessionID: "probe-session", answer: "done", toolLog: [] };
 		});
-		const tool = createAgentTool(probeSpec(), { run } as any, BUILTIN_PROFILES);
+		const tool = createAgentTool(probeSpec(), { run } as any);
 		const updates: any[] = [];
 
 		await tool.execute("call", { assignment: "probe it" }, undefined, (update: any) => updates.push(update), {
@@ -140,7 +142,7 @@ describe("agent tool factory", () => {
 			plan: () => pendingPlan.promise,
 		});
 		const updates: any[] = [];
-		const tool = createAgentTool(spec, { run: fakeRun("done") } as any, BUILTIN_PROFILES);
+		const tool = createAgentTool(spec, { run: fakeRun("done") } as any);
 
 		const running = tool.execute(
 			"call",
@@ -159,7 +161,7 @@ describe("agent tool factory", () => {
 		const run = vi.fn();
 		const controller = new AbortController();
 		controller.abort();
-		const tool = createAgentTool(probeSpec({ plan }), { run } as any, BUILTIN_PROFILES);
+		const tool = createAgentTool(probeSpec({ plan }), { run } as any);
 
 		await expect(
 			tool.execute("call", { assignment: "probe it" }, controller.signal, undefined, { cwd: "/repo" } as any),
@@ -177,7 +179,7 @@ describe("agent tool factory", () => {
 			return { sessionID: "probe-session", answer: "done", toolLog: [] };
 		});
 		const updates: any[] = [];
-		const tool = createAgentTool(spec, { run } as any, BUILTIN_PROFILES);
+		const tool = createAgentTool(spec, { run } as any);
 		const result = await tool.execute(
 			"call",
 			{ assignment: "probe it" },
@@ -200,7 +202,7 @@ describe("agent tool factory", () => {
 		});
 
 		const failure = new SubagentRunError("probe-session", [], new Error("boom"));
-		const tool = createAgentTool(spec, { run: vi.fn().mockRejectedValue(failure) } as any, BUILTIN_PROFILES);
+		const tool = createAgentTool(spec, { run: vi.fn().mockRejectedValue(failure) } as any);
 
 		const recovered = await tool.execute("call", { assignment: "probe it" }, undefined, undefined, {
 			cwd: "/repo",
@@ -215,7 +217,7 @@ describe("agent tool factory", () => {
 				throw new Error("child returned an empty answer");
 			},
 		});
-		const tool = createAgentTool(spec, { run: fakeRun("") } as any, BUILTIN_PROFILES);
+		const tool = createAgentTool(spec, { run: fakeRun("") } as any);
 
 		const failure = await tool
 			.execute("call", { assignment: "probe it" }, undefined, undefined, { cwd: "/repo" } as any)
@@ -233,7 +235,7 @@ describe("agent tool factory", () => {
 
 	it("rethrows run failures untouched when the spec has no recover hook", async () => {
 		const failure = new SubagentRunError("probe-session", [], new Error("boom"));
-		const tool = createAgentTool(probeSpec(), { run: vi.fn().mockRejectedValue(failure) } as any, BUILTIN_PROFILES);
+		const tool = createAgentTool(probeSpec(), { run: vi.fn().mockRejectedValue(failure) } as any);
 
 		await expect(
 			tool.execute("call", { assignment: "probe it" }, undefined, undefined, { cwd: "/repo" } as any),
@@ -244,11 +246,7 @@ describe("agent tool factory", () => {
 		const failure = new SubagentRunError("probe-session", [], new Error("boom"));
 		const recover = vi.fn(async () => ({ content: "salvaged report", outcome: "failed" as const }));
 		const controller = new AbortController();
-		const tool = createAgentTool(
-			probeSpec({ recover }),
-			{ run: vi.fn().mockRejectedValue(failure) } as any,
-			BUILTIN_PROFILES,
-		);
+		const tool = createAgentTool(probeSpec({ recover }), { run: vi.fn().mockRejectedValue(failure) } as any);
 
 		const result = await tool.execute("call", { assignment: "probe it" }, controller.signal, undefined, {
 			cwd: "/repo",
@@ -274,7 +272,6 @@ describe("agent tool factory", () => {
 				},
 			}),
 			{ run: vi.fn().mockRejectedValue(new Error("raw failure")) } as any,
-			BUILTIN_PROFILES,
 		);
 
 		await expect(
@@ -283,7 +280,7 @@ describe("agent tool factory", () => {
 	});
 
 	it("renders running action tallies in the presentation row", () => {
-		const tool = createAgentTool(probeSpec(), { run: vi.fn() } as any, BUILTIN_PROFILES);
+		const tool = createAgentTool(probeSpec(), { run: vi.fn() } as any);
 		const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
 		const row = tool.renderCall?.({ assignment: "probe it" }, theme, { lastComponent: undefined } as any) as any;
 
@@ -297,7 +294,7 @@ describe("agent tool factory", () => {
 	});
 
 	it("wraps the assignment with hanging indentation and caps it at three lines", () => {
-		const tool = createAgentTool(probeSpec(), { run: vi.fn() } as any, BUILTIN_PROFILES);
+		const tool = createAgentTool(probeSpec(), { run: vi.fn() } as any);
 		const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
 		const assignment = "one two three four five six seven eight nine";
 		const component = tool.renderResult?.(
@@ -315,7 +312,7 @@ describe("agent tool factory", () => {
 	});
 
 	it("renders completed envelope evidence below the presentation row", () => {
-		const tool = createAgentTool(probeSpec(), { run: vi.fn() } as any, BUILTIN_PROFILES);
+		const tool = createAgentTool(probeSpec(), { run: vi.fn() } as any);
 		const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
 		const row = tool.renderCall?.({ assignment: "probe it" }, theme, { lastComponent: undefined } as any) as any;
 

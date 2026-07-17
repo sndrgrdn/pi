@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { type AgentToolSpec, createAgentTool } from "../agent-tool.ts";
-import type { ResolvedProfiles } from "../profiles.ts";
+import { type ResolvedProfiles, resolveAgentRoute } from "../profiles.ts";
 import type { SubagentRunner } from "../runner.ts";
 
 const prompt = readFileSync(
@@ -25,23 +25,22 @@ function extractFinderAnswer(answer: string): { title: string; content: string }
 	return { title, content };
 }
 
-const spec: AgentToolSpec<FinderParams, "finder"> = {
-	key: "finder",
-	name: "finder",
-	description:
-		"Delegate local codebase search to a read-only scout. Needle queries (known symbol, exact string, path) — grep yourself; use finder for broader discovery: behavior, flows, correlated patterns. Use parallel finder calls for independent queries.",
-	parameters: Type.Object({ query: Type.String({ description: "What to locate and the desired thoroughness." }) }),
-	mode: () => "medium",
-	plan: (params) => ({ systemPrompt: prompt, message: params.query }),
-	finalize: extractFinderAnswer,
-	presentation: { action: "finder", target: (params) => params.query },
-	tools: ["read", "grep", "find", "ls"],
-	allowMcp: false,
-};
-
 export function createFinderTool(
 	runner: Pick<SubagentRunner, "run">,
 	profiles: ResolvedProfiles,
 ): ToolDefinition<any, any, any> {
-	return createAgentTool(spec, runner, profiles);
+	const spec: AgentToolSpec<FinderParams, "finder"> = {
+		key: "finder",
+		name: "finder",
+		description:
+			"Delegate local codebase search to a read-only scout. Needle queries (known symbol, exact string, path) — grep yourself; use finder for broader discovery: behavior, flows, correlated patterns. Use parallel finder calls for independent queries.",
+		parameters: Type.Object({ query: Type.String({ description: "What to locate and the desired thoroughness." }) }),
+		route: () => resolveAgentRoute(profiles, "finder"),
+		plan: (params) => ({ systemPrompt: prompt, message: params.query }),
+		finalize: extractFinderAnswer,
+		presentation: { action: "finder", target: (params) => params.query },
+		tools: ["read", "grep", "find", "ls"],
+		allowMcp: false,
+	};
+	return createAgentTool(spec, runner);
 }

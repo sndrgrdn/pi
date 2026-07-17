@@ -26,31 +26,42 @@ describe("task tool", () => {
 
 	it.each([
 		[undefined, "openai-codex/gpt-5.6-sol", "low"],
-		["low", "openai-codex/gpt-5.6-sol", "low"],
-		["medium", "openai-codex/gpt-5.6-sol", "high"],
 		["high", "openai-codex/gpt-5.6-sol", "high"],
-		["ultra", "anthropic/claude-fable-5", "high"],
-	] as const)("routes mode %s independently and exposes the exact Task toolbox", async (mode, model, reasoning) => {
-		const run = vi.fn(async (options: RunOptions) => {
-			options.onAction?.("apply_patch");
-			return { sessionID: "task-1", answer: "Changed x.ts. Verification: tests pass.", toolLog: [] };
-		});
-		const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
-			basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),
-		});
-		const params = { prompt: "Implement it", description: "implementation", ...(mode ? { mode } : {}) };
-		const updates: any[] = [];
-		const result = await tool.execute("call", params, undefined, (update: any) => updates.push(update), {
-			cwd: "/repo",
-		} as any);
-		const options = run.mock.calls[0]![0];
+	] as const)(
+		"routes effort %s independently and exposes the exact Task toolbox",
+		async (effort, model, reasoning) => {
+			const run = vi.fn(async (options: RunOptions) => {
+				options.onAction?.("apply_patch");
+				return { sessionID: "task-1", answer: "Changed x.ts. Verification: tests pass.", toolLog: [] };
+			});
+			const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
+				basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),
+			});
+			const params = { prompt: "Implement it", description: "implementation", ...(effort ? { effort } : {}) };
+			const updates: any[] = [];
+			const result = await tool.execute("call", params, undefined, (update: any) => updates.push(update), {
+				cwd: "/repo",
+			} as any);
+			const options = run.mock.calls[0]![0];
 
-		expect(options.definition).toMatchObject({
-			key: "task",
-			model,
-			reasoningEffort: reasoning,
-			allowMcp: true,
-			tools: [
+			expect(options.definition).toMatchObject({
+				key: "task",
+				model,
+				reasoningEffort: reasoning,
+				allowMcp: true,
+				tools: [
+					"shell_command",
+					"shell_command_status",
+					"shell_command_cancel",
+					"read",
+					"apply_patch",
+					"finder",
+					"librarian",
+				],
+			});
+			expect(options.definition.systemPrompt).toBe("S\n\nA\n\nC");
+			expect(options.message).toBe("Implement it");
+			expect(options.toolbox!(new BackgroundShellRegistry()).map((entry) => entry.name)).toEqual([
 				"shell_command",
 				"shell_command_status",
 				"shell_command_cancel",
@@ -58,47 +69,36 @@ describe("task tool", () => {
 				"apply_patch",
 				"finder",
 				"librarian",
-			],
-		});
-		expect(options.definition.systemPrompt).toBe("S\n\nA\n\nC");
-		expect(options.message).toBe("Implement it");
-		expect(options.toolbox!(new BackgroundShellRegistry()).map((entry) => entry.name)).toEqual([
-			"shell_command",
-			"shell_command_status",
-			"shell_command_cancel",
-			"read",
-			"apply_patch",
-			"finder",
-			"librarian",
-		]);
-		expect(result.content[0]).toEqual({
-			type: "text",
-			text: '<task_result sessionID="task-1">\nChanged x.ts. Verification: tests pass.\n</task_result>',
-		});
-		expect(updates.at(-1)?.details).toMatchObject({
-			trace: { state: "running" },
-			actions: { apply_patch: 1 },
-			mode: mode ?? "low",
-			description: "implementation",
-		});
-		expect(result.details).toMatchObject({
-			trace: { state: "success" },
-			mode: mode ?? "low",
-			description: "implementation",
-		});
-	});
+			]);
+			expect(result.content[0]).toEqual({
+				type: "text",
+				text: '<task_result sessionID="task-1">\nChanged x.ts. Verification: tests pass.\n</task_result>',
+			});
+			expect(updates.at(-1)?.details).toMatchObject({
+				trace: { state: "running" },
+				actions: { apply_patch: 1 },
+				effort: effort ?? "standard",
+				description: "implementation",
+			});
+			expect(result.details).toMatchObject({
+				trace: { state: "success" },
+				effort: effort ?? "standard",
+				description: "implementation",
+			});
+		},
+	);
 
-	it.each([undefined, "low", "medium", "high", "ultra"] as const)("always renders selected Mode %s", (mode) => {
+	it.each([undefined, "high"] as const)("always renders selected effort %s", (effort) => {
 		const tool = createTaskTool({ run: vi.fn() } as any, BUILTIN_PROFILES);
 		const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
-		const args = { prompt: "Work", description: "fix renderer", ...(mode ? { mode } : {}) };
+		const args = { prompt: "Work", description: "fix renderer", ...(effort ? { effort } : {}) };
 		const row = tool.renderResult?.(
 			{ content: [{ type: "text", text: '<task_result sessionID="one">\nDone\n</task_result>' }], details: {} },
 			{ expanded: false, isPartial: false },
 			theme,
 			{ args, cwd: "/repo", isError: false } as any,
 		) as Text;
-		expect(row.render(100).map((line) => line.trimEnd())).toEqual([` ✓ task (${mode ?? "low"}) fix renderer`]);
+		expect(row.render(100).map((line) => line.trimEnd())).toEqual([` ✓ task (${effort ?? "standard"}) fix renderer`]);
 	});
 
 	it("reports capped completed and in-progress work when cancellation interrupts a tool log", async () => {
@@ -133,7 +133,7 @@ describe("task tool", () => {
 		expect(report).not.toContain("output 10");
 		expect(report).toContain(`Command: ${"x".repeat(80)}…`);
 		expect(report).toContain("## In progress when cancelled\n\n- read: still-reading.png");
-		expect(result.details).toMatchObject({ trace: { state: "cancelled" }, mode: "low", description: "work" });
+		expect(result.details).toMatchObject({ trace: { state: "cancelled" }, effort: "standard", description: "work" });
 	});
 
 	it("returns cancellation failures in a task_error envelope", async () => {

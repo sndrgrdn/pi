@@ -1,13 +1,13 @@
 /**
  * Agent Tool — the single factory that turns a per-agent spec into a
  * model-visible delegation tool (issue #8). The spine —
- * mode-to-route dispatch, per-call definition build, plan, envelope
+ * route dispatch, per-call definition build, plan, envelope
  * build/parse, finalize, recovery, Trace View rendering, and the progress
  * signal — lives here; agents are declarative specs.
  */
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { buildEnvelope, type EnvelopeInput, parseEnvelope } from "./envelopes.ts";
-import { type AgentKey, type ProfileMode, type ResolvedProfiles, resolveAgentRoute } from "./profiles.ts";
+import type { AgentKey, Route } from "./profiles.ts";
 import {
 	type AgentDefinition,
 	type ChildToolboxFactory,
@@ -66,7 +66,7 @@ export interface AgentToolSpec<TParams, K extends AgentKey> {
 	name: string;
 	description: string;
 	parameters: unknown;
-	mode(params: TParams): ProfileMode;
+	route(params: TParams): Route;
 	plan(params: TParams, ctx: { cwd: string }): AgentToolPlan | Promise<AgentToolPlan>;
 	finalize(answer: string): AgentToolResult<K>;
 	recover?(error: unknown, ctx: AgentToolRecoverContext<TParams>): AgentToolRecovery | Promise<AgentToolRecovery>;
@@ -176,7 +176,6 @@ function subagentRecordName<TParams, K extends AgentKey>(spec: AgentToolSpec<TPa
 export function createAgentTool<TParams, K extends AgentKey>(
 	spec: AgentToolSpec<TParams, K>,
 	runner: Pick<SubagentRunner, "run">,
-	profiles: ResolvedProfiles,
 ): ToolDefinition<any, any, any> {
 	const renderer = createAgentToolRenderer(spec.presentation);
 	return {
@@ -196,7 +195,7 @@ export function createAgentTool<TParams, K extends AgentKey>(
 			const recordAction = createProgressSignal(onUpdate, traceDetails);
 			if (signal?.aborted) throw new SubagentAbortError();
 			const planned = await spec.plan(params, { cwd: ctx.cwd });
-			const route = resolveAgentRoute(profiles, spec.key, spec.mode(params));
+			const route = spec.route(params);
 			const definition: AgentDefinition = {
 				key: spec.key,
 				systemPrompt: planned.systemPrompt,

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Text } from "@earendil-works/pi-tui";
 import { describe, expect, it, vi } from "vitest";
-import { BUILTIN_PROFILES, type Mode } from "../profiles.ts";
+import { BUILTIN_PROFILES } from "../profiles.ts";
 import { type RunOptions, SubagentRunError } from "../runner.ts";
 import { BackgroundShellRegistry } from "../shell/registry.ts";
 import { createOracleTool } from "./oracle.ts";
@@ -17,7 +17,7 @@ interface OracleParams {
 /** Run the tool against a fake runner and capture the child message it plans. */
 async function capturedMessage(params: OracleParams, cwd: string): Promise<string> {
 	const run = vi.fn(async (_options: RunOptions) => ({ sessionID: "oracle-1", answer: "Advice", toolLog: [] }));
-	const tool = createOracleTool({ run } as any, BUILTIN_PROFILES, () => "medium");
+	const tool = createOracleTool({ run } as any, BUILTIN_PROFILES);
 	await tool.execute("call", params, undefined, undefined, { cwd } as any);
 	return run.mock.calls[0]?.[0].message as string;
 }
@@ -60,23 +60,18 @@ describe("oracle tool", () => {
 		expect(message).toContain("File: many.txt\n```txt\n");
 	});
 
-	it.each([
-		["low", "openai-codex/gpt-5.6-sol"],
-		["medium", "openai-codex/gpt-5.6-sol"],
-		["high", "anthropic/claude-fable-5"],
-		["ultra", "openai-codex/gpt-5.6-sol"],
-	] as const)("resolves the %s parent Mode route at invocation", async (mode, model) => {
+	it("uses its configured expert route", async () => {
 		const run = vi.fn(async (_options: RunOptions) => ({
 			sessionID: "oracle-1",
 			answer: "Use the smaller change.",
 			toolLog: [],
 		}));
-		const tool = createOracleTool({ run } as any, BUILTIN_PROFILES, () => mode as Mode);
+		const tool = createOracleTool({ run } as any, BUILTIN_PROFILES);
 		const result = await tool.execute("call", { task: "Review it" }, undefined, undefined, { cwd: "/repo" } as any);
 
 		expect(run.mock.calls[0]?.[0].definition).toMatchObject({
 			key: "oracle",
-			model,
+			model: "openai-codex/gpt-5.6-sol",
 			reasoningEffort: "high",
 			allowMcp: false,
 			tools: ["shell_command", "shell_command_status", "shell_command_cancel", "finder", "librarian"],
@@ -96,25 +91,12 @@ describe("oracle tool", () => {
 		});
 	});
 
-	it("follows the active parent Mode at call time", async () => {
-		let mode: Mode = "low";
-		const run = vi.fn(async (_options: RunOptions) => ({ sessionID: "oracle-1", answer: "Advice", toolLog: [] }));
-		const tool = createOracleTool({ run } as any, BUILTIN_PROFILES, () => mode);
-
-		await tool.execute("call-1", { task: "Review it" }, undefined, undefined, { cwd: "/repo" } as any);
-		mode = "high";
-		await tool.execute("call-2", { task: "Review it" }, undefined, undefined, { cwd: "/repo" } as any);
-
-		expect(run.mock.calls[0]?.[0].definition.model).toBe("openai-codex/gpt-5.6-sol");
-		expect(run.mock.calls[1]?.[0].definition.model).toBe("anthropic/claude-fable-5");
-	});
-
-	it("uses the medium route when the parent Mode is custom", async () => {
+	it("reports progress without any parent mode state", async () => {
 		const run = vi.fn(async (options: RunOptions) => {
 			options.onAction?.("finder");
 			return { sessionID: "oracle-1", answer: "Advice", toolLog: [] };
 		});
-		const tool = createOracleTool({ run } as any, BUILTIN_PROFILES, () => "custom");
+		const tool = createOracleTool({ run } as any, BUILTIN_PROFILES);
 		const updates: any[] = [];
 		const result = await tool.execute(
 			"call",
@@ -132,7 +114,7 @@ describe("oracle tool", () => {
 
 	it("rejects an empty final message with the child session attributed", async () => {
 		const run = vi.fn(async (_options: RunOptions) => ({ sessionID: "oracle-1", answer: "  ", toolLog: [] }));
-		const tool = createOracleTool({ run } as any, BUILTIN_PROFILES, () => "medium");
+		const tool = createOracleTool({ run } as any, BUILTIN_PROFILES);
 		const failure = await tool
 			.execute("call", { task: "Review it" }, undefined, undefined, { cwd: "/repo" } as any)
 			.then(
@@ -144,7 +126,7 @@ describe("oracle tool", () => {
 	});
 
 	it("retains the original task after completion", () => {
-		const tool = createOracleTool({ run: vi.fn() } as any, BUILTIN_PROFILES, () => "medium");
+		const tool = createOracleTool({ run: vi.fn() } as any, BUILTIN_PROFILES);
 		const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
 		const row = tool.renderCall?.({ task: "Review routing" }, theme, { lastComponent: undefined } as any) as Text;
 		tool.renderResult?.(

@@ -9,8 +9,7 @@
  * tl: (empty)       tr: model · thinking
  * bl: tokens · metrics  br: cwd (branch)
  */
-import type { ExtensionAPI, ExtensionContext, ThemeColor } from "@earendil-works/pi-coding-agent";
-import type { Mode, ProfileMode } from "../harness/profiles.js";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getEditorPaddingX, PromptBoxEditor } from "./editor.js";
 import { getMetrics, onUpdate, register as registerMetrics } from "./metrics.js";
 
@@ -26,40 +25,20 @@ const THINK_LABEL: Record<string, string> = {
 	max: "max",
 };
 
-const HARNESS_MODE_COLORS: Record<ProfileMode, ThemeColor> = {
-	low: "thinkingLow",
-	medium: "thinkingMedium",
-	high: "thinkingHigh",
-	ultra: "thinkingXhigh",
-};
-
-export function harnessModeColor(mode: ProfileMode): ThemeColor {
-	return HARNESS_MODE_COLORS[mode];
-}
-
 // ── Extension ────────────────────────────────
 
 export default function promptBox(pi: ExtensionAPI) {
 	let editor: PromptBoxEditor | undefined;
 	let branch: string | null = null;
 	let unsubMetrics: (() => void) | undefined;
-	let harnessMode: Mode = "custom";
 
 	// Wire up the metrics module
 	registerMetrics(pi);
 
-	// Active harness Mode (published by extensions/harness modes.ts).
-	pi.events.on("harness:mode", (mode: unknown) => {
-		harnessMode = mode as Mode;
-		editor?.refresh();
-	});
-
-	// ── tr: model · thinking · mode ──
+	// ── tr: model · thinking ──
 
 	const tr = (ctx: ExtensionContext) => {
 		const theme = ctx.ui.theme;
-		if (harnessMode !== "custom") return theme.fg(harnessModeColor(harnessMode), harnessMode);
-
 		const dot = theme.fg("dim", " · ");
 		const parts: string[] = [];
 
@@ -120,10 +99,6 @@ export default function promptBox(pi: ExtensionAPI) {
 
 	pi.on("session_start", (_event, ctx) => {
 		branch = null;
-
-		// Harness announces on its own session_start; request covers reloads
-		// and any ordering where we missed the announcement.
-		pi.events.emit("harness:mode:request", undefined);
 
 		// Subscribe to metrics changes for UI refresh
 		unsubMetrics = onUpdate(() => editor?.refresh());

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { type AgentToolSpec, createAgentTool } from "../agent-tool.ts";
-import { DEFAULT_MODE, type Mode, type ResolvedProfiles } from "../profiles.ts";
+import { type ResolvedProfiles, resolveAgentRoute } from "../profiles.ts";
 import type { SubagentRunner } from "../runner.ts";
 import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
 import { createFinderTool } from "./finder.ts";
@@ -38,12 +38,9 @@ function oracleMessage(params: OracleParams, cwd: string): string {
 	return sections.join("\n\n");
 }
 
-type ActiveMode = () => Mode;
-
 export function createOracleTool(
 	runner: Pick<SubagentRunner, "run">,
 	profiles: ResolvedProfiles,
-	activeMode: ActiveMode,
 ): ToolDefinition<any, any, any> {
 	const spec: AgentToolSpec<OracleParams, "oracle"> = {
 		key: "oracle",
@@ -56,10 +53,7 @@ export function createOracleTool(
 				Type.Array(Type.String(), { description: "Files whose readable contents should be supplied." }),
 			),
 		}),
-		mode: () => {
-			const activeModeValue = activeMode();
-			return activeModeValue === "custom" ? DEFAULT_MODE : activeModeValue;
-		},
+		route: () => resolveAgentRoute(profiles, "oracle"),
 		plan: (params, ctx) => ({
 			systemPrompt: `${prompt}\n\nWorking directory: ${ctx.cwd}\nCurrent date: ${new Date().toISOString().slice(0, 10)}`,
 			message: oracleMessage(params, ctx.cwd),
@@ -77,5 +71,5 @@ export function createOracleTool(
 		tools: [...SHELL_TOOLBOX_NAMES, "finder", "librarian"],
 		allowMcp: false,
 	};
-	return createAgentTool(spec, runner, profiles);
+	return createAgentTool(spec, runner);
 }
