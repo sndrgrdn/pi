@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import harness from "./index.ts";
 
 describe("harness extension entry", () => {
-	it("admits only the eleven Main tools when a session starts", () => {
+	it("admits only the ten Main tools when a session starts", () => {
 		const setActiveTools = vi.fn();
 		const handlers = new Map<string, (...args: any[]) => unknown>();
 		const pi = {
@@ -31,7 +31,6 @@ describe("harness extension entry", () => {
 			"shell_command_cancel",
 			"read",
 			"apply_patch",
-			"skill",
 			"finder",
 			"oracle",
 			"librarian",

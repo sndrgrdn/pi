@@ -56,7 +56,6 @@ describe("task tool", () => {
 				"shell_command_cancel",
 				"read",
 				"apply_patch",
-				"skill",
 				"finder",
 				"librarian",
 			],
@@ -69,7 +68,6 @@ describe("task tool", () => {
 			"shell_command_cancel",
 			"read",
 			"apply_patch",
-			"skill",
 			"finder",
 			"librarian",
 		]);
@@ -221,21 +219,6 @@ describe("task tool", () => {
 			type: "text",
 			text: expect.stringContaining('<task_error sessionID="task-failed">\nTask was cancelled.'),
 		});
-	});
-
-	it("injects skill-trigger directives from the Task brief", async () => {
-		const run = vi.fn(async (options: RunOptions) => {
-			expect(options.message).toMatch(
-				/^<skill_directive>[\s\S]*<skill>tdd<\/skill>[\s\S]*<\/skill_directive>\n\nUse \$tdd/,
-			);
-			return { sessionID: "task-skill", answer: "Done", toolLog: [] };
-		});
-		const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
-			basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),
-		});
-		await tool.execute("call", { prompt: "Use $tdd", description: "skill" }, undefined, undefined, {
-			cwd: "/repo",
-		} as any);
 	});
 
 	it("provides image attachments through read inside the Task toolbox", async () => {

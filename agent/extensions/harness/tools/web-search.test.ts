@@ -12,7 +12,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 function toolWithFetch(fetch: typeof globalThis.fetch) {
 	return createWebSearchTool({
 		fetch,
-		authStorage: { get: () => ({ type: "api_key", key: "secret-that-must-not-leak" }) },
+		getCredential: () => ({ type: "api_key", key: "secret-that-must-not-leak" }),
 		env: {},
 	});
 }
@@ -34,7 +34,7 @@ describe("web_search tool", () => {
 		);
 		const tool = createWebSearchTool({
 			fetch,
-			authStorage: { get: () => ({ type: "api_key", key: "stored-secret" }) },
+			getCredential: () => ({ type: "api_key", key: "stored-secret" }),
 			env: {},
 		});
 
@@ -96,7 +96,7 @@ describe("web_search tool", () => {
 		const fetch = vi.fn();
 		const tool = createWebSearchTool({
 			fetch,
-			authStorage: { get: () => ({ type: "api_key", key: "stored-secret" }) },
+			getCredential: () => ({ type: "api_key", key: "stored-secret" }),
 			env: {},
 		});
 
@@ -132,7 +132,7 @@ describe("web_search tool", () => {
 					],
 				}),
 			),
-			authStorage: { get: () => ({ type: "api_key", key: "secret" }) },
+			getCredential: () => ({ type: "api_key", key: "secret" }),
 			env: {},
 		});
 

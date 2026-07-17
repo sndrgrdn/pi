@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Model } from "@earendil-works/pi-ai";
+import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	type AgentDefinition,
@@ -150,16 +151,25 @@ describe("shared subagent runner", () => {
 });
 
 describe("resolved child model", () => {
-	it("uses the configured model registry rather than the built-in model catalog", () => {
-		const customModel = { provider: "custom", id: "local-model" } as Model<any>;
-		const registry = { find: vi.fn(() => customModel) };
+	it("resolves a built-in model through the current Pi model runtime", async () => {
+		const runtime = await ModelRuntime.create({ modelsPath: null });
 
-		expect(resolveConfiguredModel(registry, "custom/local-model")).toBe(customModel);
-		expect(registry.find).toHaveBeenCalledWith("custom", "local-model");
+		expect(resolveConfiguredModel(runtime, "openai-codex/gpt-5.6-sol")).toMatchObject({
+			provider: "openai-codex",
+			id: "gpt-5.6-sol",
+		});
+	});
+
+	it("uses the configured model runtime rather than a separate model catalog", () => {
+		const customModel = { provider: "custom", id: "local-model" } as Model<any>;
+		const runtime = { getModel: vi.fn(() => customModel) };
+
+		expect(resolveConfiguredModel(runtime, "custom/local-model")).toBe(customModel);
+		expect(runtime.getModel).toHaveBeenCalledWith("custom", "local-model");
 	});
 
 	it("fails at the boundary for an unconfigured model", () => {
-		expect(() => resolveConfiguredModel({ find: () => undefined }, "custom/missing")).toThrow(
+		expect(() => resolveConfiguredModel({ getModel: () => undefined }, "custom/missing")).toThrow(
 			'resolved model "custom/missing" is not configured',
 		);
 	});

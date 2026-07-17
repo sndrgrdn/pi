@@ -1,9 +1,9 @@
-import type { AuthStorage } from "@earendil-works/pi-coding-agent";
-import { createHarnessAuthStorage } from "../runner.ts";
+import { join } from "node:path";
+import { getAgentDir, readStoredCredential } from "@earendil-works/pi-coding-agent";
 
 export interface ExaDependencies {
 	fetch: typeof globalThis.fetch;
-	authStorage: Pick<AuthStorage, "get">;
+	getCredential: () => ReturnType<typeof readStoredCredential>;
 	env: { EXA_API_KEY?: string };
 }
 
@@ -35,7 +35,7 @@ const TIMEOUT_ABORT = Symbol("timeout abort");
 export function createExaDependencies(): ExaDependencies {
 	return {
 		fetch: globalThis.fetch,
-		authStorage: createHarnessAuthStorage(),
+		getCredential: () => readStoredCredential("exa", join(getAgentDir(), "auth.json")),
 		env: process.env,
 	};
 }
@@ -55,12 +55,12 @@ export async function requestExaJson(
 	signal: AbortSignal | undefined,
 ): Promise<{ ok: true; value: unknown } | { ok: false; error: CodedToolError<ExaFailureCode> }> {
 	const failure = createCodedToolErrorFactory<ExaFailureCode>(toolName, "ExaRequestError");
-	const credential = dependencies.authStorage.get("exa");
+	const credential = dependencies.getCredential();
 	const apiKey = credential?.type === "api_key" ? credential.key : dependencies.env.EXA_API_KEY;
 	if (!apiKey) {
 		return {
 			ok: false,
-			error: failure("credentials_missing", "requires an `exa` API key in Pi AuthStorage or EXA_API_KEY."),
+			error: failure("credentials_missing", "requires an `exa` API key in Pi auth.json or EXA_API_KEY."),
 		};
 	}
 	if (signal?.aborted) return { ok: false, error: failure("cancelled", "was cancelled.") };

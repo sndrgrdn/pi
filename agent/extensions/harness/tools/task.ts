@@ -13,8 +13,6 @@ import { MODES, type ProfileMode, type ResolvedProfiles, resolveAgentRoute } fro
 import { projectContextPrompt } from "../project-context.ts";
 import { isSubagentAbortError, SubagentRunError, type SubagentRunner, type ToolLogEntry } from "../runner.ts";
 import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
-import { createChildSkillTool, discoverChildSkills } from "../skill/child.ts";
-import { buildDirective, extractSkillRefs } from "../skill/core.ts";
 import { createFinderTool } from "./finder.ts";
 import { createLibrarianTool } from "./librarian.ts";
 import { createHarnessReadTool } from "./read.ts";
@@ -139,19 +137,13 @@ export function createTaskTool(
 		mode: taskMode,
 		plan: async (params, ctx) => {
 			const base = await (dependencies.basePrompts ?? readBasePrompts)(ctx.cwd);
-			const skills = discoverChildSkills(ctx.cwd);
-			const refs = extractSkillRefs(
-				params.prompt,
-				skills.map((skill) => skill.name),
-			);
 			return {
 				systemPrompt: [base.system, base.appendSystem, base.projectContext].filter(Boolean).join("\n\n"),
-				message: refs.length ? `${buildDirective(refs)}\n\n${params.prompt}` : params.prompt,
+				message: params.prompt,
 				toolbox: (processes) => [
 					...createShellToolbox(processes),
 					createHarnessReadTool(),
 					createApplyPatchTool(),
-					createChildSkillTool(skills),
 					createFinderTool(runner, profiles),
 					createLibrarianTool(runner, profiles),
 				],
@@ -164,7 +156,7 @@ export function createTaskTool(
 			target: (params) => params.description,
 		},
 		traceDetails: (params) => ({ mode: taskMode(params), description: params.description }),
-		tools: [...SHELL_TOOLBOX_NAMES, "read", "apply_patch", "skill", "finder", "librarian"],
+		tools: [...SHELL_TOOLBOX_NAMES, "read", "apply_patch", "finder", "librarian"],
 		allowMcp: true,
 	};
 	return createAgentTool(spec, runner, profiles);

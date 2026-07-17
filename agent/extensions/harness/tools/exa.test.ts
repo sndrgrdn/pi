@@ -14,13 +14,13 @@ function jsonResponse(body: unknown, status = 200): Response {
 function dependencies(
 	fetch: typeof globalThis.fetch,
 	options: {
-		authStorage?: ExaDependencies["authStorage"];
+		getCredential?: ExaDependencies["getCredential"];
 		env?: ExaDependencies["env"];
 	} = {},
 ): ExaDependencies {
 	return {
 		fetch,
-		authStorage: options.authStorage ?? { get: () => ({ type: "api_key", key: "stored-secret" }) },
+		getCredential: options.getCredential ?? (() => ({ type: "api_key", key: "stored-secret" })),
 		env: options.env ?? {},
 	};
 }
@@ -67,21 +67,21 @@ describe("Exa transport", () => {
 
 	it("prefers the stored API key over EXA_API_KEY", async () => {
 		const fetch = vi.fn(async () => jsonResponse({ results: [] }));
-		const get = vi.fn(() => ({ type: "api_key" as const, key: "stored-secret" }));
+		const getCredential = vi.fn(() => ({ type: "api_key" as const, key: "stored-secret" }));
 
 		const outcome = await requestExaJson(
 			TOOL_NAME,
 			"search",
 			BODY,
 			dependencies(fetch as typeof globalThis.fetch, {
-				authStorage: { get },
+				getCredential,
 				env: { EXA_API_KEY: "environment-secret" },
 			}),
 			undefined,
 		);
 
 		expect(outcome).toEqual({ ok: true, value: { results: [] } });
-		expect(get).toHaveBeenCalledWith("exa");
+		expect(getCredential).toHaveBeenCalledOnce();
 		expect(fetch).toHaveBeenCalledOnce();
 		expect(fetch).toHaveBeenCalledWith(
 			"https://api.exa.ai/search",
@@ -92,7 +92,7 @@ describe("Exa transport", () => {
 		);
 	});
 
-	it("falls back to EXA_API_KEY when AuthStorage has no API key", async () => {
+	it("falls back to EXA_API_KEY when auth.json has no API key", async () => {
 		const fetch = vi.fn(async () => jsonResponse({ results: [] }));
 
 		await requestExaJson(
@@ -100,7 +100,7 @@ describe("Exa transport", () => {
 			"search",
 			BODY,
 			dependencies(fetch as typeof globalThis.fetch, {
-				authStorage: { get: () => ({ type: "oauth" }) as any },
+				getCredential: () => ({ type: "oauth" }) as any,
 				env: { EXA_API_KEY: "environment-secret" },
 			}),
 			undefined,
@@ -121,7 +121,7 @@ describe("Exa transport", () => {
 			TOOL_NAME,
 			"search",
 			BODY,
-			dependencies(fetch as typeof globalThis.fetch, { authStorage: { get: () => undefined } }),
+			dependencies(fetch as typeof globalThis.fetch, { getCredential: () => undefined }),
 			undefined,
 		);
 
@@ -129,7 +129,7 @@ describe("Exa transport", () => {
 			ok: false,
 			error: {
 				code: "credentials_missing",
-				message: "web_search requires an `exa` API key in Pi AuthStorage or EXA_API_KEY.",
+				message: "web_search requires an `exa` API key in Pi auth.json or EXA_API_KEY.",
 			},
 		});
 		expect(fetch).not.toHaveBeenCalled();

@@ -1,11 +1,10 @@
 import { join } from "node:path";
 import type { Model } from "@earendil-works/pi-ai";
 import {
-	AuthStorage,
 	type CreateAgentSessionOptions,
 	createAgentSession,
 	getAgentDir,
-	ModelRegistry,
+	ModelRuntime,
 	SessionManager,
 	type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
@@ -95,11 +94,6 @@ export interface RunOptions {
 	signal?: AbortSignal;
 }
 
-/** The single Harness-owned location for Pi credentials. */
-export function createHarnessAuthStorage(): AuthStorage {
-	return AuthStorage.create(join(getAgentDir(), "auth.json"));
-}
-
 /** The completed child run: session attribution, final answer, and tool log. */
 export interface SubagentRunResult {
 	sessionID: string;
@@ -173,12 +167,12 @@ export class SubagentRunner {
 	}
 }
 
-export function resolveConfiguredModel(registry: Pick<ModelRegistry, "find">, model: string): Model<any> {
+export function resolveConfiguredModel(runtime: Pick<ModelRuntime, "getModel">, model: string): Model<any> {
 	const slash = model.indexOf("/");
 	if (slash < 1 || slash === model.length - 1) throw new Error(`invalid resolved model "${model}"`);
 	const provider = model.slice(0, slash);
 	const modelID = model.slice(slash + 1);
-	const resolved = registry.find(provider, modelID);
+	const resolved = runtime.getModel(provider, modelID);
 	if (!resolved) throw new Error(`resolved model "${model}" is not configured`);
 	return resolved;
 }
@@ -200,13 +194,15 @@ export function createSubagentSessionManager(
 export async function createSdkChildSession(config: ChildSessionConfig): Promise<ChildSession> {
 	const processes = new BackgroundShellRegistry();
 	const agentDir = getAgentDir();
-	const authStorage = createHarnessAuthStorage();
-	const modelRegistry = ModelRegistry.create(authStorage, join(agentDir, "models.json"));
+	const modelRuntime = await ModelRuntime.create({
+		authPath: join(agentDir, "auth.json"),
+		modelsPath: join(agentDir, "models.json"),
+	});
 	const options: CreateAgentSessionOptions = {
 		cwd: config.cwd,
-		authStorage,
-		modelRegistry,
-		model: resolveConfiguredModel(modelRegistry, config.definition.model),
+		agentDir,
+		modelRuntime,
+		model: resolveConfiguredModel(modelRuntime, config.definition.model),
 		thinkingLevel: config.definition.reasoningEffort,
 		tools: [...config.definition.tools, ...(config.definition.allowMcp ? ["mcp"] : [])],
 		customTools: config.toolbox?.(processes) ?? [],

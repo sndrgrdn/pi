@@ -12,7 +12,7 @@ function jsonResponse(body: unknown): Response {
 function toolWithFetch(fetch: typeof globalThis.fetch) {
 	return createWebFetchTool({
 		fetch,
-		authStorage: { get: () => ({ type: "api_key", key: "secret" }) },
+		getCredential: () => ({ type: "api_key", key: "secret" }),
 		env: {},
 	});
 }

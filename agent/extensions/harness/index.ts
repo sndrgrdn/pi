@@ -12,7 +12,6 @@ import { registerShellCommand } from "./shell/command.ts";
 import { BackgroundShellRegistry } from "./shell/registry.ts";
 import { currentShellRegistry } from "./shell/session-registry.ts";
 import { registerShellStatus } from "./shell/status.ts";
-import skillTool from "./skill/index.ts";
 import { createFinderTool } from "./tools/finder.ts";
 import { createLibrarianTool } from "./tools/librarian.ts";
 import { createOracleTool } from "./tools/oracle.ts";
@@ -26,7 +25,6 @@ export const MAIN_TOOL_NAMES = [
 	"shell_command_cancel",
 	"read",
 	"apply_patch",
-	"skill",
 	"finder",
 	"oracle",
 	"librarian",
@@ -50,8 +48,6 @@ export default function harness(pi: ExtensionAPI) {
 	// the surface lock below.
 	registerApplyPatch(pi, traceTools.register);
 	registerRead(pi, traceTools.register);
-
-	skillTool(pi, traceTools.register);
 
 	// Modes + Profiles. Loads (and strictly validates)
 	// ~/.pi/agent/profiles.json — an invalid file fails startup loudly.
