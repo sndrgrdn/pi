@@ -1,109 +1,58 @@
 ---
 name: pi-docs
-description: Pi coding agent documentation and source lookup. Use when asked about pi itself, creating extensions, understanding pi internals, its SDK, themes, skills, prompt templates, TUI, keybindings, custom providers, models, packages, system prompt, or how pi works under the hood.
+description: Navigate pi package documentation, examples, and implementation.
 disable-model-invocation: true
 ---
 
-# Pi Documentation & Source Navigation
+# Pi documentation
 
-Reference pi's official docs and source when working on pi-related topics.
+Use the selected pi package as the source of truth. `PI_ROOT` means its coding-agent package directory.
 
-## Step 1: Resolve PI_ROOT
+## 1. Resolve the package paths
+
+Run the bundled resolver by absolute path, using the directory containing this `SKILL.md` as `<skill-dir>`:
 
 ```bash
-PI_ROOT=$(dirname "$(dirname "$(readlink -f "$(which pi)")")")
+PI_ROOT="$(node <skill-dir>/scripts/resolve-pi-root.mjs "$(command -v pi)")"
+PI_README="$PI_ROOT/README.md"
+PI_DOCS="$PI_ROOT/docs"
+PI_EXAMPLES="$PI_ROOT/examples"
+PI_CODE="$PI_ROOT/dist"
 ```
 
-All paths below are relative to `PI_ROOT`.
+The resolver mirrors pi's `getPackageDir()` behavior: `PI_PACKAGE_DIR` wins; otherwise it resolves the `pi` executable and walks up to its package root. Set `PI_PACKAGE_DIR` when inspecting a source checkout or when a package-manager shim cannot reveal the installation.
 
-## Step 2: Load by Topic
+Confirm that `PI_README`, `PI_DOCS`, and `PI_EXAMPLES` exist before continuing. Path resolution is complete only when all three point into the same package root.
 
-### Documentation
+## 2. Investigate the relevant branch
 
-| Topic | Path |
-|-------|------|
-| Overview | `README.md` |
-| Usage & system prompt files | `docs/usage.md` |
-| Extensions | `docs/extensions.md` |
-| Themes | `docs/themes.md` |
-| Skills | `docs/skills.md` |
-| Prompt templates | `docs/prompt-templates.md` |
-| TUI / components | `docs/tui.md` |
-| Keybindings | `docs/keybindings.md` |
-| SDK / embedding | `docs/sdk.md` |
-| Custom providers | `docs/custom-provider.md` |
-| Adding models | `docs/models.md` |
-| Pi packages | `docs/packages.md` |
-| Sessions | `docs/sessions.md`, `docs/session-format.md` |
-| Settings | `docs/settings.md` |
-| Compaction | `docs/compaction.md` |
-| Containerization | `docs/containerization.md` |
-| JSON / print mode | `docs/json.md` |
-| RPC | `docs/rpc.md` |
-| Providers | `docs/providers.md` |
-| Development | `docs/development.md` |
-| Shell aliases | `docs/shell-aliases.md` |
-| Terminal setup | `docs/terminal-setup.md` |
-| Tmux | `docs/tmux.md` |
-| Termux | `docs/termux.md` |
-| Windows | `docs/windows.md` |
-| Quickstart | `docs/quickstart.md` |
+For usage or API questions:
 
-### Source Code (internals & implementation)
+1. Read `PI_README` and the relevant topic document completely.
+2. Follow relevant Markdown cross-references and read each selected file completely.
+3. Before implementing, inspect the relevant examples as well as the docs.
 
-| Area | Path | Key exports |
-|------|------|-------------|
-| System prompt construction | `dist/core/system-prompt.js` | `buildSystemPrompt` |
-| Config & path resolution | `dist/config.js` | `getPackageDir`, `getDocsPath`, `getAgentDir`, `CONFIG_DIR_NAME` |
-| Resource loader | `dist/core/resource-loader.js` | `DefaultResourceLoader`, `loadProjectContextFiles` |
-| SDK entry point | `dist/core/sdk.js` | `createAgentSession`, `createCodingTools`, `createReadOnlyTools` |
-| Agent session | `dist/core/agent-session.js` | Session lifecycle, tool registration |
-| Bash executor | `dist/core/bash-executor.js` | Command execution internals |
-| Skills loader | `dist/core/skills.js` | Skill discovery, `formatSkillsForPrompt` |
-| Prompt templates | `dist/core/prompt-templates.js` | Template loading & expansion |
-| Model registry | `dist/core/model-registry.js` | Model resolution & provider mapping |
-| Settings manager | `dist/core/settings-manager.js` | Settings file handling |
-| Extension runner | `dist/core/extensions/runner.js` | Extension lifecycle & hooks |
-| Extension types | `dist/core/extensions/types.js` | Extension API surface |
-| Compaction | `dist/core/compaction/compaction.js` | Context window management |
-| Keybindings | `dist/core/keybindings.js` | Key mapping internals |
-| Messages | `dist/core/messages.js` | Message formatting |
+| Topic | Document | Example area |
+|---|---|---|
+| Extensions | `docs/extensions.md` | `examples/extensions/` |
+| Themes | `docs/themes.md` | `examples/extensions/` |
+| Skills | `docs/skills.md` | — |
+| Prompt templates | `docs/prompt-templates.md` | — |
+| TUI components | `docs/tui.md` | extension examples |
+| Keybindings | `docs/keybindings.md` | — |
+| SDK integrations | `docs/sdk.md` | `examples/sdk/` |
+| Custom providers | `docs/custom-provider.md` | custom-provider extension examples |
+| Models | `docs/models.md` | — |
+| Packages | `docs/packages.md` | — |
 
-### Extension Examples
+For internals or behavior requiring implementation evidence:
 
-| Example | Path | Shows |
-|---------|------|-------|
-| Custom Anthropic provider | `examples/extensions/custom-provider-anthropic/` | Provider integration |
-| Custom GitLab Duo provider | `examples/extensions/custom-provider-gitlab-duo/` | Provider integration |
-| Dynamic resources | `examples/extensions/dynamic-resources/` | Runtime resource injection |
-| Plan mode | `examples/extensions/plan-mode/` | Custom mode extension |
-| Subagent | `examples/extensions/subagent/` | Subagent delegation |
-| Sandbox | `examples/extensions/sandbox/` | Sandboxed execution |
-| With dependencies | `examples/extensions/with-deps/` | Extension with npm deps |
-| Doom overlay | `examples/extensions/doom-overlay/` | TUI overlay |
-| Gondolin | `examples/extensions/gondolin/` | Full-featured extension |
+1. Read the relevant docs first.
+2. Search the resolved `PI_CODE` for the symbol or concept.
+3. Trace imports, call sites, and nearby tests until the behavior is accounted for.
 
-## Step 3: Follow Cross-References
+Useful entry points are `config.js`, `core/system-prompt.js`, `core/resource-loader.js`, `core/sdk.js`, and `core/skills.js` under `PI_CODE`.
 
-Pi docs reference each other. When a doc mentions another topic, read that file too.
-When reading source, check imports at the top of each file for related modules.
+## 3. Report from evidence
 
-## System Prompt Construction
-
-Read `dist/core/system-prompt.js` → `buildSystemPrompt(options)` for the full implementation.
-
-Assembly order:
-1. Custom prompt (`SYSTEM.md`) or default built-in prompt
-2. `APPEND_SYSTEM.md` content appended
-3. `<project_context>` block with `AGENTS.md` / context files
-4. Skills section (when read tool available)
-5. `Current date` and `Current working directory`
-
-The default prompt (no `SYSTEM.md`) includes:
-- Tool list from `selectedTools` + `toolSnippets`
-- Guidelines (dynamic based on available tools)
-- Pi docs section pointing to `README.md`, `docs/`, `examples/` via absolute paths from `config.js`
-
-Prompt file discovery (`dist/core/resource-loader.js` → `discoverSystemPromptFile()`):
-- `SYSTEM.md`: `.pi/SYSTEM.md` (project) → `~/.pi/agent/SYSTEM.md` (global) — replaces default
-- `APPEND_SYSTEM.md`: same lookup order — appends without replacing
+Use the resolved absolute paths in tool calls and answers. Distinguish documented behavior from implementation details. The investigation is complete when every pi-specific claim is supported by a selected doc, example, or traced source path.

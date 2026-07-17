@@ -10,7 +10,7 @@ One job: trace the **blast radius** of every altered or deleted behavior to its 
 
 - **Hyrum's Law** — with enough users, every observable behavior of a system will be depended on by somebody. → For each behavior the diff alters, find the dependents: callers, shared helpers, serialization, data formats, migrations, cross-package interactions. Trace each to its end. **Presumptive blocker** when a trace lands on a break. Evidence bar: the traced dependent (the file:line chain from change to break); traces that come back clean go in the ledger as *clear*.
 
-- **Behavior preservation** (Fowler) — a change presented as a refactor must leave observable behavior intact; "this is a refactor" is a premise — prosecute it. → Diff the before/after behavior at the seams (Feathers): same inputs, same outputs, same side effects. **Presumptive blocker.** Evidence bar: the seam plus the behavior that moved.
+- **Behavior preservation** (Fowler) — a change presented as a refactor must leave observable behavior intact; "this is a refactor" is a premise — test it against the code. → Diff the before/after behavior at the seams (Feathers): same inputs, same outputs, same side effects. **Presumptive blocker.** Evidence bar: the seam plus the behavior that moved.
 
 ## Cross-check
 

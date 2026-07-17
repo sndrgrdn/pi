@@ -1,6 +1,7 @@
 ---
 name: comments-review
 description: Comment policy — when a comment earns its place and when it must go. Use when writing, reviewing, or pruning code comments, or when another skill's review needs the comment policy.
+disable-model-invocation: true
 ---
 
 A comment earns its place by recording what the code cannot say — intent, ownership, invariants, tradeoffs. Everything else **narrates**.
