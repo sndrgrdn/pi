@@ -84,6 +84,8 @@ export function createTaskTool(
 	profiles: ResolvedProfiles,
 	dependencies: TaskDependencies = {},
 ): ToolDefinition<any, any, any> {
+	const taskRoute = (params: TaskInput) => profiles.agents.task[taskEffort(params)];
+
 	/** One cohesive recovery policy: cancellation report, else summary re-run with cancellation fallback. */
 	async function recover(
 		error: unknown,
@@ -94,7 +96,7 @@ export function createTaskTool(
 		}
 		if (!(error instanceof SubagentRunError)) throw error;
 		try {
-			const route = profiles.agents.task[taskEffort(params)];
+			const route = taskRoute(params);
 			const summary = await runner.run({
 				definition: {
 					key: "task",
@@ -135,7 +137,7 @@ export function createTaskTool(
 				),
 			),
 		}),
-		route: (params) => profiles.agents.task[taskEffort(params)],
+		route: taskRoute,
 		plan: async (params, ctx) => {
 			const base = await (dependencies.basePrompts ?? readBasePrompts)(ctx.cwd);
 			return {

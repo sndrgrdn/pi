@@ -180,10 +180,16 @@ describe("task tool", () => {
 		const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
 			basePrompts: () => ({ system: "S", appendSystem: "A", projectContext: "C" }),
 		});
-		const result = await tool.execute("call", { prompt: "Work", description: "work" }, controller.signal, undefined, {
-			cwd: "/repo",
-			sessionManager: { getSessionFile: () => "/sessions/parent.jsonl" },
-		} as any);
+		const result = await tool.execute(
+			"call",
+			{ prompt: "Work", description: "work", effort: "high" },
+			controller.signal,
+			undefined,
+			{
+				cwd: "/repo",
+				sessionManager: { getSessionFile: () => "/sessions/parent.jsonl" },
+			} as any,
+		);
 
 		expect(run).toHaveBeenCalledTimes(2);
 		expect(run.mock.calls[0]![0].record).toEqual({
@@ -192,6 +198,10 @@ describe("task tool", () => {
 		});
 		expect(run.mock.calls[1]![0].signal).toBe(controller.signal);
 		expect(run.mock.calls[1]![0]).not.toHaveProperty("record");
+		expect(run.mock.calls[1]![0].definition).toMatchObject({
+			model: "openai-codex/gpt-5.6-sol",
+			reasoningEffort: "high",
+		});
 		expect(result.content[0]).toEqual({
 			type: "text",
 			text: '<task_error sessionID="task-failed">\nChanged app.ts; verification did not run.\n</task_error>',
