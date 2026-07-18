@@ -46,10 +46,14 @@ export function createOracleTool(
 		key: "oracle",
 		name: "oracle",
 		description:
-			"Consult a read-only senior advisor for an independent second opinion on a bounded, high-judgment review, cross-module bug, architecture or plan tradeoff, or API/type design. Use Finder for location and Librarian for external research.",
+			"Consult a read-only senior advisor when your own analysis leaves a specific hard decision unresolved. Use for a second opinion on cross-module bugs, architecture or plan tradeoffs, and API/type design; use Finder for codebase discovery and Librarian for external research.",
 		parameters: Type.Object({
-			task: Type.String({ description: "Bounded question or decision the advisor should resolve." }),
-			context: Type.Optional(Type.String({ description: "Constraints, desired outcome, and relevant background." })),
+			task: Type.String({ description: "Specific unresolved question or decision the advisor should answer." }),
+			context: Type.Optional(
+				Type.String({
+					description: "Your current assessment and uncertainty, plus constraints and relevant background.",
+				}),
+			),
 			files: Type.Optional(
 				Type.Array(Type.String(), { description: "Specific files to include as direct evidence." }),
 			),

@@ -123,7 +123,7 @@ export function createTaskTool(
 		key: "task",
 		name: "task",
 		description:
-			"Delegate a bounded worker job after its scope is known. Use for implementation or isolated verification; use Finder, Oracle, or Librarian for location, advice, or external research.",
+			"Delegate a scoped implementation or isolated verification job. Use Finder for codebase discovery, Oracle for a second opinion on an unresolved hard decision, and Librarian for external research.",
 		parameters: Type.Object({
 			prompt: Type.String({
 				description:
@@ -135,7 +135,7 @@ export function createTaskTool(
 					TASK_EFFORTS.map((effort) => Type.Literal(effort)),
 					{
 						description:
-							"Use standard for routine, well-scoped work; high for complex, ambiguous, cross-cutting, or risk-sensitive work.",
+							"Defaults to standard. Reserve high for exceptional assignments dominated by deep reasoning.",
 					},
 				),
 			),
