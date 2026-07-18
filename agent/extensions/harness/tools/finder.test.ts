@@ -22,7 +22,7 @@ describe("finder tool", () => {
 				cwd: "/repo",
 			} as any,
 		);
-		expect(updates[0]?.details).toEqual({ trace: { state: "running" }, actions: {}, calls: [] });
+		expect(updates[0]?.details).toEqual({ trace: { state: "running" }, toolCallCounts: {}, toolCalls: [] });
 		expect(result.details).toEqual({ title: "Authentication entry points", trace: { state: "success" } });
 		expect(result.content[0]).toEqual({
 			type: "text",

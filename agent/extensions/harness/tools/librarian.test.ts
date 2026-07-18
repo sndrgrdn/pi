@@ -7,8 +7,8 @@ import { createLibrarianTool } from "./librarian.ts";
 describe("librarian tool", () => {
 	it("prepends optional context and returns the final answer envelope", async () => {
 		const run = vi.fn(async (options: RunOptions) => {
-			options.onAction?.({ tool: "checkout", summary: "checkout owner/one" });
-			options.onAction?.({ tool: "checkout", summary: "checkout owner/two" });
+			options.onToolCall?.({ tool: "checkout", summary: "checkout owner/one" });
+			options.onToolCall?.({ tool: "checkout", summary: "checkout owner/two" });
 			return { sessionID: "library-1", answer: "Use [the source](https://example.com).", toolLog: [] };
 		});
 		const tool = createLibrarianTool({ run } as any, BUILTIN_PROFILES);
@@ -22,13 +22,13 @@ describe("librarian tool", () => {
 		);
 		expect(updates.at(-1)?.details).toEqual({
 			trace: { state: "running" },
-			actions: { checkout: 2 },
-			calls: ["checkout owner/one", "checkout owner/two"],
+			toolCallCounts: { checkout: 2 },
+			toolCalls: ["checkout owner/one", "checkout owner/two"],
 		});
 		expect(result.details).toEqual({
 			trace: { state: "success" },
-			actions: { checkout: 2 },
-			calls: ["checkout owner/one", "checkout owner/two"],
+			toolCallCounts: { checkout: 2 },
+			toolCalls: ["checkout owner/one", "checkout owner/two"],
 		});
 		expect(result.content[0]).toMatchObject({
 			type: "text",

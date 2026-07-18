@@ -116,10 +116,10 @@ describe("agent tool factory", () => {
 		});
 	});
 
-	it("emits a running progress tally per child action", async () => {
+	it("emits running progress for each child tool call", async () => {
 		const run = vi.fn(async (options: RunOptions) => {
-			options.onAction?.({ tool: "read", summary: "read ./one.ts" });
-			options.onAction?.({ tool: "read", summary: "read ./two.ts" });
+			options.onToolCall?.({ tool: "read", summary: "read ./one.ts" });
+			options.onToolCall?.({ tool: "read", summary: "read ./two.ts" });
 			return { sessionID: "probe-session", answer: "done", toolLog: [] };
 		});
 		const tool = createAgentTool(probeSpec(), { run } as any);
@@ -130,12 +130,12 @@ describe("agent tool factory", () => {
 		} as any);
 
 		expect(updates.map((update) => update.details)).toEqual([
-			{ trace: { state: "running" }, actions: {}, calls: [] },
-			{ trace: { state: "running" }, actions: { read: 1 }, calls: ["read ./one.ts"] },
+			{ trace: { state: "running" }, toolCallCounts: {}, toolCalls: [] },
+			{ trace: { state: "running" }, toolCallCounts: { read: 1 }, toolCalls: ["read ./one.ts"] },
 			{
 				trace: { state: "running" },
-				actions: { read: 2 },
-				calls: ["read ./one.ts", "read ./two.ts"],
+				toolCallCounts: { read: 2 },
+				toolCalls: ["read ./one.ts", "read ./two.ts"],
 			},
 		]);
 	});
@@ -156,7 +156,7 @@ describe("agent tool factory", () => {
 			{ cwd: "/repo" } as any,
 		);
 		expect(updates.map((update) => update.details)).toEqual([
-			{ trace: { state: "running" }, actions: {}, calls: [] },
+			{ trace: { state: "running" }, toolCallCounts: {}, toolCalls: [] },
 		]);
 		pendingPlan.resolve({ systemPrompt: "You are a probe.", message: "Do: probe it" });
 		await running;
@@ -181,7 +181,7 @@ describe("agent tool factory", () => {
 			traceDetails: () => ({ flavor: "salty" }),
 		});
 		const run = vi.fn(async (options: RunOptions) => {
-			options.onAction?.({ tool: "read", summary: "read ./probe.ts" });
+			options.onToolCall?.({ tool: "read", summary: "read ./probe.ts" });
 			return { sessionID: "probe-session", answer: "done", toolLog: [] };
 		});
 		const updates: any[] = [];
@@ -195,19 +195,19 @@ describe("agent tool factory", () => {
 		);
 
 		expect(updates.map((update) => update.details)).toEqual([
-			{ trace: { state: "running" }, flavor: "salty", actions: {}, calls: [] },
+			{ trace: { state: "running" }, flavor: "salty", toolCallCounts: {}, toolCalls: [] },
 			{
 				trace: { state: "running" },
 				flavor: "salty",
-				actions: { read: 1 },
-				calls: ["read ./probe.ts"],
+				toolCallCounts: { read: 1 },
+				toolCalls: ["read ./probe.ts"],
 			},
 		]);
 		expect(result.details).toEqual({
 			trace: { state: "success" },
 			flavor: "salty",
-			actions: { read: 1 },
-			calls: ["read ./probe.ts"],
+			toolCallCounts: { read: 1 },
+			toolCalls: ["read ./probe.ts"],
 		});
 	});
 
@@ -295,13 +295,19 @@ describe("agent tool factory", () => {
 		).rejects.toThrow("friendlier message");
 	});
 
-	it("renders running action tallies in the presentation row", () => {
+	it("renders running tool-call tallies in the presentation row", () => {
 		const tool = createAgentTool(probeSpec(), { run: vi.fn() } as any);
 		const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
-		const row = tool.renderCall?.({ assignment: "probe it" }, theme, { lastComponent: undefined } as any) as any;
+		const row = tool.renderCall?.({ assignment: "probe it" }, theme, {
+			cwd: "/repo",
+			lastComponent: undefined,
+		} as any) as any;
 
 		const running = tool.renderResult?.(
-			{ content: [{ type: "text", text: "" }], details: { trace: { state: "running" }, actions: { read: 2 } } },
+			{
+				content: [{ type: "text", text: "" }],
+				details: { trace: { state: "running" }, toolCallCounts: { read: 2 } },
+			},
 			{ expanded: false, isPartial: true },
 			theme,
 			{ args: { assignment: "probe it" }, cwd: "/repo", isError: false, lastComponent: row } as any,
@@ -330,7 +336,10 @@ describe("agent tool factory", () => {
 	it("renders completed envelope evidence below the presentation row", () => {
 		const tool = createAgentTool(probeSpec(), { run: vi.fn() } as any);
 		const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
-		const row = tool.renderCall?.({ assignment: "probe it" }, theme, { lastComponent: undefined } as any) as any;
+		const row = tool.renderCall?.({ assignment: "probe it" }, theme, {
+			cwd: "/repo",
+			lastComponent: undefined,
+		} as any) as any;
 
 		const completed = tool.renderResult?.(
 			{
@@ -355,8 +364,8 @@ describe("agent tool factory", () => {
 				content: [{ type: "text", text: '<task_result sessionID="one">\ndone\n</task_result>' }],
 				details: {
 					trace: { state: "success" },
-					actions: { read: 3, grep: 1 },
-					calls: ["read ./one.ts", "read ./two.ts", "grep renderer", "read ./three.ts"],
+					toolCallCounts: { read: 3, grep: 1 },
+					toolCalls: ["read ./one.ts", "read ./two.ts", "grep renderer", "read ./three.ts"],
 				},
 			},
 			{ expanded: false, isPartial: false },
@@ -380,8 +389,8 @@ describe("agent tool factory", () => {
 				content: [{ type: "text", text: '<task_result sessionID="one">\nfinal answer\n</task_result>' }],
 				details: {
 					trace: { state: "success" },
-					actions: { read: 4 },
-					calls: ["read ./one.ts", "read ./two.ts", "read ./three.ts", "read ./four.ts"],
+					toolCallCounts: { read: 4 },
+					toolCalls: ["read ./one.ts", "read ./two.ts", "read ./three.ts", "read ./four.ts"],
 				},
 			},
 			{ expanded: true, isPartial: false },

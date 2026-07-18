@@ -25,6 +25,11 @@ describe("Trace renderer", () => {
 		invocation: shellTraceInvocation,
 	});
 
+	it("keeps the call component empty so the lifecycle result owns the Trace row", () => {
+		const component = renderer.renderCall({ command: "echo ok" }, theme, { lastComponent: undefined });
+		expect(lines(component)).toEqual([]);
+	});
+
 	it.each([
 		[{ isPartial: true, isError: false, details: undefined }, "<accent>◐</accent> <b>$</b> echo ok"],
 		[{ isPartial: false, isError: false, details: undefined }, "<success>✓</success> <b>$</b> echo ok"],

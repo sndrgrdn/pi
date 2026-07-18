@@ -32,7 +32,7 @@ describe("task tool", () => {
 		"routes effort %s independently and exposes the exact Task toolbox",
 		async (effort, model, reasoning) => {
 			const run = vi.fn(async (options: RunOptions) => {
-				options.onAction?.({ tool: "apply_patch", summary: "apply_patch ./task.ts" });
+				options.onToolCall?.({ tool: "apply_patch", summary: "apply_patch ./task.ts" });
 				return { sessionID: "task-1", answer: "Changed x.ts. Verification: tests pass.", toolLog: [] };
 			});
 			const tool = createTaskTool({ run } as any, BUILTIN_PROFILES, {
@@ -78,7 +78,7 @@ describe("task tool", () => {
 			});
 			expect(updates.at(-1)?.details).toMatchObject({
 				trace: { state: "running" },
-				actions: { apply_patch: 1 },
+				toolCallCounts: { apply_patch: 1 },
 				effort: effort ?? "standard",
 				description: "implementation",
 			});

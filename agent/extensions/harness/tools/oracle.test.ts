@@ -93,7 +93,7 @@ describe("oracle tool", () => {
 
 	it("reports progress without any parent mode state", async () => {
 		const run = vi.fn(async (options: RunOptions) => {
-			options.onAction?.({ tool: "finder", summary: "finder inspect locking" });
+			options.onToolCall?.({ tool: "finder", summary: "finder inspect locking" });
 			return { sessionID: "oracle-1", answer: "Advice", toolLog: [] };
 		});
 		const tool = createOracleTool({ run } as any, BUILTIN_PROFILES);
@@ -110,13 +110,13 @@ describe("oracle tool", () => {
 		expect(run.mock.calls[0]?.[0].definition.model).toBe("openai-codex/gpt-5.6-sol");
 		expect(updates.at(-1)?.details).toEqual({
 			trace: { state: "running" },
-			actions: { finder: 1 },
-			calls: ["finder inspect locking"],
+			toolCallCounts: { finder: 1 },
+			toolCalls: ["finder inspect locking"],
 		});
 		expect(result.details).toEqual({
 			trace: { state: "success" },
-			actions: { finder: 1 },
-			calls: ["finder inspect locking"],
+			toolCallCounts: { finder: 1 },
+			toolCalls: ["finder inspect locking"],
 		});
 	});
 

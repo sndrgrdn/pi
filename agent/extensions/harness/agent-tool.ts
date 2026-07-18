@@ -13,10 +13,10 @@ import {
 	type ChildToolboxFactory,
 	isSubagentAbortError,
 	SubagentAbortError,
-	type SubagentAction,
 	SubagentRunError,
 	type SubagentRunner,
 	type SubagentRunResult,
+	type SubagentToolCall,
 } from "./runner.ts";
 import {
 	createTraceRenderer,
@@ -80,26 +80,28 @@ export interface AgentToolSpec<TParams, K extends AgentKey> {
 
 type ToolUpdate = (result: { content: { type: "text"; text: string }[]; details: unknown }) => void;
 
-/** Emit the running Trace View state, tallying child tool actions as they happen. */
-function createProgressSignal(
+/** Emit the running Trace View state, tallying child tool calls as they happen. */
+function createToolCallProgress(
 	onUpdate: ToolUpdate | undefined,
 	traceDetails: Record<string, unknown> | undefined,
-): { record(action: SubagentAction): void; snapshot(): Record<string, unknown> } {
-	const actions = new Map<string, number>();
-	const calls: string[] = [];
-	emitTraceRunning(onUpdate, { ...traceDetails, actions: {}, calls: [] });
+): { record(toolCall: SubagentToolCall): void; snapshot(): Record<string, unknown> } {
+	const toolCallCounts = new Map<string, number>();
+	const toolCalls: string[] = [];
+	emitTraceRunning(onUpdate, { ...traceDetails, toolCallCounts: {}, toolCalls: [] });
 	return {
-		record(action) {
-			actions.set(action.tool, (actions.get(action.tool) ?? 0) + 1);
-			calls.push(action.summary);
+		record(toolCall) {
+			toolCallCounts.set(toolCall.tool, (toolCallCounts.get(toolCall.tool) ?? 0) + 1);
+			toolCalls.push(toolCall.summary);
 			emitTraceRunning(onUpdate, {
 				...traceDetails,
-				actions: Object.fromEntries(actions),
-				calls: [...calls],
+				toolCallCounts: Object.fromEntries(toolCallCounts),
+				toolCalls: [...toolCalls],
 			});
 		},
 		snapshot() {
-			return calls.length ? { actions: Object.fromEntries(actions), calls: [...calls] } : {};
+			return toolCalls.length
+				? { toolCallCounts: Object.fromEntries(toolCallCounts), toolCalls: [...toolCalls] }
+				: {};
 		},
 	};
 }
@@ -119,19 +121,13 @@ interface TraceResultLike {
 
 function progressTallies(details: unknown): string[] {
 	if (typeof details !== "object" || details === null) return [];
-	const actions = (details as { actions?: Record<string, number> }).actions;
-	if (typeof actions !== "object" || actions === null || Array.isArray(actions)) return [];
-	const tally = Object.entries(actions)
+	const toolCallCounts = (details as { toolCallCounts?: Record<string, number> }).toolCallCounts;
+	if (typeof toolCallCounts !== "object" || toolCallCounts === null || Array.isArray(toolCallCounts)) return [];
+	const tally = Object.entries(toolCallCounts)
 		.filter((entry): entry is [string, number] => typeof entry[1] === "number")
 		.map(([name, count]) => `${name} ×${count}`)
 		.join(", ");
 	return tally ? [tally] : [];
-}
-
-function actionCalls(details: unknown): string[] {
-	if (typeof details !== "object" || details === null) return [];
-	const calls = (details as { calls?: unknown }).calls;
-	return Array.isArray(calls) ? calls.filter((call): call is string => typeof call === "string") : [];
 }
 
 /** Trace View renderer for a delegated agent call: presentation row, tallies, envelope evidence. */
@@ -146,9 +142,6 @@ function createAgentToolRenderer<TParams>(presentation: AgentToolPresentation<TP
 		},
 		progress(result: TraceResultLike) {
 			return progressTallies(result.details);
-		},
-		activity(result: TraceResultLike) {
-			return actionCalls(result.details);
 		},
 		evidence(result: TraceResultLike, theme) {
 			const text = result.content
@@ -213,7 +206,7 @@ export function createAgentTool<TParams, K extends AgentKey>(
 			ctx: { cwd: string; sessionManager?: { getSessionFile(): string | undefined } },
 		) {
 			const traceDetails = spec.traceDetails?.(params);
-			const progress = createProgressSignal(onUpdate, traceDetails);
+			const progress = createToolCallProgress(onUpdate, traceDetails);
 			if (signal?.aborted) throw new SubagentAbortError();
 			const planned = await spec.plan(params, { cwd: ctx.cwd });
 			const route = spec.route(params);
@@ -232,7 +225,7 @@ export function createAgentTool<TParams, K extends AgentKey>(
 					cwd: ctx.cwd,
 					message: planned.message,
 					signal,
-					onAction: progress.record,
+					onToolCall: progress.record,
 					...(parentSession ? { record: { parentSession, name: subagentRecordName(spec, params) } } : {}),
 					...(planned.toolbox ? { toolbox: planned.toolbox } : {}),
 				});

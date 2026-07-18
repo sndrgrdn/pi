@@ -3,6 +3,7 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Text, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { registerToolCallSummary } from "./tool-call.ts";
 
 export type TraceState = "running" | "success" | "failed" | "cancelled";
 
@@ -14,6 +15,7 @@ export interface TraceInvocation {
 
 interface TraceDetails {
 	trace?: { state?: TraceState; qualifiers?: string[] };
+	toolCalls?: unknown;
 }
 
 /** Merge mechanical Trace View lifecycle facts into existing tool details. */
@@ -83,7 +85,6 @@ interface TraceRendererOptions<TArgs> {
 	invocation(args: TArgs, cwd: string): TraceInvocation;
 	maxRowLines?: number;
 	progress?(result: TraceResult): string[];
-	activity?(result: TraceResult): string[];
 	evidence?(result: TraceResult, theme: TraceTheme, context: TraceRenderContext<TArgs>): string | undefined;
 }
 
@@ -104,6 +105,14 @@ function detailQualifiers(details: unknown): string[] {
 	if (typeof details !== "object" || details === null) return [];
 	const qualifiers = (details as TraceDetails).trace?.qualifiers;
 	return Array.isArray(qualifiers) ? qualifiers.filter((value): value is string => typeof value === "string") : [];
+}
+
+function detailToolCalls(details: unknown): string[] {
+	if (typeof details !== "object" || details === null) return [];
+	const toolCalls = (details as TraceDetails).toolCalls;
+	return Array.isArray(toolCalls)
+		? toolCalls.filter((toolCall): toolCall is string => typeof toolCall === "string")
+		: [];
 }
 
 function resultText(result: TraceResult): string {
@@ -168,7 +177,7 @@ class TraceText extends Text {
 
 /** Shared public-contract renderer for one-row Trace View entries. */
 export function createTraceRenderer<TArgs>(options: TraceRendererOptions<TArgs>) {
-	return {
+	const renderer = {
 		renderCall(_args: TArgs, _theme: TraceTheme, context: { lastComponent?: unknown }): TraceText {
 			const component = (context.lastComponent as TraceText | undefined) ?? new TraceText("", 0, 0);
 			component.setTrace("", "", [], "", 1);
@@ -193,7 +202,7 @@ export function createTraceRenderer<TArgs>(options: TraceRendererOptions<TArgs>)
 			const target = invocation.target ?? "";
 			const prefix = `${theme.fg(presentation.color, presentation.glyph)} ${theme.bold(invocation.action)}${target ? " " : ""}`;
 			const content = `${target}${qualifiers}`;
-			const allActivity = options.activity?.(result) ?? [];
+			const allActivity = detailToolCalls(result.details);
 			const visibleActivity = renderOptions.expanded ? allActivity : allActivity.slice(-3);
 			const activity = visibleActivity.map((line) => theme.fg("muted", `  ${sanitizeTraceEvidence(line)}`));
 			const customEvidence = renderOptions.expanded ? options.evidence?.(result, theme, context) : undefined;
@@ -209,6 +218,13 @@ export function createTraceRenderer<TArgs>(options: TraceRendererOptions<TArgs>)
 			return component;
 		},
 	};
+	registerToolCallSummary<TArgs>(renderer.renderCall, (args, cwd) => {
+		const invocation = options.invocation(args, cwd);
+		return [invocation.action, invocation.target, ...(invocation.qualifiers ?? []).map((value) => `· ${value}`)]
+			.filter(Boolean)
+			.join(" ");
+	});
+	return renderer;
 }
 
 function isInside(base: string, target: string): boolean {

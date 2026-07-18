@@ -1,5 +1,4 @@
 import { join } from "node:path";
-import { stripVTControlCharacters } from "node:util";
 import type { Model } from "@earendil-works/pi-ai";
 import {
 	type CreateAgentSessionOptions,
@@ -12,6 +11,7 @@ import {
 import type { AgentKey, ReasoningLevel } from "./profiles.ts";
 import { BackgroundShellRegistry } from "./shell/registry.ts";
 import { withShellRegistry } from "./shell/session-registry.ts";
+import { summarizeToolCall } from "./ui/tool-call.ts";
 
 /** A route-resolved, invocation-ready child agent definition. */
 export interface AgentDefinition {
@@ -30,11 +30,11 @@ export interface ChildSession {
 	finalMessage(): string;
 	abort(): Promise<void>;
 	dispose(): void;
-	onAction?(listener: (action: SubagentAction) => void): () => void;
+	onToolCall?(listener: (toolCall: SubagentToolCall) => void): () => void;
 	toolLog(): ToolLogEntry[];
 }
 
-export interface SubagentAction {
+export interface SubagentToolCall {
 	tool: string;
 	summary: string;
 }
@@ -95,7 +95,7 @@ export interface RunOptions {
 	cwd: string;
 	message: string;
 	record?: SubagentRecordConfig;
-	onAction?(action: SubagentAction): void;
+	onToolCall?(toolCall: SubagentToolCall): void;
 	toolbox?: ChildToolboxFactory;
 	signal?: AbortSignal;
 }
@@ -146,7 +146,7 @@ export class SubagentRunner {
 				...(options.record ? { record: options.record } : {}),
 				...(options.toolbox ? { toolbox: options.toolbox } : {}),
 			});
-			if (options.onAction && child.onAction) unsubscribe = child.onAction(options.onAction);
+			if (options.onToolCall && child.onToolCall) unsubscribe = child.onToolCall(options.onToolCall);
 			if (parentAborted) {
 				abortPromise ??= child.abort();
 				await abortPromise;
@@ -194,55 +194,6 @@ export function createSubagentSessionManager(
 	});
 	sessionManager.appendSessionInfo(config.record.name);
 	return sessionManager;
-}
-
-const plainTheme = {
-	fg: (_color: string, value: string) => value,
-	bg: (_color: string, value: string) => value,
-	bold: (value: string) => value,
-};
-
-/** Render the same concise invocation text the child tool would show in a TUI row. */
-export function renderToolCallSummary(
-	tool: Pick<ToolDefinition<any, any, any>, "renderCall" | "renderResult"> | undefined,
-	name: string,
-	args: Record<string, unknown>,
-	toolCallId: string,
-	cwd: string,
-): string {
-	if (!tool) return name;
-	try {
-		const context = {
-			args,
-			toolCallId,
-			invalidate: () => {},
-			lastComponent: undefined,
-			state: {},
-			cwd,
-			executionStarted: true,
-			argsComplete: true,
-			isPartial: true,
-			expanded: false,
-			showImages: false,
-			isError: false,
-		};
-		let component = tool.renderCall?.(args, plainTheme as any, context as any);
-		if ((component?.render(10_000).length ?? 0) === 0 && tool.renderResult) {
-			component = tool.renderResult(
-				{ content: [{ type: "text", text: "" }], details: undefined },
-				{ expanded: false, isPartial: true },
-				plainTheme as any,
-				{ ...context, lastComponent: component } as any,
-			);
-		}
-		const summary = stripVTControlCharacters(component?.render(10_000).join(" ") ?? "")
-			.replace(/^\s*[◐✓✗■]\s+/, "")
-			.replace(/\s+/g, " ")
-			.trim();
-		return summary || name;
-	} catch {
-		return name;
-	}
 }
 
 /** Production adapter: a fresh pi SDK session, never a fork/resume. */
@@ -308,12 +259,12 @@ export async function createSdkChildSession(config: ChildSessionConfig): Promise
 			session.dispose();
 		},
 		toolLog: () => structuredClone(toolLog),
-		onAction: (listener) =>
+		onToolCall: (listener) =>
 			session.subscribe((event) => {
 				if (event.type === "tool_execution_start") {
 					listener({
 						tool: event.toolName,
-						summary: renderToolCallSummary(
+						summary: summarizeToolCall(
 							session.getToolDefinition(event.toolName),
 							event.toolName,
 							event.args,
