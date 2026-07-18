@@ -118,8 +118,8 @@ describe("agent tool factory", () => {
 
 	it("emits a running progress tally per child action", async () => {
 		const run = vi.fn(async (options: RunOptions) => {
-			options.onAction?.("read");
-			options.onAction?.("read");
+			options.onAction?.({ tool: "read", summary: "read ./one.ts" });
+			options.onAction?.({ tool: "read", summary: "read ./two.ts" });
 			return { sessionID: "probe-session", answer: "done", toolLog: [] };
 		});
 		const tool = createAgentTool(probeSpec(), { run } as any);
@@ -130,9 +130,13 @@ describe("agent tool factory", () => {
 		} as any);
 
 		expect(updates.map((update) => update.details)).toEqual([
-			{ trace: { state: "running" }, actions: {} },
-			{ trace: { state: "running" }, actions: { read: 1 } },
-			{ trace: { state: "running" }, actions: { read: 2 } },
+			{ trace: { state: "running" }, actions: {}, calls: [] },
+			{ trace: { state: "running" }, actions: { read: 1 }, calls: ["read ./one.ts"] },
+			{
+				trace: { state: "running" },
+				actions: { read: 2 },
+				calls: ["read ./one.ts", "read ./two.ts"],
+			},
 		]);
 	});
 
@@ -151,7 +155,9 @@ describe("agent tool factory", () => {
 			(update: any) => updates.push(update),
 			{ cwd: "/repo" } as any,
 		);
-		expect(updates.map((update) => update.details)).toEqual([{ trace: { state: "running" }, actions: {} }]);
+		expect(updates.map((update) => update.details)).toEqual([
+			{ trace: { state: "running" }, actions: {}, calls: [] },
+		]);
 		pendingPlan.resolve({ systemPrompt: "You are a probe.", message: "Do: probe it" });
 		await running;
 	});
@@ -175,7 +181,7 @@ describe("agent tool factory", () => {
 			traceDetails: () => ({ flavor: "salty" }),
 		});
 		const run = vi.fn(async (options: RunOptions) => {
-			options.onAction?.("read");
+			options.onAction?.({ tool: "read", summary: "read ./probe.ts" });
 			return { sessionID: "probe-session", answer: "done", toolLog: [] };
 		});
 		const updates: any[] = [];
@@ -189,10 +195,20 @@ describe("agent tool factory", () => {
 		);
 
 		expect(updates.map((update) => update.details)).toEqual([
-			{ trace: { state: "running" }, flavor: "salty", actions: {} },
-			{ trace: { state: "running" }, flavor: "salty", actions: { read: 1 } },
+			{ trace: { state: "running" }, flavor: "salty", actions: {}, calls: [] },
+			{
+				trace: { state: "running" },
+				flavor: "salty",
+				actions: { read: 1 },
+				calls: ["read ./probe.ts"],
+			},
 		]);
-		expect(result.details).toEqual({ trace: { state: "success" }, flavor: "salty" });
+		expect(result.details).toEqual({
+			trace: { state: "success" },
+			flavor: "salty",
+			actions: { read: 1 },
+			calls: ["read ./probe.ts"],
+		});
 	});
 
 	it("includes spec trace details in recovered failures", async () => {
@@ -328,6 +344,58 @@ describe("agent tool factory", () => {
 		expect(completed.render(100).map((line: string) => line.trimEnd())).toEqual([
 			" ✓ probe probe it",
 			" salvage notes",
+		]);
+	});
+
+	it("tails three child calls when collapsed and retains their aggregate after completion", () => {
+		const tool = createAgentTool(probeSpec(), { run: vi.fn() } as any);
+		const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
+		const component = tool.renderResult?.(
+			{
+				content: [{ type: "text", text: '<task_result sessionID="one">\ndone\n</task_result>' }],
+				details: {
+					trace: { state: "success" },
+					actions: { read: 3, grep: 1 },
+					calls: ["read ./one.ts", "read ./two.ts", "grep renderer", "read ./three.ts"],
+				},
+			},
+			{ expanded: false, isPartial: false },
+			theme,
+			{ args: { assignment: "probe it" }, cwd: "/repo", isError: false } as any,
+		) as any;
+
+		expect(component.render(100).map((line: string) => line.trimEnd())).toEqual([
+			" ✓ probe probe it · read ×3, grep ×1",
+			"   read ./two.ts",
+			"   grep renderer",
+			"   read ./three.ts",
+		]);
+	});
+
+	it("shows the full child call history before the final answer when expanded", () => {
+		const tool = createAgentTool(probeSpec(), { run: vi.fn() } as any);
+		const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
+		const component = tool.renderResult?.(
+			{
+				content: [{ type: "text", text: '<task_result sessionID="one">\nfinal answer\n</task_result>' }],
+				details: {
+					trace: { state: "success" },
+					actions: { read: 4 },
+					calls: ["read ./one.ts", "read ./two.ts", "read ./three.ts", "read ./four.ts"],
+				},
+			},
+			{ expanded: true, isPartial: false },
+			theme,
+			{ args: { assignment: "probe it" }, cwd: "/repo", isError: false } as any,
+		) as any;
+
+		expect(component.render(100).map((line: string) => line.trimEnd())).toEqual([
+			" ✓ probe probe it · read ×4",
+			"   read ./one.ts",
+			"   read ./two.ts",
+			"   read ./three.ts",
+			"   read ./four.ts",
+			" final answer",
 		]);
 	});
 });

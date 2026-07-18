@@ -93,7 +93,7 @@ describe("oracle tool", () => {
 
 	it("reports progress without any parent mode state", async () => {
 		const run = vi.fn(async (options: RunOptions) => {
-			options.onAction?.("finder");
+			options.onAction?.({ tool: "finder", summary: "finder inspect locking" });
 			return { sessionID: "oracle-1", answer: "Advice", toolLog: [] };
 		});
 		const tool = createOracleTool({ run } as any, BUILTIN_PROFILES);
@@ -108,8 +108,16 @@ describe("oracle tool", () => {
 			} as any,
 		);
 		expect(run.mock.calls[0]?.[0].definition.model).toBe("openai-codex/gpt-5.6-sol");
-		expect(updates.at(-1)?.details).toEqual({ trace: { state: "running" }, actions: { finder: 1 } });
-		expect(result.details).toEqual({ trace: { state: "success" } });
+		expect(updates.at(-1)?.details).toEqual({
+			trace: { state: "running" },
+			actions: { finder: 1 },
+			calls: ["finder inspect locking"],
+		});
+		expect(result.details).toEqual({
+			trace: { state: "success" },
+			actions: { finder: 1 },
+			calls: ["finder inspect locking"],
+		});
 	});
 
 	it("rejects an empty final message with the child session attributed", async () => {

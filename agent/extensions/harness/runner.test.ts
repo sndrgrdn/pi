@@ -8,10 +8,12 @@ import {
 	type AgentDefinition,
 	type ChildSession,
 	createSubagentSessionManager,
+	renderToolCallSummary,
 	resolveConfiguredModel,
 	SubagentRunner,
 } from "./runner.ts";
 import { BackgroundShellRegistry } from "./shell/registry.ts";
+import { createHarnessReadTool } from "./tools/read.ts";
 
 const definition: AgentDefinition = {
 	key: "oracle",
@@ -47,6 +49,12 @@ function fakeChild(prompt: () => Promise<void>, sessionID = "child-7") {
 }
 
 describe("shared subagent runner", () => {
+	it("reuses a child tool renderer for its concise call summary", () => {
+		expect(
+			renderToolCallSummary(createHarnessReadTool(), "read", { path: "/repo/src/app.ts" }, "call-1", "/repo"),
+		).toBe("read ./src/app.ts");
+	});
+
 	it("prompts the sole child message and returns the attributed run result", async () => {
 		const child = fakeChild(vi.fn(async () => {}));
 		const create = vi.fn(async () => child);

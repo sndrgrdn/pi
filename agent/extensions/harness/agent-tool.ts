@@ -13,6 +13,7 @@ import {
 	type ChildToolboxFactory,
 	isSubagentAbortError,
 	SubagentAbortError,
+	type SubagentAction,
 	SubagentRunError,
 	type SubagentRunner,
 	type SubagentRunResult,
@@ -83,12 +84,23 @@ type ToolUpdate = (result: { content: { type: "text"; text: string }[]; details:
 function createProgressSignal(
 	onUpdate: ToolUpdate | undefined,
 	traceDetails: Record<string, unknown> | undefined,
-): (action: string) => void {
+): { record(action: SubagentAction): void; snapshot(): Record<string, unknown> } {
 	const actions = new Map<string, number>();
-	emitTraceRunning(onUpdate, { ...traceDetails, actions: {} });
-	return (action) => {
-		actions.set(action, (actions.get(action) ?? 0) + 1);
-		emitTraceRunning(onUpdate, { ...traceDetails, actions: Object.fromEntries(actions) });
+	const calls: string[] = [];
+	emitTraceRunning(onUpdate, { ...traceDetails, actions: {}, calls: [] });
+	return {
+		record(action) {
+			actions.set(action.tool, (actions.get(action.tool) ?? 0) + 1);
+			calls.push(action.summary);
+			emitTraceRunning(onUpdate, {
+				...traceDetails,
+				actions: Object.fromEntries(actions),
+				calls: [...calls],
+			});
+		},
+		snapshot() {
+			return calls.length ? { actions: Object.fromEntries(actions), calls: [...calls] } : {};
+		},
 	};
 }
 
@@ -116,6 +128,12 @@ function progressTallies(details: unknown): string[] {
 	return tally ? [tally] : [];
 }
 
+function actionCalls(details: unknown): string[] {
+	if (typeof details !== "object" || details === null) return [];
+	const calls = (details as { calls?: unknown }).calls;
+	return Array.isArray(calls) ? calls.filter((call): call is string => typeof call === "string") : [];
+}
+
 /** Trace View renderer for a delegated agent call: presentation row, tallies, envelope evidence. */
 function createAgentToolRenderer<TParams>(presentation: AgentToolPresentation<TParams>) {
 	return createTraceRenderer<TParams>({
@@ -128,6 +146,9 @@ function createAgentToolRenderer<TParams>(presentation: AgentToolPresentation<TP
 		},
 		progress(result: TraceResultLike) {
 			return progressTallies(result.details);
+		},
+		activity(result: TraceResultLike) {
+			return actionCalls(result.details);
 		},
 		evidence(result: TraceResultLike, theme) {
 			const text = result.content
@@ -192,7 +213,7 @@ export function createAgentTool<TParams, K extends AgentKey>(
 			ctx: { cwd: string; sessionManager?: { getSessionFile(): string | undefined } },
 		) {
 			const traceDetails = spec.traceDetails?.(params);
-			const recordAction = createProgressSignal(onUpdate, traceDetails);
+			const progress = createProgressSignal(onUpdate, traceDetails);
 			if (signal?.aborted) throw new SubagentAbortError();
 			const planned = await spec.plan(params, { cwd: ctx.cwd });
 			const route = spec.route(params);
@@ -211,7 +232,7 @@ export function createAgentTool<TParams, K extends AgentKey>(
 					cwd: ctx.cwd,
 					message: planned.message,
 					signal,
-					onAction: recordAction,
+					onAction: progress.record,
 					...(parentSession ? { record: { parentSession, name: subagentRecordName(spec, params) } } : {}),
 					...(planned.toolbox ? { toolbox: planned.toolbox } : {}),
 				});
@@ -223,6 +244,7 @@ export function createAgentTool<TParams, K extends AgentKey>(
 							...(finalized.title !== undefined ? { title: finalized.title } : {}),
 							...traceDetails,
 							...finalized.traceDetails,
+							...progress.snapshot(),
 						},
 						"success",
 					),
@@ -239,7 +261,7 @@ export function createAgentTool<TParams, K extends AgentKey>(
 							text: buildEnvelope({ kind: "error", agent: spec.key, sessionID, content: recovery.content }),
 						},
 					],
-					details: withTraceDetails(traceDetails, recovery.outcome),
+					details: withTraceDetails({ ...traceDetails, ...progress.snapshot() }, recovery.outcome),
 				};
 			}
 		},

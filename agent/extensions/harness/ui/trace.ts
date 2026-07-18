@@ -83,6 +83,7 @@ interface TraceRendererOptions<TArgs> {
 	invocation(args: TArgs, cwd: string): TraceInvocation;
 	maxRowLines?: number;
 	progress?(result: TraceResult): string[];
+	activity?(result: TraceResult): string[];
 	evidence?(result: TraceResult, theme: TraceTheme, context: TraceRenderContext<TArgs>): string | undefined;
 }
 
@@ -128,12 +129,14 @@ export function sanitizeTraceEvidence(text: string): string {
 class TraceText extends Text {
 	private prefix = "";
 	private content = "";
+	private activity: string[] = [];
 	private evidence = "";
 	private maxRowLines = 1;
 
-	setTrace(prefix: string, content: string, evidence: string, maxRowLines: number): void {
+	setTrace(prefix: string, content: string, activity: string[], evidence: string, maxRowLines: number): void {
 		this.prefix = prefix;
 		this.content = content;
+		this.activity = activity;
 		this.evidence = evidence;
 		this.maxRowLines = maxRowLines;
 		this.invalidate();
@@ -156,8 +159,10 @@ class TraceText extends Text {
 			}
 		}
 		const renderedRows = new Text(rows.join("\n"), paddingX, 0).render(width);
-		if (!this.evidence) return renderedRows;
-		return [...renderedRows, ...new Text(this.evidence, paddingX, 0).render(width)];
+		const activityRows = this.activity.map((line) => truncateToWidth(line, Math.max(1, contentWidth), "…", true));
+		const renderedActivity = activityRows.length ? new Text(activityRows.join("\n"), paddingX, 0).render(width) : [];
+		if (!this.evidence) return [...renderedRows, ...renderedActivity];
+		return [...renderedRows, ...renderedActivity, ...new Text(this.evidence, paddingX, 0).render(width)];
 	}
 }
 
@@ -166,7 +171,7 @@ export function createTraceRenderer<TArgs>(options: TraceRendererOptions<TArgs>)
 	return {
 		renderCall(_args: TArgs, _theme: TraceTheme, context: { lastComponent?: unknown }): TraceText {
 			const component = (context.lastComponent as TraceText | undefined) ?? new TraceText("", 0, 0);
-			component.setTrace("", "", "", 1);
+			component.setTrace("", "", [], "", 1);
 			return component;
 		},
 		renderResult(
@@ -181,13 +186,16 @@ export function createTraceRenderer<TArgs>(options: TraceRendererOptions<TArgs>)
 				(renderOptions.isPartial ? "running" : context.isError ? "failed" : "success");
 			const presentation = statePresentation[state];
 			const invocation = options.invocation(context.args, context.cwd);
-			const progress = state === "running" ? (options.progress?.(result) ?? []) : [];
+			const progress = options.progress?.(result) ?? [];
 			const qualifiers = [...(invocation.qualifiers ?? []), ...detailQualifiers(result.details), ...progress]
 				.map((value) => ` · ${theme.fg("muted", value)}`)
 				.join("");
 			const target = invocation.target ?? "";
 			const prefix = `${theme.fg(presentation.color, presentation.glyph)} ${theme.bold(invocation.action)}${target ? " " : ""}`;
 			const content = `${target}${qualifiers}`;
+			const allActivity = options.activity?.(result) ?? [];
+			const visibleActivity = renderOptions.expanded ? allActivity : allActivity.slice(-3);
+			const activity = visibleActivity.map((line) => theme.fg("muted", `  ${sanitizeTraceEvidence(line)}`));
 			const customEvidence = renderOptions.expanded ? options.evidence?.(result, theme, context) : undefined;
 			const safeResultText = sanitizeTraceEvidence(resultText(result));
 			const evidence = !renderOptions.expanded
@@ -197,7 +205,7 @@ export function createTraceRenderer<TArgs>(options: TraceRendererOptions<TArgs>)
 						.split("\n")
 						.map((line) => theme.fg("toolOutput", line))
 						.join("\n"));
-			component.setTrace(prefix, content, evidence, options.maxRowLines ?? 1);
+			component.setTrace(prefix, content, activity, evidence, options.maxRowLines ?? 1);
 			return component;
 		},
 	};

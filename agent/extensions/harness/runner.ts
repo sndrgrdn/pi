@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 import type { Model } from "@earendil-works/pi-ai";
 import {
 	type CreateAgentSessionOptions,
@@ -29,8 +30,13 @@ export interface ChildSession {
 	finalMessage(): string;
 	abort(): Promise<void>;
 	dispose(): void;
-	onAction?(listener: (toolName: string) => void): () => void;
+	onAction?(listener: (action: SubagentAction) => void): () => void;
 	toolLog(): ToolLogEntry[];
+}
+
+export interface SubagentAction {
+	tool: string;
+	summary: string;
 }
 
 export interface ToolLogEntry {
@@ -89,7 +95,7 @@ export interface RunOptions {
 	cwd: string;
 	message: string;
 	record?: SubagentRecordConfig;
-	onAction?(toolName: string): void;
+	onAction?(action: SubagentAction): void;
 	toolbox?: ChildToolboxFactory;
 	signal?: AbortSignal;
 }
@@ -190,6 +196,55 @@ export function createSubagentSessionManager(
 	return sessionManager;
 }
 
+const plainTheme = {
+	fg: (_color: string, value: string) => value,
+	bg: (_color: string, value: string) => value,
+	bold: (value: string) => value,
+};
+
+/** Render the same concise invocation text the child tool would show in a TUI row. */
+export function renderToolCallSummary(
+	tool: Pick<ToolDefinition<any, any, any>, "renderCall" | "renderResult"> | undefined,
+	name: string,
+	args: Record<string, unknown>,
+	toolCallId: string,
+	cwd: string,
+): string {
+	if (!tool) return name;
+	try {
+		const context = {
+			args,
+			toolCallId,
+			invalidate: () => {},
+			lastComponent: undefined,
+			state: {},
+			cwd,
+			executionStarted: true,
+			argsComplete: true,
+			isPartial: true,
+			expanded: false,
+			showImages: false,
+			isError: false,
+		};
+		let component = tool.renderCall?.(args, plainTheme as any, context as any);
+		if ((component?.render(10_000).length ?? 0) === 0 && tool.renderResult) {
+			component = tool.renderResult(
+				{ content: [{ type: "text", text: "" }], details: undefined },
+				{ expanded: false, isPartial: true },
+				plainTheme as any,
+				{ ...context, lastComponent: component } as any,
+			);
+		}
+		const summary = stripVTControlCharacters(component?.render(10_000).join(" ") ?? "")
+			.replace(/^\s*[◐✓✗■]\s+/, "")
+			.replace(/\s+/g, " ")
+			.trim();
+		return summary || name;
+	} catch {
+		return name;
+	}
+}
+
 /** Production adapter: a fresh pi SDK session, never a fork/resume. */
 export async function createSdkChildSession(config: ChildSessionConfig): Promise<ChildSession> {
 	const processes = new BackgroundShellRegistry();
@@ -255,7 +310,18 @@ export async function createSdkChildSession(config: ChildSessionConfig): Promise
 		toolLog: () => structuredClone(toolLog),
 		onAction: (listener) =>
 			session.subscribe((event) => {
-				if (event.type === "tool_execution_start") listener(event.toolName);
+				if (event.type === "tool_execution_start") {
+					listener({
+						tool: event.toolName,
+						summary: renderToolCallSummary(
+							session.getToolDefinition(event.toolName),
+							event.toolName,
+							event.args,
+							event.toolCallId,
+							config.cwd,
+						),
+					});
+				}
 			}),
 	};
 }
