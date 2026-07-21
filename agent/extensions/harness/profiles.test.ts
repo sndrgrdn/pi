@@ -2,12 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import {
-	BUILTIN_PROFILES,
-	loadProfiles,
-	mergeProfiles,
-	validateProfilesOverride,
-} from "./profiles.ts";
+import { BUILTIN_PROFILES, loadProfiles, mergeProfiles, validateProfilesOverride } from "./profiles.ts";
 
 const SOL = "openai-codex/gpt-5.6-sol";
 const HAIKU = "anthropic/claude-haiku-4-5";

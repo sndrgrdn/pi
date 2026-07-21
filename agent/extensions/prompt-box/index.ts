@@ -1,17 +1,16 @@
 /**
- * Bordered prompt box with streaming metrics.
+ * Bordered prompt box.
  *
  * ╭────────────────────────────────────────────────── Claude Opus 4.6 · high ─╮
  * │ type here_                                                                │
  * │                                                                           │
- * ╰─ 69.6K (69%) · 0.69s · 69 tok/s ──────────────────────────── ~/.pi/agent ─╯
+ * ╰─ 69.6K (69%) ───────────────────────────────────────────────── ~/.pi/agent ─╯
  *
  * tl: (empty)       tr: model · thinking
- * bl: tokens · metrics  br: cwd (branch)
+ * bl: tokens        br: cwd (branch)
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getEditorPaddingX, PromptBoxEditor } from "./editor.js";
-import { getMetrics, onUpdate, register as registerMetrics } from "./metrics.js";
 
 // ── Thinking glyphs ──────────────────────────
 
@@ -30,10 +29,6 @@ const THINK_LABEL: Record<string, string> = {
 export default function promptBox(pi: ExtensionAPI) {
 	let editor: PromptBoxEditor | undefined;
 	let branch: string | null = null;
-	let unsubMetrics: (() => void) | undefined;
-
-	// Wire up the metrics module
-	registerMetrics(pi);
 
 	// ── tr: model · thinking ──
 
@@ -56,7 +51,7 @@ export default function promptBox(pi: ExtensionAPI) {
 		return parts.join(dot);
 	};
 
-	// ── bl: tokens + metrics ─────────
+	// ── bl: tokens ───────────────────
 
 	const bl = (ctx: ExtensionContext) => {
 		const theme = ctx.ui.theme;
@@ -74,15 +69,6 @@ export default function promptBox(pi: ExtensionAPI) {
 		const k = tokens ? `${(tokens / 1000).toFixed(1)}K` : "?";
 		parts.push(theme.fg("dim", `${k} (${pct ?? "?"}%)`));
 
-		// streaming metrics
-		const m = getMetrics();
-		if (m.latest) {
-			parts.push(theme.fg("dim", `${m.latest.ttft.toFixed(2)}s`));
-			parts.push(theme.fg("dim", `${m.latest.tokSec.toFixed(0)} tok/s`));
-		} else if (m.live) {
-			parts.push(theme.fg("dim", `${m.live.ttft.toFixed(2)}s`));
-		}
-
 		return parts.join(dot);
 	};
 
@@ -99,9 +85,6 @@ export default function promptBox(pi: ExtensionAPI) {
 
 	pi.on("session_start", (_event, ctx) => {
 		branch = null;
-
-		// Subscribe to metrics changes for UI refresh
-		unsubMetrics = onUpdate(() => editor?.refresh());
 
 		// Empty footer — setFooter(undefined) restores built-in
 		ctx.ui.setFooter((tui, _theme, footerData) => {
@@ -136,7 +119,5 @@ export default function promptBox(pi: ExtensionAPI) {
 	pi.on("session_shutdown", () => {
 		branch = null;
 		editor = undefined;
-		unsubMetrics?.();
-		unsubMetrics = undefined;
 	});
 }
