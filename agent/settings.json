@@ -1,6 +1,6 @@
 {
-  "lastChangelogVersion": "0.81.0",
-  "defaultThinkingLevel": "medium",
+  "lastChangelogVersion": "0.81.1",
+  "defaultThinkingLevel": "high",
   "hideThinkingBlock": true,
   "defaultProvider": "anthropic",
   "defaultModel": "claude-fable-5",
@@ -11,7 +11,7 @@
   ],
   "steeringMode": "all",
   "doubleEscapeAction": "tree",
-  "treeFilterMode": "default",
+  "treeFilterMode": "no-tools",
   "transport": "auto",
   "httpIdleTimeoutMs": 300000,
   "warnings": {
@@ -20,7 +20,9 @@
   "packages": [
     "npm:pi-mcp-adapter@2.10.0"
   ],
-  "theme": "github-light/github-dark",
+  "theme": "catppuccin-mocha",
   "quietStartup": false,
-  "showCacheMissNotices": true
+  "showCacheMissNotices": true,
+  "autocompleteMaxVisible": 10,
+  "defaultProjectTrust": "ask"
 }
