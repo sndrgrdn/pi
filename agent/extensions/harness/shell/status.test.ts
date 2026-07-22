@@ -113,6 +113,57 @@ describe("shell_command_status", () => {
 		expect(registry.get(id)).toBeUndefined();
 	});
 
+	it("allow_nonzero carries over to the background completing read", async () => {
+		const { registry, command, status } = makeTools();
+		const start = await run(command, {
+			command: "sleep 0.5; echo oops >&2; exit 7",
+			timeout_ms: 100,
+			allow_nonzero: true,
+		});
+		const id = start.content[0].text.match(/backgrounded as (shell-\d+)/)![1];
+		await expect(run(status, { id, timeout_ms: 5000 })).resolves.toMatchObject({
+			content: [{ text: expect.stringMatching(/oops[\s\S]*exited 7/) }],
+		});
+		expect(registry.get(id)).toBeUndefined();
+	});
+
+	it("polls multiple ids in one call, waiting for all and reporting each section", async () => {
+		const { registry, command, status } = makeTools();
+		const a = await background(command, "sleep 0.5; echo alpha");
+		const b = await background(command, "sleep 0.5; echo beta");
+		const result = await run(status, { id: [a, b], timeout_ms: 5000 });
+		expect(result.content[0].text).toMatch(
+			new RegExp(`alpha[\\s\\S]*${a} · exited 0[\\s\\S]*beta[\\s\\S]*${b} · exited 0`),
+		);
+		expect(result.details.trace).toEqual({ state: "success", qualifiers: ["2 exited"] });
+		expect(registry.get(a)).toBeUndefined();
+		expect(registry.get(b)).toBeUndefined();
+	});
+
+	it("multi-id read with one disallowed nonzero fails with every section included", async () => {
+		const { registry, command, status } = makeTools();
+		const a = await background(command, "sleep 0.5; echo good");
+		const b = await background(command, "sleep 0.5; echo bad >&2; exit 3");
+		await expect(run(status, { id: [a, b], timeout_ms: 5000 })).rejects.toThrow(
+			new RegExp(`good[\\s\\S]*${a} · exited 0[\\s\\S]*bad[\\s\\S]*${b} · exited 3`),
+		);
+		// Both completing reads consumed exactly once.
+		expect(registry.get(a)).toBeUndefined();
+		expect(registry.get(b)).toBeUndefined();
+	});
+
+	it("unknown id in a multi-id call fails before any read is acquired", async () => {
+		const { registry, command, status } = makeTools();
+		const a = await background(command, "sleep 30");
+		await expect(run(status, { id: [a, "shell-99"], timeout_ms: 0 })).rejects.toThrow(
+			/no tracked background process "shell-99"/,
+		);
+		// The valid id holds no leaked in-flight read and polls normally.
+		const result = await run(status, { id: a, timeout_ms: 0 });
+		expect(result.content[0].text).toContain(`${a} · still running`);
+		registry.killAll();
+	});
+
 	it("timeout_ms 0 returns an instant snapshot of a still-running process", async () => {
 		const { registry, command, status } = makeTools();
 		const id = await background(command, "sleep 30");

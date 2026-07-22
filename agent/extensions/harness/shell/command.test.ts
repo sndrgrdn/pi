@@ -68,6 +68,20 @@ describe("shell_command", () => {
 		);
 	});
 
+	it("signal-killed foreground command is a labeled success, matching the background read", async () => {
+		const { tool } = makeTool();
+		const result = await run(tool, { command: "echo partial; kill -9 $$" });
+		expect(result.content[0].text).toMatch(/partial[\s\S]*exited \(signal\)/);
+		expect(result.details.trace).toEqual({ state: "success", qualifiers: ["signal"] });
+	});
+
+	it("allow_nonzero reports a non-zero exit as data instead of failing", async () => {
+		const { tool } = makeTool();
+		const result = await run(tool, { command: "echo oops >&2; exit 7", allow_nonzero: true });
+		expect(result.content[0].text).toMatch(/oops[\s\S]*exited 7/);
+		expect(result.details.trace).toEqual({ state: "success", qualifiers: ["exit 7"] });
+	});
+
 	it("backgrounds a still-running command at the timeout with id + poll instruction", async () => {
 		const { tool, registry } = makeTool();
 		const result = await run(tool, { command: "echo started; sleep 30", timeout_ms: 300 });

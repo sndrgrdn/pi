@@ -91,8 +91,7 @@ export function createWebSearchTool(dependencies: ExaDependencies = createExaDep
 	return defineTool({
 		name: "web_search",
 		label: "web_search",
-		description:
-			"Search the web for relevant sources and highlighted excerpts. Describe the ideal source rather than supplying keywords alone.",
+		description: "Search the web for relevant sources and highlighted excerpts.",
 		parameters,
 		async execute(_id, params, signal) {
 			if (!Value.Check(parameters, params))

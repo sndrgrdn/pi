@@ -19,11 +19,11 @@ interface ReadParams {
 const schema = Type.Object({
 	path: Type.String({ description: "File path, relative or absolute." }),
 	offset: Type.Optional(
-		Type.Number({ description: "First line or entry to return, 1-indexed. Continue from here after truncation." }),
+		Type.Number({ description: "First line to return, 1-indexed. Continue from here after truncation." }),
 	),
 	limit: Type.Optional(
 		Type.Number({
-			description: "Maximum lines or entries to return. Prefer one large window to many small reads.",
+			description: "Maximum lines to return. Prefer one large window to many small reads.",
 		}),
 	),
 });

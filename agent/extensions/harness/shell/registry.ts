@@ -110,6 +110,9 @@ export interface TrackInput {
 	pid: number | undefined;
 	output: ShellOutputFile;
 	exitPromise: Promise<number | null>;
+	/** Set at spawn by shell_command's allow_nonzero: a non-zero exit on the
+	 * completing read is a normal result instead of a tool error. */
+	allowNonzero?: boolean;
 }
 
 export interface ShellProcessRecord extends TrackInput {

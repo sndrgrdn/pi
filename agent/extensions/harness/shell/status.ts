@@ -1,17 +1,19 @@
 /**
- * `shell_command_status` — pure observation of a backgrounded process.
+ * `shell_command_status` — pure observation of backgrounded processes.
  *
- * Waits for completion or timeout, streaming new output as progress. Reads
- * are lossless since-last-read slices backed by the accumulator temp-file
+ * Takes one id or an array; waits for every process to exit or the timeout,
+ * streaming new output as progress. Reads are lossless since-last-read
+ * slices backed by the accumulator temp-file
  * byte offset (cursor shared with the backgrounding snapshot and the final
  * cancel/completion read), each bounded by pi truncation. The read that
  * observes exit delivers remaining output + exit status exactly once
- * (nonzero → tool error) and deletes the record.
+ * (nonzero → tool error unless the command set allow_nonzero) and deletes
+ * the record.
  */
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { createTraceRenderer, emitTraceRunning, type TraceToolRegistrar, withTraceDetails } from "../ui/trace.ts";
-import { appendStatus, formatShellOutput, UPDATE_THROTTLE_MS } from "./output.ts";
+import { appendStatus, type FormattedOutput, formatShellOutput, UPDATE_THROTTLE_MS } from "./output.ts";
 import {
 	type BackgroundShellRegistry,
 	clampTimeoutMs,
@@ -21,7 +23,10 @@ import {
 } from "./registry.ts";
 
 const schema = Type.Object({
-	id: Type.String({ description: "Background process id returned by shell_command (e.g. shell-3)." }),
+	id: Type.Union([Type.String(), Type.Array(Type.String(), { minItems: 1 })], {
+		description:
+			"Background process id returned by shell_command (e.g. shell-3), or an array of ids to wait on together.",
+	}),
 	timeout_ms: Type.Optional(
 		Type.Number({
 			description: `How long to wait for completion in milliseconds (default ${DEFAULT_TIMEOUT_MS}, max ${MAX_TIMEOUT_MS}). 0 returns an instant snapshot.`,
@@ -30,20 +35,20 @@ const schema = Type.Object({
 });
 
 interface ShellStatusParams {
-	id: string;
+	id: string | string[];
 	timeout_ms?: number;
 }
 
 const description = [
-	"Poll a background process started by shell_command and return output produced since the last read (lossless cursor).",
-	`Waits up to timeout_ms (default ${DEFAULT_TIMEOUT_MS / 1000}s, max ${MAX_TIMEOUT_MS / 1000}s) for the process to exit; timeout_ms 0 returns an instant snapshot.`,
+	"Poll background processes started by shell_command and return output produced since the last read (lossless cursor).",
+	`Accepts one id or an array of ids and waits up to timeout_ms (default ${DEFAULT_TIMEOUT_MS / 1000}s, max ${MAX_TIMEOUT_MS / 1000}s) for every one to exit; timeout_ms 0 returns an instant snapshot.`,
 	"Observes without stopping the process; shell_command_cancel stops it.",
-	"The read that observes exit reports its status once and forgets the id; a nonzero exit fails the tool.",
-	"Output is truncated to the last 2000 lines or 50KB; the full output temp-file path is included when truncated.",
+	"The read that observes an exit reports it once and forgets that id; a nonzero exit fails the tool unless the command set allow_nonzero.",
+	"Output is bounded like shell_command output; the full temp-file path is included when truncated.",
 ].join(" ");
 
 const traceRenderer = createTraceRenderer<ShellStatusParams>({
-	invocation: (args) => ({ action: "poll", target: args.id }),
+	invocation: (args) => ({ action: "poll", target: Array.isArray(args.id) ? args.id.join(" ") : args.id }),
 });
 
 function exitLabel(record: ShellProcessRecord): string {
@@ -62,27 +67,56 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 			// Lazy sweep of exited-but-unpolled records.
 			registry.sweep();
 
-			const record = registry.get(params.id);
-			if (!record) throw registry.unknownIdError(params.id);
-			registry.beginRead(record);
+			const multi = Array.isArray(params.id);
+			const ids = multi ? [...new Set(params.id as string[])] : [params.id as string];
+			if (ids.length === 0) throw new Error("requires at least one id");
+
+			// Resolve every id before any cursor moves; one unknown id fails the call.
+			const records: ShellProcessRecord[] = ids.map((id) => {
+				const record = registry.get(id);
+				if (!record) throw registry.unknownIdError(id);
+				return record;
+			});
+
+			// Single-flight covers the whole set; release on partial acquisition.
+			const began: ShellProcessRecord[] = [];
+			try {
+				for (const record of records) {
+					registry.beginRead(record);
+					began.push(record);
+				}
+			} catch (error) {
+				for (const record of began) registry.endRead(record);
+				throw error;
+			}
 
 			let updateTimer: ReturnType<typeof setInterval> | undefined;
 			try {
 				const timeoutMs = clampTimeoutMs(params.timeout_ms);
 
-				if (!record.exited && timeoutMs > 0) {
-					// Stream new output as progress without advancing the cursor;
+				if (timeoutMs > 0 && records.some((record) => !record.exited)) {
+					// Stream new output as progress without advancing cursors;
 					// the final readAndAdvance below stays lossless.
-					let lastEmitted = record.cursor;
+					const lastEmitted = new Map(records.map((record) => [record.id, record.cursor]));
 					if (onUpdate) {
 						updateTimer = setInterval(() => {
-							if (record.output.bytesWritten <= lastEmitted) return;
-							lastEmitted = record.output.bytesWritten;
-							const { text, details } = formatShellOutput(
-								record.output.readSlice(record.cursor, lastEmitted),
-								record.output.path,
-							);
-							onUpdate({ content: [{ type: "text", text }], details: withTraceDetails(details, "running") });
+							const parts: string[] = [];
+							let details: FormattedOutput["details"];
+							for (const record of records) {
+								if (record.output.bytesWritten <= (lastEmitted.get(record.id) ?? 0)) continue;
+								lastEmitted.set(record.id, record.output.bytesWritten);
+								const formatted = formatShellOutput(
+									record.output.readSlice(record.cursor, record.output.bytesWritten),
+									record.output.path,
+								);
+								parts.push(multi ? `[${record.id}]\n${formatted.text}` : formatted.text);
+								details = formatted.details;
+							}
+							if (!parts.length) return;
+							onUpdate({
+								content: [{ type: "text", text: parts.join("\n\n") }],
+								details: withTraceDetails(multi ? undefined : details, "running"),
+							});
 						}, UPDATE_THROTTLE_MS);
 					}
 
@@ -90,9 +124,8 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 					let onAbort: (() => void) | undefined;
 					try {
 						await Promise.race([
-							record.exitPromise,
-							// Cancel-preempts-poll: a cancel wakes this wait.
-							record.cancelPromise,
+							// Cancel-preempts-poll: a cancel wakes the wait for its record.
+							Promise.all(records.map((record) => Promise.race([record.exitPromise, record.cancelPromise]))),
 							new Promise<void>((resolvePromise) => {
 								timeoutHandle = setTimeout(resolvePromise, timeoutMs);
 								onAbort = () => resolvePromise();
@@ -113,36 +146,54 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 					throw new Error("Status check aborted");
 				}
 
-				const { text, details } = formatShellOutput(registry.readAndAdvance(record), record.output.path);
-
-				if (record.cancelled) {
-					// Preempted by cancel: resolve non-error with output-so-far.
-					// The cancel call is the completing read, not this one.
-					return {
-						content: [{ type: "text", text: appendStatus(text, `${record.id} · cancelled`) }],
-						details: withTraceDetails(details, "cancelled"),
-					};
+				const sections: string[] = [];
+				let singleDetails: FormattedOutput["details"];
+				let failed = false;
+				let runningCount = 0;
+				let cancelledCount = 0;
+				let exitedCount = 0;
+				for (const record of records) {
+					const { text, details } = formatShellOutput(registry.readAndAdvance(record), record.output.path);
+					singleDetails = details;
+					let label: string;
+					if (record.cancelled) {
+						// Preempted by cancel: non-error with output-so-far. The
+						// cancel call is the completing read, not this one.
+						label = `${record.id} · cancelled`;
+						cancelledCount += 1;
+					} else if (!record.exited) {
+						label = `${record.id} · still running`;
+						runningCount += 1;
+					} else {
+						// Completing read: report exit exactly once, forget the record.
+						registry.completeRead(record.id);
+						label = multi ? `${record.id} · ${exitLabel(record)}` : exitLabel(record);
+						exitedCount += 1;
+						if (record.exitCode !== 0 && record.exitCode !== null && !record.allowNonzero) failed = true;
+					}
+					sections.push(appendStatus(text, label));
 				}
 
-				if (!record.exited) {
-					return {
-						content: [{ type: "text", text: appendStatus(text, `${record.id} · still running`) }],
-						details: withTraceDetails(details, "success", ["still running"]),
-					};
-				}
+				const combined = sections.join("\n\n");
+				if (failed) throw new Error(combined);
 
-				// Completing read: report exit exactly once, forget the record.
-				registry.completeRead(record.id);
-				if (record.exitCode !== 0 && record.exitCode !== null) {
-					throw new Error(appendStatus(text, exitLabel(record)));
-				}
+				const state = !multi && cancelledCount ? "cancelled" : "success";
+				const qualifiers = multi
+					? [
+							...(exitedCount ? [`${exitedCount} exited`] : []),
+							...(runningCount ? [`${runningCount} running`] : []),
+							...(cancelledCount ? [`${cancelledCount} cancelled`] : []),
+						]
+					: runningCount
+						? ["still running"]
+						: undefined;
 				return {
-					content: [{ type: "text", text: appendStatus(text, exitLabel(record)) }],
-					details: withTraceDetails(details, "success"),
+					content: [{ type: "text", text: combined }],
+					details: withTraceDetails(multi ? undefined : singleDetails, state, qualifiers),
 				};
 			} finally {
 				if (updateTimer) clearInterval(updateTimer);
-				registry.endRead(record);
+				for (const record of began) registry.endRead(record);
 			}
 		},
 		renderCall: traceRenderer.renderCall,

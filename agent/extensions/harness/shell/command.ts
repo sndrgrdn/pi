@@ -41,12 +41,19 @@ const schema = Type.Object({
 			description: `Foreground wait in milliseconds (default ${DEFAULT_TIMEOUT_MS}, max ${MAX_TIMEOUT_MS}). At timeout, the command continues in the background and returns an id for polling.`,
 		}),
 	),
+	allow_nonzero: Type.Optional(
+		Type.Boolean({
+			description:
+				"Report a non-zero exit code as a normal result instead of a tool failure. Set it when a non-zero exit is expected; it carries over to status reads if the command backgrounds.",
+		}),
+	),
 });
 
 interface ShellCommandParams {
 	command: string;
 	workdir?: string;
 	timeout_ms?: number;
+	allow_nonzero?: boolean;
 }
 
 const description = [
@@ -54,7 +61,7 @@ const description = [
 	`Waits up to timeout_ms (default ${DEFAULT_TIMEOUT_MS / 1000}s, max ${MAX_TIMEOUT_MS / 1000}s) for completion.`,
 	"At timeout, a running command continues in the background and returns output-so-far plus an id (e.g. shell-3).",
 	"Poll it with shell_command_status or kill it with shell_command_cancel.",
-	"A completed command with a non-zero exit code fails the tool.",
+	"A completed command with a non-zero exit code fails the tool unless allow_nonzero is set.",
 	"Output is truncated to the last 2000 lines or 50KB; full output is saved to a temp file whose path is included when truncated.",
 ].join(" ");
 
@@ -188,8 +195,23 @@ export function createShellCommandTool(registry: BackgroundShellRegistry): ToolD
 				if (signal?.aborted) {
 					throw new Error(appendStatus(text, "Command aborted"));
 				}
-				if (exitCode !== 0 && exitCode !== null) {
+				if (exitCode !== 0 && exitCode !== null && !params.allow_nonzero) {
 					throw new Error(appendStatus(text, `Command exited with code ${exitCode}`));
+				}
+				if (exitCode === null) {
+					// Signal termination is a labeled success, matching the
+					// background completing read: someone chose to stop it.
+					return {
+						content: [{ type: "text", text: appendStatus(text, "exited (signal)") }],
+						details: withTraceDetails(details, "success", ["signal"]),
+					};
+				}
+				if (exitCode !== 0) {
+					// allow_nonzero: expected failure, exit code delivered as data.
+					return {
+						content: [{ type: "text", text: appendStatus(text, `exited ${exitCode}`) }],
+						details: withTraceDetails(details, "success", [`exit ${exitCode}`]),
+					};
 				}
 				return {
 					content: [{ type: "text", text: text || "(no output)" }],
@@ -200,7 +222,13 @@ export function createShellCommandTool(registry: BackgroundShellRegistry): ToolD
 			// Still running at the timeout: background it.
 			backgrounded = true;
 			signal?.removeEventListener("abort", onAbort);
-			const record = registry.track({ command: params.command, pid: child.pid, output, exitPromise });
+			const record = registry.track({
+				command: params.command,
+				pid: child.pid,
+				output,
+				exitPromise,
+				allowNonzero: params.allow_nonzero === true,
+			});
 			const snapshot = registry.readAndAdvance(record);
 			const { text, details } = formatShellOutput(snapshot, output.path);
 			const status = `backgrounded as ${record.id} · still running. Poll with shell_command_status({"id": "${record.id}"}).`;
