@@ -17,8 +17,10 @@ import { appendStatus, type FormattedOutput, formatShellOutput, UPDATE_THROTTLE_
 import {
 	type BackgroundShellRegistry,
 	clampTimeoutMs,
+	classifyCompletion,
 	DEFAULT_TIMEOUT_MS,
 	MAX_TIMEOUT_MS,
+	type ShellCompletion,
 	type ShellProcessRecord,
 } from "./registry.ts";
 
@@ -51,8 +53,125 @@ const traceRenderer = createTraceRenderer<ShellStatusParams>({
 	invocation: (args) => ({ action: "poll", target: Array.isArray(args.id) ? args.id.join(" ") : args.id }),
 });
 
-function exitLabel(record: ShellProcessRecord): string {
-	return `exited ${record.exitCode ?? "(signal)"}`;
+/** Wire shape → non-empty deduplicated id list, keeping array-ness for presentation. */
+function parseIdParam(id: string | string[]): { ids: [string, ...string[]]; multi: boolean } {
+	const multi = Array.isArray(id);
+	const [first, ...rest] = new Set(multi ? id : [id]);
+	if (first === undefined) throw new Error("id array must contain at least one id");
+	return { ids: [first, ...rest], multi };
+}
+
+/** Resolve every id and acquire single-flight reads, all or nothing. */
+function acquireRecords(registry: BackgroundShellRegistry, ids: readonly string[]): ShellProcessRecord[] {
+	const records = ids.map((id) => {
+		const record = registry.get(id);
+		if (!record) throw registry.unknownIdError(id);
+		return record;
+	});
+	const began: ShellProcessRecord[] = [];
+	try {
+		for (const record of records) {
+			registry.beginRead(record);
+			began.push(record);
+		}
+	} catch (error) {
+		for (const record of began) registry.endRead(record);
+		throw error;
+	}
+	return records;
+}
+
+/**
+ * Wait until every record exits or is cancelled, the timeout fires, or the
+ * signal aborts; ticks onProgress on the TUI throttle while waiting.
+ */
+async function awaitCompletion(
+	records: readonly ShellProcessRecord[],
+	timeoutMs: number,
+	signal: AbortSignal | undefined,
+	onProgress: (() => void) | undefined,
+): Promise<void> {
+	if (timeoutMs <= 0 || records.every((record) => record.exited)) return;
+	const progressTimer = onProgress ? setInterval(onProgress, UPDATE_THROTTLE_MS) : undefined;
+	let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+	let onAbort: (() => void) | undefined;
+	try {
+		await Promise.race([
+			// Cancel-preempts-poll: a cancel wakes the wait for its record.
+			Promise.all(records.map((record) => Promise.race([record.exitPromise, record.cancelPromise]))),
+			new Promise<void>((resolvePromise) => {
+				timeoutHandle = setTimeout(resolvePromise, timeoutMs);
+				onAbort = () => resolvePromise();
+				if (signal) {
+					if (signal.aborted) resolvePromise();
+					else signal.addEventListener("abort", onAbort, { once: true });
+				}
+			}),
+		]);
+	} finally {
+		if (progressTimer) clearInterval(progressTimer);
+		if (timeoutHandle) clearTimeout(timeoutHandle);
+		if (onAbort) signal?.removeEventListener("abort", onAbort);
+	}
+}
+
+type ReadingOutcome = { kind: "cancelled" } | { kind: "running" } | { kind: "exited"; completion: ShellCompletion };
+
+interface RecordReading {
+	id: string;
+	formatted: FormattedOutput;
+	outcome: ReadingOutcome;
+}
+
+/**
+ * Consume each record's since-last-read slice and classify where it stands.
+ * Exited records are read-once: classifying one here deletes it.
+ */
+function consumeReadings(registry: BackgroundShellRegistry, records: readonly ShellProcessRecord[]): RecordReading[] {
+	return records.map((record) => {
+		const formatted = formatShellOutput(registry.readAndAdvance(record), record.output.path);
+		let outcome: ReadingOutcome;
+		if (record.cancelled) {
+			// Preempted by cancel: the cancel call is the completing read, not this one.
+			outcome = { kind: "cancelled" };
+		} else if (!record.exited) {
+			outcome = { kind: "running" };
+		} else {
+			// Completing read: report exit exactly once, forget the record.
+			registry.completeRead(record.id);
+			outcome = { kind: "exited", completion: classifyCompletion(record.exitCode, record.allowNonzero === true) };
+		}
+		return { id: record.id, formatted, outcome };
+	});
+}
+
+function readingLabel(reading: RecordReading, multi: boolean): string {
+	switch (reading.outcome.kind) {
+		case "cancelled":
+			return `${reading.id} · cancelled`;
+		case "running":
+			return `${reading.id} · still running`;
+		case "exited":
+			return multi ? `${reading.id} · ${reading.outcome.completion.label}` : reading.outcome.completion.label;
+	}
+}
+
+function resultQualifiers(readings: readonly RecordReading[], multi: boolean): string[] | undefined {
+	const only = readings.find(() => true);
+	if (!multi) {
+		if (only?.outcome.kind === "running") return ["still running"];
+		if (only?.outcome.kind === "exited") return only.outcome.completion.qualifiers;
+		return undefined;
+	}
+	const count = (kind: ReadingOutcome["kind"]) => readings.filter((reading) => reading.outcome.kind === kind).length;
+	const exited = count("exited");
+	const running = count("running");
+	const cancelled = count("cancelled");
+	return [
+		...(exited ? [`${exited} exited`] : []),
+		...(running ? [`${running} running`] : []),
+		...(cancelled ? [`${cancelled} cancelled`] : []),
+	];
 }
 
 export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDefinition<any, any, any> {
@@ -67,133 +186,58 @@ export function createShellStatusTool(registry: BackgroundShellRegistry): ToolDe
 			// Lazy sweep of exited-but-unpolled records.
 			registry.sweep();
 
-			const multi = Array.isArray(params.id);
-			const ids = multi ? [...new Set(params.id as string[])] : [params.id as string];
-			if (ids.length === 0) throw new Error("requires at least one id");
-
-			// Resolve every id before any cursor moves; one unknown id fails the call.
-			const records: ShellProcessRecord[] = ids.map((id) => {
-				const record = registry.get(id);
-				if (!record) throw registry.unknownIdError(id);
-				return record;
-			});
-
-			// Single-flight covers the whole set; release on partial acquisition.
-			const began: ShellProcessRecord[] = [];
+			const { ids, multi } = parseIdParam(params.id);
+			const records = acquireRecords(registry, ids);
 			try {
-				for (const record of records) {
-					registry.beginRead(record);
-					began.push(record);
-				}
-			} catch (error) {
-				for (const record of began) registry.endRead(record);
-				throw error;
-			}
-
-			let updateTimer: ReturnType<typeof setInterval> | undefined;
-			try {
-				const timeoutMs = clampTimeoutMs(params.timeout_ms);
-
-				if (timeoutMs > 0 && records.some((record) => !record.exited)) {
-					// Stream new output as progress without advancing cursors;
-					// the final readAndAdvance below stays lossless.
-					const lastEmitted = new Map(records.map((record) => [record.id, record.cursor]));
-					if (onUpdate) {
-						updateTimer = setInterval(() => {
-							const parts: string[] = [];
-							let details: FormattedOutput["details"];
-							for (const record of records) {
-								if (record.output.bytesWritten <= (lastEmitted.get(record.id) ?? 0)) continue;
-								lastEmitted.set(record.id, record.output.bytesWritten);
-								const formatted = formatShellOutput(
-									record.output.readSlice(record.cursor, record.output.bytesWritten),
-									record.output.path,
-								);
-								parts.push(multi ? `[${record.id}]\n${formatted.text}` : formatted.text);
-								details = formatted.details;
-							}
-							if (!parts.length) return;
-							onUpdate({
-								content: [{ type: "text", text: parts.join("\n\n") }],
-								details: withTraceDetails(multi ? undefined : details, "running"),
-							});
-						}, UPDATE_THROTTLE_MS);
+				// Stream new output as progress without advancing cursors;
+				// the final consumeReadings below stays lossless.
+				const lastEmitted = new Map(records.map((record) => [record.id, record.cursor]));
+				const emitProgress = () => {
+					const parts: string[] = [];
+					let details: FormattedOutput["details"];
+					for (const record of records) {
+						if (record.output.bytesWritten <= (lastEmitted.get(record.id) ?? 0)) continue;
+						lastEmitted.set(record.id, record.output.bytesWritten);
+						const formatted = formatShellOutput(
+							record.output.readSlice(record.cursor, record.output.bytesWritten),
+							record.output.path,
+						);
+						parts.push(multi ? `[${record.id}]\n${formatted.text}` : formatted.text);
+						details = formatted.details;
 					}
+					if (!parts.length) return;
+					onUpdate?.({
+						content: [{ type: "text", text: parts.join("\n\n") }],
+						details: withTraceDetails(multi ? undefined : details, "running"),
+					});
+				};
 
-					let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-					let onAbort: (() => void) | undefined;
-					try {
-						await Promise.race([
-							// Cancel-preempts-poll: a cancel wakes the wait for its record.
-							Promise.all(records.map((record) => Promise.race([record.exitPromise, record.cancelPromise]))),
-							new Promise<void>((resolvePromise) => {
-								timeoutHandle = setTimeout(resolvePromise, timeoutMs);
-								onAbort = () => resolvePromise();
-								if (signal) {
-									if (signal.aborted) resolvePromise();
-									else signal.addEventListener("abort", onAbort, { once: true });
-								}
-							}),
-						]);
-					} finally {
-						if (timeoutHandle) clearTimeout(timeoutHandle);
-						if (onAbort) signal?.removeEventListener("abort", onAbort);
-					}
-				}
+				await awaitCompletion(records, clampTimeoutMs(params.timeout_ms), signal, onUpdate && emitProgress);
 
 				if (signal?.aborted) {
 					// Pure observation: abort ends the wait without consuming output.
 					throw new Error("Status check aborted");
 				}
 
-				const sections: string[] = [];
-				let singleDetails: FormattedOutput["details"];
-				let failed = false;
-				let runningCount = 0;
-				let cancelledCount = 0;
-				let exitedCount = 0;
-				for (const record of records) {
-					const { text, details } = formatShellOutput(registry.readAndAdvance(record), record.output.path);
-					singleDetails = details;
-					let label: string;
-					if (record.cancelled) {
-						// Preempted by cancel: non-error with output-so-far. The
-						// cancel call is the completing read, not this one.
-						label = `${record.id} · cancelled`;
-						cancelledCount += 1;
-					} else if (!record.exited) {
-						label = `${record.id} · still running`;
-						runningCount += 1;
-					} else {
-						// Completing read: report exit exactly once, forget the record.
-						registry.completeRead(record.id);
-						label = multi ? `${record.id} · ${exitLabel(record)}` : exitLabel(record);
-						exitedCount += 1;
-						if (record.exitCode !== 0 && record.exitCode !== null && !record.allowNonzero) failed = true;
-					}
-					sections.push(appendStatus(text, label));
+				const readings = consumeReadings(registry, records);
+				const combined = readings
+					.map((reading) => appendStatus(reading.formatted.text, readingLabel(reading, multi)))
+					.join("\n\n");
+				if (readings.some((reading) => reading.outcome.kind === "exited" && reading.outcome.completion.failed)) {
+					throw new Error(combined);
 				}
 
-				const combined = sections.join("\n\n");
-				if (failed) throw new Error(combined);
-
-				const state = !multi && cancelledCount ? "cancelled" : "success";
-				const qualifiers = multi
-					? [
-							...(exitedCount ? [`${exitedCount} exited`] : []),
-							...(runningCount ? [`${runningCount} running`] : []),
-							...(cancelledCount ? [`${cancelledCount} cancelled`] : []),
-						]
-					: runningCount
-						? ["still running"]
-						: undefined;
+				const cancelled = !multi && readings.some((reading) => reading.outcome.kind === "cancelled");
 				return {
 					content: [{ type: "text", text: combined }],
-					details: withTraceDetails(multi ? undefined : singleDetails, state, qualifiers),
+					details: withTraceDetails(
+						multi ? undefined : readings.find(() => true)?.formatted.details,
+						cancelled ? "cancelled" : "success",
+						resultQualifiers(readings, multi),
+					),
 				};
 			} finally {
-				if (updateTimer) clearInterval(updateTimer);
-				for (const record of began) registry.endRead(record);
+				for (const record of records) registry.endRead(record);
 			}
 		},
 		renderCall: traceRenderer.renderCall,

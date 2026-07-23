@@ -115,6 +115,28 @@ export interface TrackInput {
 	allowNonzero?: boolean;
 }
 
+/**
+ * Disposition of a completed process: exit code + acceptance policy →
+ * failure verdict, status label, and trace qualifiers. The single home for
+ * exit classification; command and status only decide when completion is
+ * observed. Signal termination (`exitCode === null`) is a labeled success:
+ * the kill paths (cancel, killAll, an external kill) all mean someone chose
+ * to stop the process, not that the command failed.
+ */
+export interface ShellCompletion {
+	failed: boolean;
+	label: string;
+	/** Present only for noteworthy outcomes (signal, accepted non-zero). */
+	qualifiers?: string[];
+}
+
+export function classifyCompletion(exitCode: number | null, allowNonzero: boolean): ShellCompletion {
+	if (exitCode === null) return { failed: false, label: "exited (signal)", qualifiers: ["signal"] };
+	if (exitCode === 0) return { failed: false, label: "exited 0" };
+	if (allowNonzero) return { failed: false, label: `exited ${exitCode}`, qualifiers: [`exit ${exitCode}`] };
+	return { failed: true, label: `exited ${exitCode}` };
+}
+
 export interface ShellProcessRecord extends TrackInput {
 	id: string;
 	cursor: number;

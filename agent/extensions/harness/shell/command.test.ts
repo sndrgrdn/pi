@@ -56,9 +56,7 @@ describe("shell_command", () => {
 
 	it("nonzero exit on a completed run is a tool error with output", async () => {
 		const { tool } = makeTool();
-		await expect(run(tool, { command: "echo oops >&2; exit 7" })).rejects.toThrow(
-			/oops[\s\S]*Command exited with code 7/,
-		);
+		await expect(run(tool, { command: "echo oops >&2; exit 7" })).rejects.toThrow(/oops[\s\S]*exited 7/);
 	});
 
 	it("nonexistent workdir errors immediately", async () => {

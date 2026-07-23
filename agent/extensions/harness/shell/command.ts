@@ -23,6 +23,7 @@ import { appendStatus, formatShellOutput, UPDATE_THROTTLE_MS } from "./output.ts
 import {
 	type BackgroundShellRegistry,
 	clampTimeoutMs,
+	classifyCompletion,
 	DEFAULT_TIMEOUT_MS,
 	killProcessTree,
 	MAX_TIMEOUT_MS,
@@ -195,22 +196,15 @@ export function createShellCommandTool(registry: BackgroundShellRegistry): ToolD
 				if (signal?.aborted) {
 					throw new Error(appendStatus(text, "Command aborted"));
 				}
-				if (exitCode !== 0 && exitCode !== null && !params.allow_nonzero) {
-					throw new Error(appendStatus(text, `Command exited with code ${exitCode}`));
+				const completion = classifyCompletion(exitCode, params.allow_nonzero === true);
+				if (completion.failed) {
+					throw new Error(appendStatus(text, completion.label));
 				}
-				if (exitCode === null) {
-					// Signal termination is a labeled success, matching the
-					// background completing read: someone chose to stop it.
+				if (completion.qualifiers) {
+					// Noteworthy but accepted: signal termination or an allowed non-zero exit.
 					return {
-						content: [{ type: "text", text: appendStatus(text, "exited (signal)") }],
-						details: withTraceDetails(details, "success", ["signal"]),
-					};
-				}
-				if (exitCode !== 0) {
-					// allow_nonzero: expected failure, exit code delivered as data.
-					return {
-						content: [{ type: "text", text: appendStatus(text, `exited ${exitCode}`) }],
-						details: withTraceDetails(details, "success", [`exit ${exitCode}`]),
+						content: [{ type: "text", text: appendStatus(text, completion.label) }],
+						details: withTraceDetails(details, "success", completion.qualifiers),
 					};
 				}
 				return {
