@@ -20,7 +20,7 @@
   "packages": [
     "npm:pi-mcp-adapter@2.11.0"
   ],
-  "theme": "catppuccin-mocha",
+  "theme": "catppuccin-macchiato",
   "quietStartup": false,
   "showCacheMissNotices": true,
   "autocompleteMaxVisible": 10,
