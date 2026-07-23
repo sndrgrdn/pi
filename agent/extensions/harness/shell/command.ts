@@ -201,7 +201,8 @@ export function createShellCommandTool(registry: BackgroundShellRegistry): ToolD
 					throw new Error(appendStatus(text, completion.label));
 				}
 				if (completion.qualifiers) {
-					// Noteworthy but accepted: signal termination or an allowed non-zero exit.
+					// Qualifiers gate the label: only noteworthy outcomes earn a
+					// status line; a clean exit returns bare output.
 					return {
 						content: [{ type: "text", text: appendStatus(text, completion.label) }],
 						details: withTraceDetails(details, "success", completion.qualifiers),

@@ -137,7 +137,6 @@ function consumeReadings(registry: BackgroundShellRegistry, records: readonly Sh
 		} else if (!record.exited) {
 			outcome = { kind: "running" };
 		} else {
-			// Completing read: report exit exactly once, forget the record.
 			registry.completeRead(record.id);
 			outcome = { kind: "exited", completion: classifyCompletion(record.exitCode, record.allowNonzero === true) };
 		}

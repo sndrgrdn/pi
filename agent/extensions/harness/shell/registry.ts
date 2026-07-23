@@ -115,14 +115,8 @@ export interface TrackInput {
 	allowNonzero?: boolean;
 }
 
-/**
- * Disposition of a completed process: exit code + acceptance policy →
- * failure verdict, status label, and trace qualifiers. The single home for
- * exit classification; command and status only decide when completion is
- * observed. Signal termination (`exitCode === null`) is a labeled success:
- * the kill paths (cancel, killAll, an external kill) all mean someone chose
- * to stop the process, not that the command failed.
- */
+/** Disposition of a completed process: failure verdict, status label, and
+ * trace qualifiers. */
 export interface ShellCompletion {
 	failed: boolean;
 	label: string;
@@ -130,6 +124,13 @@ export interface ShellCompletion {
 	qualifiers?: string[];
 }
 
+/**
+ * The single home for exit classification: exit code + acceptance policy →
+ * disposition. Command and status only decide when completion is observed.
+ * Signal termination (`exitCode === null`) is a labeled success: every kill
+ * path (cancel, killAll, an external kill) means someone chose to stop the
+ * process, not that the command failed.
+ */
 export function classifyCompletion(exitCode: number | null, allowNonzero: boolean): ShellCompletion {
 	if (exitCode === null) return { failed: false, label: "exited (signal)", qualifiers: ["signal"] };
 	if (exitCode === 0) return { failed: false, label: "exited 0" };
