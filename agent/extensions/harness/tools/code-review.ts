@@ -120,7 +120,7 @@ export function createCodeReviewTool(
 		key: "review",
 		name: "code_review",
 		description:
-			"Run a formal Code Review only when the user explicitly requests one. Never use merely to inspect changes for context. If the merge base is ambiguous, ask the user first; never assume main or master.",
+			"Run a formal Code Review only when the user explicitly requests one. Never use merely to inspect changes for context. Uncommitted or staged work, named refs, and explicit ranges are unambiguous: call directly. Ask the user only when the review needs a merge base nobody named; never assume main or master.",
 		parameters: Type.Object({
 			diff_description: Type.String({ description: "Explicit free-text description of the diff to review." }),
 			files: Type.Optional(Type.Array(Type.String())),
