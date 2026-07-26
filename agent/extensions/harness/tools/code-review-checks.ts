@@ -14,7 +14,7 @@ import {
 	submittedCheckCommentSchema,
 } from "./review-comment.ts";
 
-/** The `run_check` wire shape (new-Amp lineage), sent by the main reviewer child. */
+/** The `run_check` wire shape. */
 export interface CheckRunParams {
 	checkName: string;
 	checkURI: string;
@@ -95,8 +95,8 @@ export class CheckCoordinator {
 
 	/**
 	 * Run one Check child, retrying once on error. Returns only a one-line
-	 * summary: full Comments stay captured here so the main reviewer cannot
-	 * copy or drop them — the merge is mechanical.
+	 * summary: full Comments stay captured here for the mechanical merge and
+	 * never reach the main reviewer. Rerunning a Check replaces its capture.
 	 */
 	async run(params: CheckRunParams): Promise<string> {
 		const entry = await this.resolve(params.checkURI);

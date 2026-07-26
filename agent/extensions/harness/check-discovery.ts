@@ -2,7 +2,7 @@
  * Check discovery — finds the Checks (Markdown-defined mechanical review
  * scans) that apply to a working directory and refines them into typed
  * definitions. Precedence: nearest ancestor `.agents/checks` first, then the
- * global roots, first name wins — mirroring pi's skill collision policy.
+ * global roots, first name wins.
  */
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";

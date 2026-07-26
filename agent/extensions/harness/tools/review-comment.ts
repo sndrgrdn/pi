@@ -29,7 +29,7 @@ export interface ReviewComment {
 
 const severitySchema = Type.Union(reviewSeverities.map((severity) => Type.Literal(severity)));
 
-/** A line range from submitted endpoints; `undefined` when no line was given. */
+/** Validate submitted endpoints into a range: `endLine` requires a start line and may not precede it. */
 export function parseLocation(
 	line: number | undefined,
 	endLine: number | undefined,
@@ -46,7 +46,7 @@ export function parseLocation(
 	return { startLine: line, endLine };
 }
 
-/** `submit_review` wire shape; the line range is omitted for Comments on deleted files. */
+/** `submit_review` wire shape; the line range may be omitted — deleted files have no new-side lines. */
 export interface SubmittedComment {
 	filename: string;
 	startLine?: number;

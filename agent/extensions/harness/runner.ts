@@ -99,9 +99,9 @@ export interface RunOptions {
 	toolbox?: ChildToolboxFactory;
 	signal?: AbortSignal;
 	/**
-	 * Defaults to required. Set to "optional" only alongside a toolbox whose
-	 * terminating submit tool captures the result the final assistant message
-	 * would otherwise carry (the agent-tool factory couples the two).
+	 * Defaults to required. Set to "optional" only when the caller captures
+	 * the result some other way — the agent-tool factory sets it exactly when
+	 * a plan supplies a capture-based finalize.
 	 */
 	finalMessage?: "required" | "optional";
 }
