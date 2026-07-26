@@ -1,4 +1,5 @@
-import { basename, dirname } from "node:path";
+import { readFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
@@ -47,9 +48,10 @@ interface CheckCoordinatorOptions {
 	parentSession?: string;
 }
 
-const checkSystemPrompt = `You run one Code Review Check against an explicitly described diff.
-Inspect only; never modify files. Follow the supplied Check instructions and report only issues caused by the diff.
-Finish by calling submit_check exactly once. Do not write a final assistant message.`;
+const checkSystemPrompt = readFileSync(
+	join(dirname(fileURLToPath(import.meta.url)), "..", "agents", "prompts", "check.md"),
+	"utf8",
+).trim();
 
 function checkMessage(params: CheckRunParams, check: CheckDefinition): string {
 	return [
