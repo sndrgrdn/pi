@@ -68,9 +68,7 @@ describe("shell_command", () => {
 			command:
 				'printf "%s\\n%s\\n%s\\n%s\\n%s" "$PI_SESSION_ID" "$PI_SESSION_FILE" "$PI_PROVIDER" "$PI_MODEL" "$PI_REASONING_LEVEL"',
 		});
-		expect(result.content[0].text).toBe(
-			"session-test\n/tmp/session-test.jsonl\nopenai-codex\ngpt-5.4\nhigh",
-		);
+		expect(result.content[0].text).toBe("session-test\n/tmp/session-test.jsonl\nopenai-codex\ngpt-5.4\nhigh");
 	});
 
 	it("nonzero exit on a completed run is a tool error with output", async () => {
