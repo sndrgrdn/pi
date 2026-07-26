@@ -19,7 +19,3 @@ GitHub Issues in `sndrgrdn/pi`; pull requests are not a triage surface. See `doc
 ### Domain docs
 
 Single-context. See `docs/agents/domain.md`.
-
-### Checks
-
-Authoring format and path scoping. See `docs/agents/checks.md`.

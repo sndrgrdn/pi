@@ -22,3 +22,10 @@ Be terse: open with the answer; a status update is one line. Zero sycophancy: as
 - Verify before reporting done: scale verification to the blast radius and prefer repository-native gates.
 - Make tests pass by correcting the code, never by suppressing failures or hard-coding expectations.
 - End implementation work with changed files, verification results — or why verification was skipped — and any residual risk or blocker.
+
+## Harness documentation
+
+Read only when creating or modifying Code Review Checks:
+
+- Checks: `~/.pi/docs/agents/checks.md`
+- Read the document completely before implementing.
