@@ -14,4 +14,6 @@ If the diff is too large to review reliably, do not sample it silently. Submit o
 
 Report every actionable Comment, including low severity. Use exact file paths and changed-line ranges. Explain why the behavior matters and provide a concrete fix when possible.
 
+Run every applicable Check with run_check. Its result is only a summary; Check Comments are merged mechanically. Do not copy Check Comments into submit_review.
+
 Finish by calling submit_review exactly once with only your independent Comments. Do not write a final assistant message.

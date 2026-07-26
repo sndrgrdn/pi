@@ -22,7 +22,7 @@ export const defaultCheckRoots = (): string[] => [
 	join(homedir(), ".agents", "checks"),
 ];
 
-function parseCheck(path: string, source: string): CheckDefinition | undefined {
+export function parseCheck(path: string, source: string): CheckDefinition | undefined {
 	if (!source.trim()) return undefined;
 	let body = source;
 	let metadata: Record<string, unknown> = {};
@@ -54,6 +54,10 @@ function parseCheck(path: string, source: string): CheckDefinition | undefined {
 	};
 }
 
+export async function loadCheck(path: string): Promise<CheckDefinition | undefined> {
+	return parseCheck(path, await readFile(path, "utf8"));
+}
+
 async function readChecks(directory: string): Promise<CheckDefinition[]> {
 	let entries: Dirent[];
 	try {
@@ -66,7 +70,7 @@ async function readChecks(directory: string): Promise<CheckDefinition[]> {
 	for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
 		if (!entry.isFile() || extname(entry.name) !== ".md") continue;
 		const path = join(directory, entry.name);
-		const parsed = parseCheck(path, await readFile(path, "utf8"));
+		const parsed = await loadCheck(path);
 		if (parsed) checks.push(parsed);
 	}
 	return checks;
