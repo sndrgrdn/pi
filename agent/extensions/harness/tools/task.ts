@@ -123,7 +123,7 @@ export function createTaskTool(
 		key: "task",
 		name: "task",
 		description:
-			"Delegate a scoped implementation or isolated verification job. Use Finder for codebase discovery, Oracle for a second opinion on an unresolved hard decision, and Librarian for external research.",
+			"Delegate a self-contained errand — parallel legwork, a noisy verification run, an independent sub-change. The main work you were asked for stays in your own context. Use Finder for codebase discovery, Oracle for a second opinion on an unresolved hard decision, and Librarian for external research.",
 		parameters: Type.Object({
 			prompt: Type.String({
 				description:
@@ -135,7 +135,7 @@ export function createTaskTool(
 					TASK_EFFORTS.map((effort) => Type.Literal(effort)),
 					{
 						description:
-							"Defaults to standard. Reserve high for exceptional assignments dominated by deep reasoning.",
+							"Omit — standard applies. Set high only when the user explicitly asked for high effort on this delegation.",
 					},
 				),
 			),
