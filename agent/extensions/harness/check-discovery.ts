@@ -1,3 +1,9 @@
+/**
+ * Check discovery — finds the Checks (Markdown-defined mechanical review
+ * scans) that apply to a working directory and refines them into typed
+ * definitions. Precedence: nearest ancestor `.agents/checks` first, then the
+ * global roots, first name wins — mirroring pi's skill collision policy.
+ */
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { loadMarkdownResource, type MarkdownResource, readMarkdownResources } from "./markdown-resources.ts";
@@ -61,6 +67,7 @@ export async function loadCheck(path: string): Promise<CheckDefinition | undefin
 	return resource && checkFromResource(resource);
 }
 
+/** Discover every applicable Check across the precedence walk; the first definition of a name wins. */
 export async function discoverChecks(options: CheckDiscoveryOptions): Promise<CheckDefinition[]> {
 	const discovered = new Map<string, CheckDefinition>();
 	for (const directory of checkDirectories(options)) {

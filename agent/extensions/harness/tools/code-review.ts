@@ -34,6 +34,7 @@ interface CodeReviewOptions {
 	globalRoots?: readonly string[];
 }
 
+/** The deterministic output contract: order by file, severity (low last), location, text. */
 function formatReview(comments: readonly ReviewComment[], checks: readonly CheckCatalogEntry[]): string {
 	const ordered = [...comments].sort(
 		(a, b) =>

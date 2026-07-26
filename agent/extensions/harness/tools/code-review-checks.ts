@@ -14,6 +14,7 @@ import {
 	submittedCheckCommentSchema,
 } from "./review-comment.ts";
 
+/** The `run_check` wire shape (new-Amp lineage), sent by the main reviewer child. */
 export interface CheckRunParams {
 	checkName: string;
 	checkURI: string;
@@ -74,7 +75,7 @@ function isAllowedCheckDirectory(directory: string, allowed: readonly string[]):
 	return basename(directory) === "checks" && basename(dirname(directory)) === ".agents";
 }
 
-/** Coordinates URI-identified Check discovery state, execution, and normalized findings. */
+/** Owns the URI-identified Check catalog: execution, retry, synthesis gating, and captured Comments. */
 export class CheckCoordinator {
 	private readonly catalog = new Map<string, MutableCheckCatalogEntry>();
 	private readonly options: CheckCoordinatorOptions;
@@ -92,6 +93,11 @@ export class CheckCoordinator {
 		return [...this.catalog.values()].flatMap((entry) => entry.comments);
 	}
 
+	/**
+	 * Run one Check child, retrying once on error. Returns only a one-line
+	 * summary: full Comments stay captured here so the main reviewer cannot
+	 * copy or drop them — the merge is mechanical.
+	 */
 	async run(params: CheckRunParams): Promise<string> {
 		const entry = await this.resolve(params.checkURI);
 		if (params.checkName !== entry.definition.name)
@@ -178,6 +184,7 @@ export class CheckCoordinator {
 		return entry;
 	}
 
+	/** The synthesis boundary: catalog hit, else canonicalized URI, else gate the directory and load the file. */
 	private async resolve(uriValue: string): Promise<MutableCheckCatalogEntry> {
 		const direct = this.catalog.get(uriValue);
 		if (direct) return direct;
