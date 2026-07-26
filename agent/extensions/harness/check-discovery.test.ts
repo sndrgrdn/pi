@@ -105,6 +105,19 @@ describe("discoverChecks", () => {
 		);
 	});
 
+	it("rejects malformed and non-object frontmatter loudly, naming the file", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-checks-frontmatter-"));
+		await check(root, "repo", "malformed.md", "---\nseverity-default: [high\n---\nInstructions.");
+		await expect(discoverChecks({ cwd: join(root, "repo"), globalRoots: [] })).rejects.toThrow(
+			/malformed\.md.*invalid YAML frontmatter/,
+		);
+		const otherRoot = await mkdtemp(join(tmpdir(), "pi-checks-frontmatter-"));
+		await check(otherRoot, "repo", "scalar.md", "---\nhigh\n---\nInstructions.");
+		await expect(discoverChecks({ cwd: join(otherRoot, "repo"), globalRoots: [] })).rejects.toThrow(
+			/scalar\.md.*frontmatter must be a YAML object/,
+		);
+	});
+
 	it("parses a valid severity-default and defaults to medium", async () => {
 		const root = await mkdtemp(join(tmpdir(), "pi-checks-severity-ok-"));
 		await check(root, "repo", "strict.md", "---\nseverity-default: critical\n---\nInstructions.");

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { lstat, realpath } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
@@ -78,9 +79,18 @@ function checkMessage(params: CheckRunParams, check: CheckDefinition): string {
 }
 
 /** Self-discovered Checks must come from a `.agents/checks` directory or a configured global root. */
-function isAllowedCheckDirectory(directory: string, allowed: readonly string[]): boolean {
-	if (allowed.includes(directory)) return true;
-	return basename(directory) === "checks" && basename(dirname(directory)) === ".agents";
+async function isAllowedCheckDirectory(directory: string, allowed: readonly string[], cwd: string): Promise<boolean> {
+	const realDirectory = await realpath(directory);
+	for (const candidate of allowed) {
+		try {
+			if ((await realpath(candidate)) === realDirectory) return true;
+		} catch {
+			// Missing discovery roots authorize nothing.
+		}
+	}
+	if (basename(realDirectory) !== "checks" || basename(dirname(realDirectory)) !== ".agents") return false;
+	const fromCwd = relative(await realpath(cwd), realDirectory);
+	return fromCwd !== ".." && !fromCwd.startsWith(`..${sep}`) && !isAbsolute(fromCwd);
 }
 
 /** Owns the URI-identified Check catalog: execution, retry, synthesis gating, and captured Comments. */
@@ -212,7 +222,13 @@ export class CheckCoordinator {
 		const canonicalURI = pathToFileURL(path).href;
 		const canonical = this.catalog.get(canonicalURI);
 		if (canonical) return canonical;
-		if (!isAllowedCheckDirectory(dirname(path), this.options.allowedDirectories)) {
+		try {
+			if ((await lstat(path)).isSymbolicLink())
+				throw new Error(`Check URI ${JSON.stringify(uriValue)} is a symlink`);
+		} catch (error) {
+			if (error instanceof Error && error.message.includes(" is a symlink")) throw error;
+		}
+		if (!(await isAllowedCheckDirectory(dirname(path), this.options.allowedDirectories, this.options.cwd))) {
 			const valid = [...this.catalog.values()].map((entry) => `${entry.definition.name}: ${entry.uri}`).join(", ");
 			throw new Error(
 				`Check URI ${JSON.stringify(uriValue)} is outside every .agents/checks directory and configured global root. Valid Checks: ${valid || "none"}`,

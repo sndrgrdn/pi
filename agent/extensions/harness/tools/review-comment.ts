@@ -18,7 +18,7 @@ export interface ReviewLocation {
 }
 
 export interface ReviewComment {
-	filename: string;
+	filename?: string;
 	location?: ReviewLocation;
 	severity: ReviewSeverity;
 	text: string;
@@ -48,7 +48,7 @@ export function parseLocation(
 
 /** `submit_review` wire shape; the line range may be omitted — deleted files have no new-side lines. */
 export interface SubmittedComment {
-	filename: string;
+	filename?: string;
 	startLine?: number;
 	endLine?: number;
 	severity: ReviewSeverity;
@@ -58,7 +58,7 @@ export interface SubmittedComment {
 }
 
 export const submittedCommentSchema = Type.Object({
-	filename: Type.String(),
+	filename: Type.Optional(Type.String()),
 	startLine: Type.Optional(Type.Integer({ minimum: 1 })),
 	endLine: Type.Optional(Type.Integer({ minimum: 1 })),
 	severity: severitySchema,

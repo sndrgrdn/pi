@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -194,6 +194,26 @@ No checks were run.
 		expect(textOf(result)).toContain("**HIGH** — Deleting this drops the only retry path.");
 	});
 
+	it("renders filename-less protocol Comments before file Comments", async () => {
+		const run = vi.fn(async (options: RunOptions) => {
+			await submit(options, [
+				{ filename: "a.ts", severity: "low", text: "File comment." },
+				{ severity: "high", text: "Split this review into a smaller diff." },
+			]);
+			return { sessionID: "review-protocol", answer: "", toolLog: [] };
+		});
+		const result = await createCodeReviewTool({ run } as any, BUILTIN_PROFILES, { globalRoots: [] }).execute(
+			"call",
+			{ diff_description: "HEAD" },
+			undefined,
+			undefined,
+			context,
+		);
+		const text = textOf(result);
+		expect(text).toContain("### Review\n- **HIGH** — Split this review into a smaller diff.");
+		expect(text.indexOf("### Review")).toBeLessThan(text.indexOf("### a.ts"));
+	});
+
 	it("runs a discovered Check through the main toolbox and merges its submitted issues", async () => {
 		const root = await mkdtemp(join(tmpdir(), "pi-review-run-check-"));
 		const checksDirectory = join(root, ".agents", "checks");
@@ -377,6 +397,47 @@ No checks were run.
 		);
 		expect(textOf(result)).toContain("- known — **not-run**");
 		expect(textOf(result)).toContain("- synthesized — **ran with 0 issues**");
+	});
+
+	it("rejects synthesized Checks outside the review cwd and symlinked Check files", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-review-check-gate-"));
+		const repo = join(root, "repo");
+		const outsideCheck = join(root, "outside", ".agents", "checks", "outside.md");
+		const secret = join(root, "secret.md");
+		const linkedCheck = join(repo, ".agents", "checks", "linked.md");
+		await mkdir(join(repo, ".agents", "checks"), { recursive: true });
+		await mkdir(join(root, "outside", ".agents", "checks"), { recursive: true });
+		await writeFile(outsideCheck, "Outside instructions.");
+		await writeFile(secret, "Secret instructions.");
+		await symlink(secret, linkedCheck);
+		const run = vi.fn(async (options: RunOptions) => {
+			const tool = childTool(options, "run_check");
+			for (const candidate of [outsideCheck, linkedCheck]) {
+				await expect(
+					tool.execute(
+						"run",
+						{
+							checkName: "outside",
+							checkURI: pathToFileURL(candidate).href,
+							diffDescription: "HEAD",
+							instructions: "Run.",
+						},
+						undefined,
+						undefined,
+						context,
+					),
+				).rejects.toThrow(/outside every|symlink/);
+			}
+			await submit(options, []);
+			return { sessionID: "main", answer: "", toolLog: [] };
+		});
+		await createCodeReviewTool({ run } as any, BUILTIN_PROFILES, { globalRoots: [] }).execute(
+			"call",
+			{ diff_description: "HEAD" },
+			undefined,
+			undefined,
+			{ cwd: repo } as any,
+		);
 	});
 
 	it("keeps same-name Check statuses isolated by URI and validates the supplied name", async () => {

@@ -52,7 +52,7 @@ Use severity consistently:
 - medium: real defect or maintainability problem with bounded impact
 - low: minor but actionable improvement
 
-If the diff has more than 100 changed files or 10,000 changed lines, do not sample it silently. Submit one high-severity Comment explaining that the review must be split into a smaller diff.
+If the diff has more than 100 changed files or 10,000 changed lines, abort the review: do not inspect a sample and do not run Checks. Submit exactly one filename-less high-severity Comment explaining that the review must be split into a smaller diff, then stop.
 
 Report every actionable Comment, including low severity. Use exact file paths as they appear in the diff header. Line numbers follow the new version of each file (the + side of hunk headers); for added files, number from the new content; for deleted files, omit the line numbers and describe the deletion in the Comment text. Verify every Comment's line numbers against the file content before submitting. Explain why the behavior matters and provide a concrete fix when possible.
 

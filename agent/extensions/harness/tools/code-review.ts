@@ -50,7 +50,7 @@ const submitReviewTraceRenderer = createTraceRenderer<{ comments: SubmittedComme
 function formatReview(comments: readonly ReviewComment[], checks: readonly CheckCatalogEntry[]): string {
 	const ordered = [...comments].sort(
 		(a, b) =>
-			a.filename.localeCompare(b.filename) ||
+			(a.filename ?? "").localeCompare(b.filename ?? "") ||
 			reviewSeverities.indexOf(a.severity) - reviewSeverities.indexOf(b.severity) ||
 			(a.location?.startLine ?? Number.MAX_SAFE_INTEGER) - (b.location?.startLine ?? Number.MAX_SAFE_INTEGER) ||
 			(a.location?.endLine ?? Number.MAX_SAFE_INTEGER) - (b.location?.endLine ?? Number.MAX_SAFE_INTEGER) ||
@@ -59,11 +59,13 @@ function formatReview(comments: readonly ReviewComment[], checks: readonly Check
 	const lines = ["## Comments", ""];
 	if (!ordered.length) lines.push("No comments.");
 	let filename: string | undefined;
+	let firstComment = true;
 	for (const comment of ordered) {
-		if (filename !== comment.filename) {
-			if (filename !== undefined) lines.push("");
+		if (firstComment || filename !== comment.filename) {
+			if (!firstComment) lines.push("");
 			filename = comment.filename;
-			lines.push(`### ${filename}`);
+			lines.push(`### ${filename ?? "Review"}`);
+			firstComment = false;
 		}
 		const location = comment.location
 			? comment.location.startLine === comment.location.endLine

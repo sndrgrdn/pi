@@ -18,7 +18,7 @@ export interface MarkdownResource {
 	path: string;
 }
 
-/** Parse one resource; `undefined` when the body is empty. Unparseable frontmatter is body text. */
+/** Parse one resource; `undefined` when the body is empty. */
 export function parseMarkdownResource(path: string, source: string): MarkdownResource | undefined {
 	if (!source.trim()) return undefined;
 	let body = source;
@@ -27,11 +27,15 @@ export function parseMarkdownResource(path: string, source: string): MarkdownRes
 	if (match) {
 		try {
 			const parsed = parse(match[1] ?? "");
-			if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) frontmatter = parsed;
-			body = source.slice(match[0].length);
-		} catch {
-			// Unparseable frontmatter is treated as body text.
+			if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+				throw new Error("frontmatter must be a YAML object");
+			frontmatter = parsed;
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			if (message === "frontmatter must be a YAML object") throw new Error(`${path}: ${message}`);
+			throw new Error(`${path}: invalid YAML frontmatter: ${message}`);
 		}
+		body = source.slice(match[0].length);
 	}
 	const trimmed = body.trim();
 	if (!trimmed) return undefined;
