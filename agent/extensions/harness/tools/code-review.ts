@@ -85,6 +85,7 @@ function reviewMessage(params: CodeReviewParams, checks: readonly CheckDefinitio
 		params.instructions ? `Additional instructions: ${params.instructions}` : undefined,
 		"Also discover any additional applicable .agents/checks/*.md files for the changed paths and call run_check once for each applicable Check.",
 		'Use this argument shape: { "checkName": "...", "checkURI": "file://...", "diffDescription": "...", "files": ["..."], "instructions": "..." }.',
+		"For diffDescription, pass the exact commands you used to resolve the diff so Checks skip re-deriving them.",
 		checks.length
 			? [
 					"Pre-discovered Checks:",
