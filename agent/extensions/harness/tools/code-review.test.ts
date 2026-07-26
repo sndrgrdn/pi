@@ -117,11 +117,88 @@ No checks were run.
 
 		const message = run.mock.calls[0]?.[0].message;
 		expect(message).toContain(
-			"Also discover any additional applicable .agents/checks/*.md files for the changed paths and call run_check once for each applicable Check.",
+			"Also discover any additional .agents/checks/*.md files and call run_check once for every discovered Check. Do not skip Checks or judge applicability.",
 		);
 		expect(message).toContain('<check name="error-paths" severity-default="high"');
 		expect(message).toContain("Description: Error handling\n\nFind swallowed errors.\n</check>");
 		expect(textOf(result)).toContain("## Checks\n- error-paths — **not-run**");
+	});
+
+	it("renders Check globs and briefs scoped children with home-relative semantics", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-review-globs-"));
+		const packageRoot = join(root, "packages", "app");
+		const checkPath = join(packageRoot, ".agents", "checks", "workers.md");
+		await mkdir(join(packageRoot, ".agents", "checks"), { recursive: true });
+		await writeFile(
+			checkPath,
+			"---\nname: workers\nglobs:\n  - app/workers/**\n  - lib/**/*.ts\n---\nInspect workers.",
+		);
+		const run = vi.fn(async (options: RunOptions) => {
+			if (options.definition.model === BUILTIN_PROFILES.agents.review.check.model) {
+				expect(options.message).toContain(
+					`Scan only changed files matching these globs: app/workers/**, lib/**/*.ts. Resolve them relative to the Check's home directory: ${packageRoot}. If no changed files match, submit zero issues.`,
+				);
+				await childTool(options, "submit_check").execute("submit", { issues: [] }, undefined, undefined, context);
+				return { sessionID: "check", answer: "", toolLog: [] };
+			}
+			expect(options.message).toContain('globs="app/workers/**,lib/**/*.ts"');
+			await childTool(options, "run_check").execute(
+				"run",
+				{
+					checkName: "workers",
+					checkURI: pathToFileURL(checkPath).href,
+					diffDescription: "fixed-point...HEAD",
+					instructions: "Run.",
+				},
+				undefined,
+				undefined,
+				context,
+			);
+			await submit(options, []);
+			return { sessionID: "main", answer: "", toolLog: [] };
+		});
+		await createCodeReviewTool({ run } as any, BUILTIN_PROFILES, { globalRoots: [] }).execute(
+			"call",
+			{ diff_description: "fixed-point...HEAD" },
+			undefined,
+			undefined,
+			{ cwd: packageRoot } as any,
+		);
+	});
+
+	it("does not add a scope paragraph to an unscoped Check child", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-review-unscoped-"));
+		const checkPath = join(root, ".agents", "checks", "all.md");
+		await mkdir(join(root, ".agents", "checks"), { recursive: true });
+		await writeFile(checkPath, "Inspect everything.");
+		const run = vi.fn(async (options: RunOptions) => {
+			if (options.definition.model === BUILTIN_PROFILES.agents.review.check.model) {
+				expect(options.message).not.toContain("Scan only changed files matching these globs");
+				await childTool(options, "submit_check").execute("submit", { issues: [] }, undefined, undefined, context);
+				return { sessionID: "check", answer: "", toolLog: [] };
+			}
+			await childTool(options, "run_check").execute(
+				"run",
+				{
+					checkName: "all",
+					checkURI: pathToFileURL(checkPath).href,
+					diffDescription: "HEAD",
+					instructions: "Run.",
+				},
+				undefined,
+				undefined,
+				context,
+			);
+			await submit(options, []);
+			return { sessionID: "main", answer: "", toolLog: [] };
+		});
+		await createCodeReviewTool({ run } as any, BUILTIN_PROFILES, { globalRoots: [] }).execute(
+			"call",
+			{ diff_description: "HEAD" },
+			undefined,
+			undefined,
+			{ cwd: root } as any,
+		);
 	});
 
 	it("briefs the check child with the severity-default and applies it to omitted severities", async () => {

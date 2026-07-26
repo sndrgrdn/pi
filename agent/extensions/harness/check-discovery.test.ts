@@ -128,4 +128,26 @@ describe("discoverChecks", () => {
 			["strict", "critical"],
 		]);
 	});
+
+	it("normalizes globs from a string or list and leaves unscoped Checks undefined", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-checks-globs-"));
+		await check(root, "repo", "single.md", "---\nglobs: app/workers/**\n---\nInstructions.");
+		await check(root, "repo", "multiple.md", "---\nglobs:\n  - app/jobs/**\n  - lib/**/*.ts\n---\nInstructions.");
+		await check(root, "repo", "unscoped.md", "Instructions.");
+
+		const checks = await discoverChecks({ cwd: join(root, "repo"), globalRoots: [] });
+		expect(checks.map(({ name, globs }) => [name, globs])).toEqual([
+			["multiple", ["app/jobs/**", "lib/**/*.ts"]],
+			["single", ["app/workers/**"]],
+			["unscoped", undefined],
+		]);
+	});
+
+	it("rejects malformed globs loudly, naming the file", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-checks-globs-invalid-"));
+		await check(root, "repo", "invalid.md", "---\nglobs: 42\n---\nInstructions.");
+		await expect(discoverChecks({ cwd: join(root, "repo"), globalRoots: [] })).rejects.toThrow(
+			/invalid\.md.*globs 42 must be a string or list of strings/,
+		);
+	});
 });

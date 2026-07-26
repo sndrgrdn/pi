@@ -97,15 +97,15 @@ function reviewMessage(params: CodeReviewParams, checks: readonly CheckDefinitio
 		`Diff description: ${params.diff_description}`,
 		params.files?.length ? `Focus files: ${params.files.join(", ")}` : undefined,
 		params.instructions ? `Additional instructions: ${params.instructions}` : undefined,
-		"Also discover any additional applicable .agents/checks/*.md files for the changed paths and call run_check once for each applicable Check.",
+		"Also discover any additional .agents/checks/*.md files and call run_check once for every discovered Check. Do not skip Checks or judge applicability.",
 		'Use this argument shape: { "checkName": "...", "checkURI": "file://...", "diffDescription": "...", "files": ["..."], "instructions": "..." }.',
-		"For diffDescription, pass the exact commands you used to resolve the diff so Checks skip re-deriving them.",
+		"For diffDescription, pass the original Diff description above unchanged; each Check resolves the diff itself.",
 		checks.length
 			? [
 					"Pre-discovered Checks:",
 					...checks.map((check) =>
 						[
-							`<check name="${escapeAttribute(check.name)}" severity-default="${escapeAttribute(check.severityDefault)}" uri="${escapeAttribute(pathToFileURL(check.path).href)}">`,
+							`<check name="${escapeAttribute(check.name)}" severity-default="${escapeAttribute(check.severityDefault)}"${check.globs ? ` globs="${escapeAttribute(check.globs.join(","))}"` : ""} uri="${escapeAttribute(pathToFileURL(check.path).href)}">`,
 							check.description ? `Description: ${check.description}` : undefined,
 							check.description ? "" : undefined,
 							check.body,

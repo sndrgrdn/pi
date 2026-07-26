@@ -63,7 +63,13 @@ const checkSystemPrompt = readFileSync(
 	"utf8",
 ).trim();
 
-function checkMessage(params: CheckRunParams, check: CheckDefinition): string {
+function checkHome(check: CheckDefinition, cwd: string): string {
+	const localHome = dirname(dirname(dirname(check.path)));
+	const fromCwd = relative(cwd, localHome);
+	return fromCwd === ".." || fromCwd.startsWith(`..${sep}`) || isAbsolute(fromCwd) ? cwd : localHome;
+}
+
+function checkMessage(params: CheckRunParams, check: CheckDefinition, cwd: string): string {
 	return [
 		`Check: ${check.name}`,
 		check.description ? `Description: ${check.description}` : undefined,
@@ -71,6 +77,9 @@ function checkMessage(params: CheckRunParams, check: CheckDefinition): string {
 		`Diff description: ${params.diffDescription}`,
 		params.files?.length ? `Relevant files: ${params.files.join(", ")}` : undefined,
 		`Invocation brief: ${params.instructions}`,
+		check.globs
+			? `Scan only changed files matching these globs: ${check.globs.join(", ")}. Resolve them relative to the Check's home directory: ${checkHome(check, cwd)}. If no changed files match, submit zero issues.`
+			: undefined,
 		"Check instructions:",
 		check.body,
 	]
@@ -159,7 +168,7 @@ export class CheckCoordinator {
 						reasoningEffort: route.reasoning,
 					},
 					cwd: this.options.cwd,
-					message: checkMessage(params, entry.definition),
+					message: checkMessage(params, entry.definition, this.options.cwd),
 					finalMessage: "optional",
 					signal: this.options.signal,
 					...(this.options.parentSession

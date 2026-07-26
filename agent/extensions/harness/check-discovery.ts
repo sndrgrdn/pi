@@ -13,6 +13,7 @@ export interface CheckDefinition {
 	name: string;
 	description?: string;
 	severityDefault: ReviewSeverity;
+	globs?: string[];
 	body: string;
 	path: string;
 }
@@ -53,10 +54,18 @@ function checkFromResource(resource: MarkdownResource): CheckDefinition {
 			);
 		severityDefault = parsed;
 	}
+	const rawGlobs = resource.frontmatter.globs;
+	let globs: string[] | undefined;
+	if (rawGlobs !== undefined) {
+		if (typeof rawGlobs === "string") globs = [rawGlobs];
+		else if (Array.isArray(rawGlobs) && rawGlobs.every((glob) => typeof glob === "string")) globs = rawGlobs;
+		else throw new Error(`${resource.path}: globs ${JSON.stringify(rawGlobs)} must be a string or list of strings`);
+	}
 	return {
 		name: resource.name,
 		description: resource.description,
 		severityDefault,
+		...(globs ? { globs } : {}),
 		body: resource.body,
 		path: resource.path,
 	};

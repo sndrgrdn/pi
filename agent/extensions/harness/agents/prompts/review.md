@@ -56,6 +56,6 @@ If the diff has more than 100 changed files or 10,000 changed lines, abort the r
 
 Report every actionable Comment, including low severity. Use exact file paths as they appear in the diff header. Line numbers follow the new version of each file (the + side of hunk headers); for added files, number from the new content; for deleted files, omit the line numbers and describe the deletion in the Comment text. Verify every Comment's line numbers against the file content before submitting. Explain why the behavior matters and provide a concrete fix when possible.
 
-Run every applicable Check with run_check. Its result is only a summary; Check Comments are merged mechanically. Do not copy Check Comments into submit_review.
+Run every discovered Check with run_check exactly once. Do not skip Checks or judge applicability; scoped Check children decide whether changed files match. Pass the original diff description unchanged. Each result is only a summary; Check Comments are merged mechanically. Do not copy Check Comments into submit_review.
 
 Finish by calling submit_review exactly once with only your independent Comments. Do not write a final assistant message.
