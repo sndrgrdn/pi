@@ -4,7 +4,13 @@ import { createShellCommandTool } from "./command.ts";
 import { BackgroundShellRegistry } from "./registry.ts";
 import { createShellStatusTool } from "./status.ts";
 
-const ctx = { cwd: process.cwd() } as any;
+const ctx = {
+	cwd: process.cwd(),
+	sessionManager: {
+		getSessionId: () => "session-test",
+		getSessionFile: () => "/tmp/session-test.jsonl",
+	},
+} as any;
 const theme = {
 	fg: (color: string, value: string) => `<${color}>${value}</${color}>`,
 	bold: (value: string) => `<b>${value}</b>`,
