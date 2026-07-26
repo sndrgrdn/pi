@@ -14,7 +14,7 @@ Before changing code, resolve and record the current `HEAD` commit SHA as the re
 
 Use `/tdd` where possible, at pre-agreed seams. Run focused tests and typechecking regularly, and the full test suite once at the end.
 
-Commit only this task's changes, then run `/deep-review` with the Design and Craft judges, explicitly passing the recorded fixed-point SHA and original work. Resolve or account for every finding and rerun affected checks.
+Commit only this task's changes, then call `code_review` exactly once with `git diff <fixed-point-sha>...HEAD` as the diff description, substituting the recorded SHA. Pass the original work item in `instructions` and ask the review to flag requirements that are missing or only partially implemented, behavior the work item did not request, and implementations that look wrong against the work item. Resolve or account for every Comment and rerun affected checks.
 
 Commit any review fixes to the current branch. Leave pre-existing changes untouched.
 
