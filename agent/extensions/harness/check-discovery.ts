@@ -14,6 +14,7 @@ export interface CheckDefinition {
 	description?: string;
 	severityDefault: ReviewSeverity;
 	globs?: string[];
+	scopeRoot?: string;
 	body: string;
 	path: string;
 }
@@ -42,8 +43,8 @@ export function checkDirectories(options: CheckDiscoveryOptions): string[] {
 	return directories;
 }
 
-/** Refine a Markdown resource into a Check; a malformed `severity-default` fails loudly, naming the file. */
-function checkFromResource(resource: MarkdownResource): CheckDefinition {
+/** Refine supported Check frontmatter, failing loudly with the file path when metadata is malformed. */
+function checkFromResource(resource: MarkdownResource, scopeRoot?: string): CheckDefinition {
 	const raw = resource.frontmatter["severity-default"];
 	let severityDefault: ReviewSeverity = "medium";
 	if (raw !== undefined) {
@@ -65,23 +66,27 @@ function checkFromResource(resource: MarkdownResource): CheckDefinition {
 		name: resource.name,
 		description: resource.description,
 		severityDefault,
-		...(globs ? { globs } : {}),
+		...(globs ? { globs, scopeRoot } : {}),
 		body: resource.body,
 		path: resource.path,
 	};
 }
 
-export async function loadCheck(path: string): Promise<CheckDefinition | undefined> {
+export async function loadCheck(path: string, scopeRoot?: string): Promise<CheckDefinition | undefined> {
 	const resource = await loadMarkdownResource(path);
-	return resource && checkFromResource(resource);
+	return resource && checkFromResource(resource, scopeRoot);
 }
 
 /** Discover every applicable Check across the precedence walk; the first definition of a name wins. */
 export async function discoverChecks(options: CheckDiscoveryOptions): Promise<CheckDefinition[]> {
 	const discovered = new Map<string, CheckDefinition>();
-	for (const directory of checkDirectories(options)) {
+	const globalRoots = options.globalRoots ?? defaultGlobalRoots();
+	const directories = checkDirectories({ ...options, globalRoots });
+	const localDirectoryCount = directories.length - globalRoots.length;
+	for (const [index, directory] of directories.entries()) {
+		const scopeRoot = index < localDirectoryCount ? dirname(dirname(directory)) : options.cwd;
 		for (const resource of await readMarkdownResources(directory)) {
-			const check = checkFromResource(resource);
+			const check = checkFromResource(resource, scopeRoot);
 			if (!discovered.has(check.name)) discovered.set(check.name, check);
 		}
 	}

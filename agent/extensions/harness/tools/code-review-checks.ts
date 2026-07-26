@@ -54,6 +54,7 @@ interface CheckCoordinatorOptions {
 	cwd: string;
 	/** Directories self-discovered Checks may also come from (the discovery walk plus global roots). */
 	allowedDirectories: readonly string[];
+	globalDirectories: readonly string[];
 	signal?: AbortSignal;
 	parentSession?: string;
 }
@@ -63,13 +64,7 @@ const checkSystemPrompt = readFileSync(
 	"utf8",
 ).trim();
 
-function checkHome(check: CheckDefinition, cwd: string): string {
-	const localHome = dirname(dirname(dirname(check.path)));
-	const fromCwd = relative(cwd, localHome);
-	return fromCwd === ".." || fromCwd.startsWith(`..${sep}`) || isAbsolute(fromCwd) ? cwd : localHome;
-}
-
-function checkMessage(params: CheckRunParams, check: CheckDefinition, cwd: string): string {
+function checkMessage(params: CheckRunParams, check: CheckDefinition): string {
 	return [
 		`Check: ${check.name}`,
 		check.description ? `Description: ${check.description}` : undefined,
@@ -78,7 +73,7 @@ function checkMessage(params: CheckRunParams, check: CheckDefinition, cwd: strin
 		params.files?.length ? `Relevant files: ${params.files.join(", ")}` : undefined,
 		`Invocation brief: ${params.instructions}`,
 		check.globs
-			? `Scan only changed files matching these globs: ${check.globs.join(", ")}. Resolve them relative to the Check's home directory: ${checkHome(check, cwd)}. If no changed files match, submit zero issues.`
+			? `Scan only changed files matching these globs: ${check.globs.join(", ")}. Resolve them relative to the Check's home directory: ${check.scopeRoot}. If no changed files match, submit zero issues.`
 			: undefined,
 		"Check instructions:",
 		check.body,
@@ -168,7 +163,7 @@ export class CheckCoordinator {
 						reasoningEffort: route.reasoning,
 					},
 					cwd: this.options.cwd,
-					message: checkMessage(params, entry.definition, this.options.cwd),
+					message: checkMessage(params, entry.definition),
 					finalMessage: "optional",
 					signal: this.options.signal,
 					...(this.options.parentSession
@@ -245,7 +240,16 @@ export class CheckCoordinator {
 		}
 		let definition: CheckDefinition | undefined;
 		try {
-			definition = await loadCheck(path);
+			let global = false;
+			for (const directory of this.options.globalDirectories) {
+				try {
+					if ((await realpath(directory)) === (await realpath(dirname(path)))) global = true;
+				} catch {
+					// Missing global roots cannot contain this loaded Check.
+				}
+			}
+			const scopeRoot = global ? this.options.cwd : dirname(dirname(dirname(path)));
+			definition = await loadCheck(path, scopeRoot);
 		} catch (error) {
 			throw new Error(`Could not load Check ${uriValue}: ${error instanceof Error ? error.message : String(error)}`);
 		}

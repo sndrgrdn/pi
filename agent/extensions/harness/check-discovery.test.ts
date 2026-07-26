@@ -136,10 +136,27 @@ describe("discoverChecks", () => {
 		await check(root, "repo", "unscoped.md", "Instructions.");
 
 		const checks = await discoverChecks({ cwd: join(root, "repo"), globalRoots: [] });
-		expect(checks.map(({ name, globs }) => [name, globs])).toEqual([
-			["multiple", ["app/jobs/**", "lib/**/*.ts"]],
-			["single", ["app/workers/**"]],
-			["unscoped", undefined],
+		expect(checks.map(({ name, globs, scopeRoot }) => [name, globs, scopeRoot])).toEqual([
+			["multiple", ["app/jobs/**", "lib/**/*.ts"], join(root, "repo")],
+			["single", ["app/workers/**"], join(root, "repo")],
+			["unscoped", undefined, undefined],
+		]);
+	});
+
+	it("keeps ancestor Check homes and maps global Check homes to the review cwd", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-checks-homes-"));
+		const repo = join(root, "repo");
+		const cwd = join(repo, "packages", "app");
+		const globalRoot = join(root, "global-checks");
+		await mkdir(cwd, { recursive: true });
+		await check(root, "repo", "ancestor.md", "---\nglobs: src/**\n---\nInstructions.");
+		await mkdir(globalRoot, { recursive: true });
+		await writeFile(join(globalRoot, "global.md"), "---\nglobs: docs/**\n---\nInstructions.");
+
+		const checks = await discoverChecks({ cwd, globalRoots: [globalRoot] });
+		expect(checks.map(({ name, scopeRoot }) => [name, scopeRoot])).toEqual([
+			["ancestor", repo],
+			["global", cwd],
 		]);
 	});
 

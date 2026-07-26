@@ -4,6 +4,7 @@
  * results merge mechanically into one deterministic Comment list.
  */
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
@@ -147,12 +148,17 @@ export function createCodeReviewTool(
 			return { ...route, reasoning: params.thinking ?? route.reasoning };
 		},
 		async plan(params, ctx) {
-			const checks = await discoverChecks({ cwd: ctx.cwd, globalRoots: options.globalRoots });
+			const globalRoots = options.globalRoots ?? [
+				join(homedir(), ".pi", "agent", "checks"),
+				join(homedir(), ".agents", "checks"),
+			];
+			const checks = await discoverChecks({ cwd: ctx.cwd, globalRoots });
 			const coordinator = new CheckCoordinator(checks, {
 				runner,
 				profiles,
 				cwd: ctx.cwd,
-				allowedDirectories: checkDirectories({ cwd: ctx.cwd, globalRoots: options.globalRoots }),
+				allowedDirectories: checkDirectories({ cwd: ctx.cwd, globalRoots }),
+				globalDirectories: globalRoots,
 				signal: ctx.signal,
 				...(ctx.parentSession ? { parentSession: ctx.parentSession } : {}),
 			});
