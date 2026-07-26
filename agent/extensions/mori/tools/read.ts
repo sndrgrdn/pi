@@ -50,7 +50,7 @@ function readTraceInvocation(args: ReadParams, cwd: string): TraceInvocation {
 
 const traceRenderer = createTraceRenderer<ReadParams>({ invocation: readTraceInvocation });
 
-export function createHarnessReadTool(): ToolDefinition<any, any, any> {
+export function createMoriReadTool(): ToolDefinition<any, any, any> {
 	const base = createReadToolDefinition(process.cwd());
 	return {
 		...base,
@@ -69,13 +69,13 @@ export function createHarnessReadTool(): ToolDefinition<any, any, any> {
 	} as ToolDefinition<any, any, any>;
 }
 
-export function registerHarnessRead(
+export function registerMoriRead(
 	pi: ExtensionAPI,
 	register: TraceToolRegistrar["register"] = (tool) => pi.registerTool(tool),
 ): void {
-	register(createHarnessReadTool());
+	register(createMoriReadTool());
 }
 
 export default function (pi: ExtensionAPI, register?: TraceToolRegistrar["register"]) {
-	registerHarnessRead(pi, register);
+	registerMoriRead(pi, register);
 }

@@ -15,7 +15,7 @@ import { isSubagentAbortError, SubagentRunError, type SubagentRunner, type ToolL
 import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
 import { createFinderTool } from "./finder.ts";
 import { createLibrarianTool } from "./librarian.ts";
-import { createHarnessReadTool } from "./read.ts";
+import { createMoriReadTool } from "./read.ts";
 
 const workerPrompt = readFileSync(join(import.meta.dirname, "..", "agents", "prompts", "task.md"), "utf8").trim();
 
@@ -150,7 +150,7 @@ export function createTaskTool(
 				message: params.prompt,
 				toolbox: (processes) => [
 					...createShellToolbox(processes),
-					createHarnessReadTool(),
+					createMoriReadTool(),
 					createApplyPatchTool(),
 					createFinderTool(runner, profiles),
 					createLibrarianTool(runner, profiles),

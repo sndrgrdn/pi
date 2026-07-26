@@ -1,7 +1,7 @@
 /**
  * Agent extension entry point.
  *
- * Wires all harness modules onto pi.
+ * Wires all mori modules onto pi.
  */
 import { join } from "node:path";
 import { type ExtensionAPI, getAgentDir } from "@earendil-works/pi-coding-agent";
@@ -35,7 +35,7 @@ export const MAIN_TOOL_NAMES = [
 	"mcp",
 ] as const;
 
-export default function harness(pi: ExtensionAPI) {
+export default function mori(pi: ExtensionAPI) {
 	const traceTools = createTraceToolRegistrar(
 		pi,
 		(error, signal) => signal?.aborted === true || isSubagentAbortError(error),

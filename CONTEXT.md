@@ -1,8 +1,14 @@
-# Pi Harness
+# Mori (守)
 
-Personal Pi configuration: constrained agent tooling, model profiles, specialist agents, skills, and terminal UI.
+Personal harness around Pi: constrained agent tooling, model profiles, specialist agents, skills, and terminal UI.
 
 ## Language
+
+### The harness
+
+**Mori (守)**:
+The harness itself: constrained tooling, profiles, specialists, skills, and terminal UI, wrapped around the Pi coding agent.
+_Avoid_: Pi Harness, the harness (when naming it), Pi (reserved for the underlying agent)
 
 ### Code review
 

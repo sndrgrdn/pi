@@ -1,6 +1,6 @@
-# Pi repository instructions
+# Mori (守) repository instructions
 
-Personal configuration and extension code for Pi's constrained agent tooling, model profiles, specialist agents, skills, and terminal UI.
+Mori is the personal harness around the Pi coding agent: constrained agent tooling, model profiles, specialist agents, skills, and terminal UI.
 
 ## Essentials
 

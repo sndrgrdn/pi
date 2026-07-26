@@ -19,7 +19,7 @@ describe("subagent result envelopes", () => {
 		});
 	});
 
-	it("escapes harness-owned XML attributes", () => {
+	it("escapes mori-owned XML attributes", () => {
 		expect(
 			buildEnvelope({ kind: "finder", sessionID: 'child&"1', content: "Found it", title: 'Files & "tests"' }),
 		).toBe(
@@ -27,7 +27,7 @@ describe("subagent result envelopes", () => {
 		);
 	});
 
-	it("parses harness-owned attributes and verbatim content", () => {
+	it("parses mori-owned attributes and verbatim content", () => {
 		expect(
 			parseEnvelope(
 				'<finder_result title="Auth &amp; sessions" sessionID="child-1">\n/abs/auth.ts:2\n</finder_result>',
@@ -35,7 +35,7 @@ describe("subagent result envelopes", () => {
 		).toEqual({ tag: "finder_result", title: "Auth & sessions", sessionID: "child-1", content: "/abs/auth.ts:2" });
 	});
 
-	it("preserves meaningful whitespace inside the harness framing", () => {
+	it("preserves meaningful whitespace inside the mori framing", () => {
 		const envelope = buildEnvelope({ kind: "oracle", sessionID: "child-1", content: "  indented\ntrailing  " });
 		expect(parseEnvelope(envelope)?.content).toBe("  indented\ntrailing  ");
 	});

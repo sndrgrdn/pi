@@ -46,7 +46,7 @@ export interface AgentToolPlan<TParams = unknown, K extends AgentKey = AgentKey>
 export interface AgentToolPlanContext {
 	cwd: string;
 	signal: AbortSignal | undefined;
-	/** The user session file, when the harness can attribute subagent records. */
+	/** The user session file, when the mori can attribute subagent records. */
 	parentSession: string | undefined;
 }
 

@@ -2,7 +2,7 @@ import { copyFileSync, mkdtempSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createHarnessReadTool } from "./read.ts";
+import { createMoriReadTool } from "./read.ts";
 
 const theme = {
 	fg: (color: string, value: string) => `<${color}>${value}</${color}>`,
@@ -15,7 +15,7 @@ function renderedLines(component: { render(width: number): string[] }): string[]
 
 describe("read Trace View renderer", () => {
 	it("shows the path and requested range while keeping text behind expansion", () => {
-		const tool = createHarnessReadTool();
+		const tool = createMoriReadTool();
 		const result = { content: [{ type: "text", text: "second\nthird" }] } as any;
 		const context = {
 			args: { path: "src/file.ts", offset: 2, limit: 2 },
@@ -42,7 +42,7 @@ describe("read Trace View renderer", () => {
 			),
 			join(cwd, "pixel.png"),
 		);
-		const tool = createHarnessReadTool();
+		const tool = createMoriReadTool();
 		const updates: any[] = [];
 		const result = await tool.execute(
 			"read-1",
@@ -69,7 +69,7 @@ describe("read Trace View renderer", () => {
 	it.each(["image/jpeg", "image/png", "image/gif", "image/webp"])(
 		"renders the supported %s qualifier while collapsed",
 		(mimeType) => {
-			const tool = createHarnessReadTool();
+			const tool = createMoriReadTool();
 			const component = tool.renderResult!(
 				{
 					content: [{ type: "image", data: "base64", mimeType }],
@@ -90,7 +90,7 @@ describe("read Trace View renderer", () => {
 		["home outside cwd", join(homedir(), "notes/file.txt"), "/work", "~/notes/file.txt"],
 		["outside cwd and home", "/opt/shared/file.txt", "/work", "/opt/shared/file.txt"],
 	])("applies path policy for %s", (_case, path, cwd, expectedPath) => {
-		const tool = createHarnessReadTool();
+		const tool = createMoriReadTool();
 		const component = tool.renderResult!(
 			{ content: [{ type: "text", text: "hidden" }] } as any,
 			{ expanded: false, isPartial: false },
@@ -104,7 +104,7 @@ describe("read Trace View renderer", () => {
 		[{ offset: 5 }, "lines 5-"],
 		[{ limit: 10 }, "lines 1-10"],
 	])("renders deterministic open and bounded requested ranges", (range, expected) => {
-		const tool = createHarnessReadTool();
+		const tool = createMoriReadTool();
 		const component = tool.renderResult!(
 			{ content: [{ type: "text", text: "hidden" }] } as any,
 			{ expanded: false, isPartial: false },
@@ -118,7 +118,7 @@ describe("read Trace View renderer", () => {
 
 	it("renders a missing file as one failed row with expandable evidence", async () => {
 		const cwd = mkdtempSync(join(tmpdir(), "read-trace-missing-"));
-		const tool = createHarnessReadTool();
+		const tool = createMoriReadTool();
 		await expect(
 			tool.execute("read-1", { path: "missing.txt" }, undefined, undefined, { cwd } as any),
 		).rejects.toThrow(/ENOENT/);
@@ -135,7 +135,7 @@ describe("read Trace View renderer", () => {
 	});
 
 	it("propagates read cancellation to the shared Trace lifecycle", async () => {
-		const tool = createHarnessReadTool();
+		const tool = createMoriReadTool();
 		const controller = new AbortController();
 		controller.abort();
 

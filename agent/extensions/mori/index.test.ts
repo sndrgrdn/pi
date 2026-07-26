@@ -1,8 +1,8 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
-import harness from "./index.ts";
+import mori from "./index.ts";
 
-describe("harness extension entry", () => {
+describe("mori extension entry", () => {
 	it("admits only the eleven Main tools when a session starts", () => {
 		const setActiveTools = vi.fn();
 		const handlers = new Map<string, (...args: any[]) => unknown>();
@@ -19,7 +19,7 @@ describe("harness extension entry", () => {
 			getCommands: () => [],
 		} as unknown as ExtensionAPI;
 
-		harness(pi);
+		mori(pi);
 		expect(setActiveTools).not.toHaveBeenCalled();
 		expect(pi.registerShortcut).not.toHaveBeenCalled();
 		expect(pi.events.on).not.toHaveBeenCalled();

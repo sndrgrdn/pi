@@ -1,11 +1,11 @@
 import { createReadToolDefinition } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
-import { createHarnessReadTool } from "../tools/read.ts";
+import { createMoriReadTool } from "../tools/read.ts";
 import { summarizeToolCall } from "./tool-call.ts";
 
 describe("tool call summaries", () => {
 	it("uses the registered Trace invocation formatter", () => {
-		expect(summarizeToolCall(createHarnessReadTool(), "read", { path: "/repo/src/app.ts" }, "call-1", "/repo")).toBe(
+		expect(summarizeToolCall(createMoriReadTool(), "read", { path: "/repo/src/app.ts" }, "call-1", "/repo")).toBe(
 			"read ./src/app.ts",
 		);
 	});
