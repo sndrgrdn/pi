@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { BUILTIN_PROFILES } from "../profiles.ts";
 import { type RunOptions, SubagentAbortError, SubagentRunError } from "../runner.ts";
@@ -30,7 +33,7 @@ describe("code_review tool", () => {
 			]);
 			return { sessionID: "review-1", answer: "ignored", toolLog: [] };
 		});
-		const tool = createCodeReviewTool({ run } as any, BUILTIN_PROFILES);
+		const tool = createCodeReviewTool({ run } as any, BUILTIN_PROFILES, { globalRoots: [] });
 		const result = await tool.execute(
 			"call",
 			{
@@ -82,6 +85,35 @@ No checks were run.
 			toolCallCounts: { read: 1 },
 			toolCalls: ["read a.ts"],
 		});
+	});
+
+	it("includes discovered Check blocks and reports every Check as not-run", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-review-checks-"));
+		const checksDirectory = join(root, ".agents", "checks");
+		await mkdir(checksDirectory, { recursive: true });
+		await writeFile(
+			join(checksDirectory, "errors.md"),
+			"---\nname: error-paths\ndescription: Error handling\nseverity-default: high\n---\nFind swallowed errors.\n",
+		);
+		const run = vi.fn(async (options: RunOptions) => {
+			await submit(options, []);
+			return { sessionID: "review-checks", answer: "ignored", toolLog: [] };
+		});
+		const result = await createCodeReviewTool({ run } as any, BUILTIN_PROFILES, { globalRoots: [] }).execute(
+			"call",
+			{ diff_description: "HEAD~1" },
+			undefined,
+			undefined,
+			{ cwd: root } as any,
+		);
+
+		const message = run.mock.calls[0]?.[0].message;
+		expect(message).toContain(
+			"Also discover any additional applicable .agents/checks/*.md files for the changed paths.",
+		);
+		expect(message).toContain('<check name="error-paths" severity-default="high"');
+		expect(message).toContain("Description: Error handling\n\nFind swallowed errors.\n</check>");
+		expect(textOf(result)).toContain("## Checks\n- error-paths — **not-run**");
 	});
 
 	it("accepts submit_review followed by the runner's no-final-message failure", async () => {

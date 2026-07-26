@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { type CheckDefinition, discoverChecks } from "../check-discovery.ts";
 import { buildEnvelope } from "../envelopes.ts";
 import type { ResolvedProfiles } from "../profiles.ts";
 import { isSubagentAbortError, SubagentRunError, type SubagentRunner } from "../runner.ts";
@@ -26,6 +27,9 @@ interface CodeReviewParams {
 	instructions?: string;
 	thinking?: "low" | "high";
 }
+interface CodeReviewOptions {
+	globalRoots?: readonly string[];
+}
 
 const commentSchema = Type.Object({
 	filename: Type.String(),
@@ -37,7 +41,7 @@ const commentSchema = Type.Object({
 	fix: Type.Optional(Type.String()),
 });
 
-function formatReview(comments: readonly Comment[]): string {
+function formatReview(comments: readonly Comment[], checks: readonly CheckDefinition[]): string {
 	const ordered = [...comments].sort(
 		(a, b) =>
 			a.filename.localeCompare(b.filename) ||
@@ -63,15 +67,38 @@ function formatReview(comments: readonly Comment[]): string {
 		if (comment.why) lines.push(`  - Why: ${comment.why}`);
 		if (comment.fix) lines.push(`  - Fix: ${comment.fix}`);
 	}
-	lines.push("", "## Checks", "No checks were run.");
+	lines.push("", "## Checks");
+	if (!checks.length) lines.push("No checks were run.");
+	for (const check of checks) lines.push(`- ${check.name} — **not-run**`);
 	return lines.join("\n");
 }
 
-function reviewMessage(params: CodeReviewParams): string {
+function escapeAttribute(value: string): string {
+	return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+function reviewMessage(params: CodeReviewParams, checks: readonly CheckDefinition[]): string {
 	return [
 		`Diff description: ${params.diff_description}`,
 		params.files?.length ? `Focus files: ${params.files.join(", ")}` : undefined,
 		params.instructions ? `Additional instructions: ${params.instructions}` : undefined,
+		"Also discover any additional applicable .agents/checks/*.md files for the changed paths.",
+		checks.length
+			? [
+					"Pre-discovered Checks (execution is not available yet):",
+					...checks.map((check) =>
+						[
+							`<check name="${escapeAttribute(check.name)}" severity-default="${escapeAttribute(check.severityDefault)}" path="${escapeAttribute(check.path)}">`,
+							check.description ? `Description: ${check.description}` : undefined,
+							check.description ? "" : undefined,
+							check.body,
+							"</check>",
+						]
+							.filter((line) => line !== undefined)
+							.join("\n"),
+					),
+				].join("\n\n")
+			: "No Checks were pre-discovered.",
 	]
 		.filter(Boolean)
 		.join("\n\n");
@@ -85,6 +112,7 @@ const systemPrompt = readFileSync(
 export function createCodeReviewTool(
 	runner: Pick<SubagentRunner, "run">,
 	profiles: ResolvedProfiles,
+	options: CodeReviewOptions = {},
 ): ToolDefinition<any, any, any> {
 	const renderer = createTraceRenderer<CodeReviewParams>({
 		invocation: (params) => ({ action: "review", target: params.diff_description }),
@@ -116,6 +144,7 @@ export function createCodeReviewTool(
 			const traceDetails = () => ({ toolCallCounts: Object.fromEntries(toolCallCounts), toolCalls: [...toolCalls] });
 			emitTraceRunning(onUpdate, traceDetails());
 			let submission: Comment[] | undefined;
+			let checks: CheckDefinition[] = [];
 			const submitReview: ToolDefinition<any, any, any> = {
 				name: "submit_review",
 				label: "submit_review",
@@ -129,6 +158,7 @@ export function createCodeReviewTool(
 			const route = profiles.agents.review.main;
 			const parentSession = ctx.sessionManager?.getSessionFile();
 			try {
+				checks = await discoverChecks({ cwd: ctx.cwd, globalRoots: options.globalRoots });
 				const child = await runner.run({
 					definition: {
 						key: "review",
@@ -139,7 +169,7 @@ export function createCodeReviewTool(
 						reasoningEffort: params.thinking ?? route.reasoning,
 					},
 					cwd: ctx.cwd,
-					message: reviewMessage(params),
+					message: reviewMessage(params, checks),
 					signal,
 					...(parentSession
 						? { record: { parentSession, name: `review: ${params.diff_description}`.slice(0, 120) } }
@@ -164,7 +194,7 @@ export function createCodeReviewTool(
 							text: buildEnvelope({
 								kind: "review",
 								sessionID: child.sessionID,
-								content: formatReview(submission),
+								content: formatReview(submission, checks),
 							}),
 						},
 					],
@@ -182,7 +212,7 @@ export function createCodeReviewTool(
 						content: [
 							{
 								type: "text",
-								text: buildEnvelope({ kind: "review", sessionID, content: formatReview(submission) }),
+								text: buildEnvelope({ kind: "review", sessionID, content: formatReview(submission, checks) }),
 							},
 						],
 						details: withTraceDetails(traceDetails(), "success"),
@@ -191,7 +221,7 @@ export function createCodeReviewTool(
 				const content = [
 					`Review failed: ${error instanceof Error ? error.message : String(error)}`,
 					"",
-					formatReview(submission ?? []),
+					formatReview(submission ?? [], checks),
 				].join("\n");
 				return {
 					content: [
