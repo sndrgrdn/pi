@@ -9,7 +9,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { delimiter, isAbsolute, join, resolve } from "node:path";
-import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { getAgentDir, getShellConfig } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import {
@@ -68,14 +68,31 @@ const description = [
 
 const traceRenderer = createTraceRenderer<ShellCommandParams>({ invocation: shellTraceInvocation, maxRowLines: 3 });
 
-/** Mirror pi's internal getShellEnv: prepend the agent bin dir to PATH. */
-function shellEnv(): NodeJS.ProcessEnv {
+// macOS ships bash 3.2, whose $() parser mishandles quotes inside heredocs
+// (e.g. an apostrophe in a heredoc body inside "$(cat <<'EOF' …)" is read as
+// an unterminated string). Prefer Homebrew's bash 5 when present.
+const HOMEBREW_BASH = "/opt/homebrew/bin/bash";
+
+function resolveShellConfig() {
+	return getShellConfig(existsSync(HOMEBREW_BASH) ? HOMEBREW_BASH : undefined);
+}
+
+/** Mirror pi's shell environment, including useful current-session metadata. */
+function shellEnv(ctx: ExtensionContext): NodeJS.ProcessEnv {
 	const binDir = join(getAgentDir(), "bin");
 	const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === "path") ?? "PATH";
 	const currentPath = process.env[pathKey] ?? "";
 	const entries = currentPath.split(delimiter).filter(Boolean);
 	const updatedPath = entries.includes(binDir) ? currentPath : [binDir, currentPath].filter(Boolean).join(delimiter);
-	return { ...process.env, [pathKey]: updatedPath };
+	return {
+		...process.env,
+		[pathKey]: updatedPath,
+		PI_SESSION_ID: ctx.sessionManager.getSessionId(),
+		PI_SESSION_FILE: ctx.sessionManager.getSessionFile(),
+		PI_PROVIDER: ctx.model?.provider,
+		PI_MODEL: ctx.model?.id,
+		PI_REASONING_LEVEL: ctx.thinkingLevel,
+	};
 }
 
 function resolveWorkdir(cwd: string, workdir?: string): string {
@@ -100,12 +117,12 @@ export function createShellCommandTool(registry: BackgroundShellRegistry): ToolD
 				throw new Error("Command aborted");
 			}
 
-			const { shell, args } = getShellConfig();
+			const { shell, args } = resolveShellConfig();
 			const output = new ShellOutputFile();
 			const child = spawn(shell, [...args, params.command], {
 				cwd: workdir,
 				detached: process.platform !== "win32",
-				env: shellEnv(),
+				env: shellEnv(ctx),
 				stdio: ["ignore", "pipe", "pipe"],
 				windowsHide: true,
 			});

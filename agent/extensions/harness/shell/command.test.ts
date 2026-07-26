@@ -2,7 +2,15 @@ import { describe, expect, it } from "vitest";
 import { createShellCommandTool } from "./command.ts";
 import { BackgroundShellRegistry } from "./registry.ts";
 
-const ctx = { cwd: process.cwd() } as any;
+const ctx = {
+	cwd: process.cwd(),
+	sessionManager: {
+		getSessionId: () => "session-test",
+		getSessionFile: () => "/tmp/session-test.jsonl",
+	},
+	model: { provider: "openai-codex", id: "gpt-5.4" },
+	thinkingLevel: "high",
+} as any;
 const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
 
 function makeTool(registry = new BackgroundShellRegistry()) {
@@ -52,6 +60,17 @@ describe("shell_command", () => {
 		const result = await run(tool, { command: "echo hello" });
 		expect(result.content[0].text).toBe("hello");
 		expect(result.details.trace).toEqual({ state: "success" });
+	});
+
+	it("exposes the current session metadata", async () => {
+		const { tool } = makeTool();
+		const result = await run(tool, {
+			command:
+				'printf "%s\\n%s\\n%s\\n%s\\n%s" "$PI_SESSION_ID" "$PI_SESSION_FILE" "$PI_PROVIDER" "$PI_MODEL" "$PI_REASONING_LEVEL"',
+		});
+		expect(result.content[0].text).toBe(
+			"session-test\n/tmp/session-test.jsonl\nopenai-codex\ngpt-5.4\nhigh",
+		);
 	});
 
 	it("nonzero exit on a completed run is a tool error with output", async () => {

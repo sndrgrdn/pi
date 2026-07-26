@@ -42,7 +42,7 @@ export default function promptBox(pi: ExtensionAPI) {
 		parts.push(theme.fg("muted", name));
 
 		if (model?.reasoning) {
-			const level = pi.getThinkingLevel?.() ?? "off";
+			const level = ctx.thinkingLevel ?? "off";
 			const label = THINK_LABEL[level] ?? level.slice(0, 3);
 			const colorFn = theme.getThinkingBorderColor(level);
 			parts.push(colorFn(label));
