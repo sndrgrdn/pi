@@ -167,6 +167,33 @@ No checks were run.
 		expect(textOf(result)).toContain("- strict — **ran with 1 issue**");
 	});
 
+	it("accepts a Comment without a line range for deleted files and rejects endLine alone", async () => {
+		const run = vi.fn(async (options: RunOptions) => {
+			const tool = childTool(options, "submit_review");
+			await expect(
+				tool.execute(
+					"bad",
+					{ comments: [{ filename: "gone.ts", endLine: 4, severity: "high", text: "Half a range." }] },
+					undefined,
+					undefined,
+					context,
+				),
+			).rejects.toThrow("submit_review comment endLine requires line");
+			await submit(options, [
+				{ filename: "gone.ts", severity: "high", text: "Deleting this drops the only retry path." },
+			]);
+			return { sessionID: "review-del", answer: "", toolLog: [] };
+		});
+		const result = await createCodeReviewTool({ run } as any, BUILTIN_PROFILES, { globalRoots: [] }).execute(
+			"call",
+			{ diff_description: "HEAD" },
+			undefined,
+			undefined,
+			context,
+		);
+		expect(textOf(result)).toContain("**HIGH** — Deleting this drops the only retry path.");
+	});
+
 	it("runs a discovered Check through the main toolbox and merges its submitted issues", async () => {
 		const root = await mkdtemp(join(tmpdir(), "pi-review-run-check-"));
 		const checksDirectory = join(root, ".agents", "checks");

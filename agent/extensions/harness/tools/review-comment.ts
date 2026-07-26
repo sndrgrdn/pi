@@ -46,11 +46,11 @@ export function parseLocation(
 	return { startLine: line, endLine };
 }
 
-/** `submit_review` wire shape. */
+/** `submit_review` wire shape; the line range is omitted for Comments on deleted files. */
 export interface SubmittedComment {
 	filename: string;
-	startLine: number;
-	endLine: number;
+	startLine?: number;
+	endLine?: number;
 	severity: ReviewSeverity;
 	text: string;
 	why?: string;
@@ -59,8 +59,8 @@ export interface SubmittedComment {
 
 export const submittedCommentSchema = Type.Object({
 	filename: Type.String(),
-	startLine: Type.Integer({ minimum: 1 }),
-	endLine: Type.Integer({ minimum: 1 }),
+	startLine: Type.Optional(Type.Integer({ minimum: 1 })),
+	endLine: Type.Optional(Type.Integer({ minimum: 1 })),
 	severity: severitySchema,
 	text: Type.String(),
 	why: Type.Optional(Type.String()),
@@ -68,9 +68,10 @@ export const submittedCommentSchema = Type.Object({
 });
 
 export function commentFromSubmission(comment: SubmittedComment): ReviewComment {
+	const location = parseLocation(comment.startLine, comment.endLine, "submit_review comment");
 	return {
 		filename: comment.filename,
-		location: parseLocation(comment.startLine, comment.endLine, "submit_review comment"),
+		...(location ? { location } : {}),
 		severity: comment.severity,
 		text: comment.text,
 		why: comment.why,
