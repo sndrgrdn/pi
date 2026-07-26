@@ -1,17 +1,10 @@
+import { decodeAttribute, escapeAttribute } from "./markup.ts";
 import { AGENT_KEYS, type AgentKey } from "./profiles.ts";
 
 export type EnvelopeInput =
 	| { kind: "finder"; sessionID: string; content: string; title: string }
 	| { kind: Exclude<AgentKey, "finder">; sessionID: string; content: string }
 	| { kind: "error"; agent: AgentKey; sessionID: string; content: string };
-
-function escapeAttribute(value: string): string {
-	return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-}
-
-function decodeAttribute(value: string): string {
-	return value.replaceAll("&quot;", '"').replaceAll("&gt;", ">").replaceAll("&lt;", "<").replaceAll("&amp;", "&");
-}
 
 type EnvelopeTag = `${AgentKey}_result` | `${AgentKey}_error`;
 

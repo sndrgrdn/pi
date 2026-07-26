@@ -1,8 +1,5 @@
 import { getAgentDir, loadProjectContextFiles } from "@earendil-works/pi-coding-agent";
-
-function escapeAttribute(value: string): string {
-	return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-}
+import { escapeAttribute } from "./markup.ts";
 
 export function projectContextPrompt(cwd: string): string {
 	const files = loadProjectContextFiles({ cwd, agentDir: getAgentDir() });
