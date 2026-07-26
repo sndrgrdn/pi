@@ -70,13 +70,36 @@ describe("shared subagent runner", () => {
 		expect(child.dispose).toHaveBeenCalledOnce();
 	});
 
-	it("kills child processes after a hard error", async () => {
+	it("requires a final message by default", async () => {
+		const child = { ...fakeChild(vi.fn(async () => {})), finalMessage: () => undefined };
+		const runner = new SubagentRunner(async () => child);
+
+		await expect(runner.run({ definition, cwd: "/tmp", message: "x" })).rejects.toMatchObject({
+			sessionID: "child-7",
+			message: "oracle child returned no final message",
+		});
+	});
+
+	it("allows a terminating-tool child to omit its final message explicitly", async () => {
+		const child = { ...fakeChild(vi.fn(async () => {})), finalMessage: () => undefined };
+		const runner = new SubagentRunner(async () => child);
+
+		await expect(runner.run({ definition, cwd: "/tmp", message: "x", finalMessage: "optional" })).resolves.toEqual({
+			sessionID: "child-7",
+			answer: "",
+			toolLog: [],
+		});
+	});
+
+	it("does not hide provider errors when the final message is optional", async () => {
 		const child = fakeChild(async () => {
 			throw new Error("provider failed");
 		});
 		const runner = new SubagentRunner(async () => child);
 
-		await expect(runner.run({ definition, cwd: "/tmp", message: "x" })).rejects.toThrow("provider failed");
+		await expect(runner.run({ definition, cwd: "/tmp", message: "x", finalMessage: "optional" })).rejects.toThrow(
+			"provider failed",
+		);
 		expect(child.processes.killAll).toHaveBeenCalledOnce();
 	});
 

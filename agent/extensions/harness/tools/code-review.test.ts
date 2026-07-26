@@ -132,6 +132,7 @@ No checks were run.
 		await writeFile(checkPath, "---\nname: error-paths\nseverity-default: high\n---\nFind swallowed errors.\n");
 		const run = vi.fn(async (options: RunOptions) => {
 			if (options.definition.model === BUILTIN_PROFILES.agents.review.check.model) {
+				expect(options.finalMessage).toBe("optional");
 				await childTool(options, "submit_check").execute(
 					"submit-check",
 					{ issues: [{ severity: "high", file: "src/a.ts", line: 7, problem: "The rejection is swallowed." }] },
@@ -168,6 +169,7 @@ No checks were run.
 		);
 
 		expect(run).toHaveBeenCalledTimes(2);
+		expect(run.mock.calls[0]?.[0].finalMessage).toBe("optional");
 		expect(run.mock.calls[1]?.[0]).toMatchObject({
 			definition: {
 				model: BUILTIN_PROFILES.agents.review.check.model,
@@ -187,10 +189,11 @@ No checks were run.
 		expect(textOf(result)).toContain("## Checks\n- error-paths — **ran with 1 issue**");
 	});
 
-	it("accepts submit_review followed by the runner's no-final-message failure", async () => {
+	it("allows the terminating main child to omit its final message explicitly", async () => {
 		const run = vi.fn(async (options: RunOptions) => {
+			expect(options.finalMessage).toBe("optional");
 			await submit(options, []);
-			throw new SubagentRunError("review-2", [], new Error("review child returned no final message"));
+			return { sessionID: "review-2", answer: "", toolLog: [] };
 		});
 		const result = await createCodeReviewTool({ run } as any, BUILTIN_PROFILES).execute(
 			"call",
@@ -287,6 +290,219 @@ No checks were run.
 		);
 		expect(textOf(result)).toContain("- known — **not-run**");
 		expect(textOf(result)).toContain("- synthesized — **ran with 0 issues**");
+	});
+
+	it("keeps same-name Check statuses isolated by URI and validates the supplied name", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-review-check-identity-"));
+		const known = join(root, ".agents", "checks", "known.md");
+		const extra = join(root, "extra.md");
+		await mkdir(join(root, ".agents", "checks"), { recursive: true });
+		await writeFile(known, "---\nname: duplicate\n---\nKnown instructions.");
+		await writeFile(extra, "---\nname: duplicate\n---\nExtra instructions.");
+		const knownURI = pathToFileURL(known).href;
+		const extraURI = pathToFileURL(extra).href;
+		const run = vi.fn(async (options: RunOptions) => {
+			if (options.definition.model === BUILTIN_PROFILES.agents.review.check.model) {
+				await childTool(options, "submit_check").execute("submit", { issues: [] }, undefined, undefined, context);
+				return { sessionID: "check", answer: "", toolLog: [] };
+			}
+			const tool = childTool(options, "run_check");
+			await expect(
+				tool.execute(
+					"mismatch",
+					{ checkName: "wrong", checkURI: knownURI, diffDescription: "HEAD", instructions: "Run." },
+					undefined,
+					undefined,
+					context,
+				),
+			).rejects.toThrow('Check name "wrong" does not match "duplicate"');
+			await tool.execute(
+				"extra",
+				{ checkName: "duplicate", checkURI: extraURI, diffDescription: "HEAD", instructions: "Run." },
+				undefined,
+				undefined,
+				context,
+			);
+			await submit(options, []);
+			return { sessionID: "main", answer: "", toolLog: [] };
+		});
+
+		const result = await createCodeReviewTool({ run } as any, BUILTIN_PROFILES, { globalRoots: [] }).execute(
+			"call",
+			{ diff_description: "HEAD" },
+			undefined,
+			undefined,
+			{ cwd: root } as any,
+		);
+
+		expect(textOf(result)).toContain(`- duplicate (${knownURI}) — **not-run**`);
+		expect(textOf(result)).toContain(`- duplicate (${extraURI}) — **ran with 0 issues**`);
+	});
+
+	it("normalizes optional Check locations and rejects illegal ranges at the tool boundary", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-review-check-location-"));
+		const checkPath = join(root, ".agents", "checks", "locations.md");
+		await mkdir(join(root, ".agents", "checks"), { recursive: true });
+		await writeFile(checkPath, "Location instructions.");
+		const run = vi.fn(async (options: RunOptions) => {
+			if (options.definition.model === BUILTIN_PROFILES.agents.review.check.model) {
+				const tool = childTool(options, "submit_check");
+				await expect(
+					tool.execute(
+						"end-only",
+						{ issues: [{ severity: "high", file: "a.ts", endLine: 3, problem: "Invalid." }] },
+						undefined,
+						undefined,
+						context,
+					),
+				).rejects.toThrow("endLine requires line");
+				await expect(
+					tool.execute(
+						"reversed",
+						{ issues: [{ severity: "high", file: "a.ts", line: 5, endLine: 4, problem: "Invalid." }] },
+						undefined,
+						undefined,
+						context,
+					),
+				).rejects.toThrow("endLine must not be before line");
+				await tool.execute(
+					"valid",
+					{
+						issues: [
+							{ severity: "high", file: "a.ts", problem: "File-wide issue." },
+							{ severity: "medium", file: "a.ts", line: 7, problem: "One line." },
+							{ severity: "low", file: "a.ts", line: 9, endLine: 11, problem: "A range." },
+						],
+					},
+					undefined,
+					undefined,
+					context,
+				);
+				return { sessionID: "check", answer: "", toolLog: [] };
+			}
+			await childTool(options, "run_check").execute(
+				"run",
+				{
+					checkName: "locations",
+					checkURI: pathToFileURL(checkPath).href,
+					diffDescription: "HEAD",
+					instructions: "Run.",
+				},
+				undefined,
+				undefined,
+				context,
+			);
+			await submit(options, []);
+			return { sessionID: "main", answer: "", toolLog: [] };
+		});
+
+		const result = await createCodeReviewTool({ run } as any, BUILTIN_PROFILES, { globalRoots: [] }).execute(
+			"call",
+			{ diff_description: "HEAD" },
+			undefined,
+			undefined,
+			{ cwd: root } as any,
+		);
+
+		expect(textOf(result)).toContain("**HIGH** — [locations] File-wide issue.");
+		expect(textOf(result)).toContain("**MEDIUM** line 7 — [locations] One line.");
+		expect(textOf(result)).toContain("**LOW** lines 9-11 — [locations] A range.");
+		expect(textOf(result)).not.toContain("line 1 — [locations]");
+	});
+
+	it("retries provider errors and does not accept a submission from a failed attempt", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-review-check-error-"));
+		const checkPath = join(root, ".agents", "checks", "provider.md");
+		await mkdir(join(root, ".agents", "checks"), { recursive: true });
+		await writeFile(checkPath, "Provider instructions.");
+		let attempts = 0;
+		const run = vi.fn(async (options: RunOptions) => {
+			if (options.definition.model === BUILTIN_PROFILES.agents.review.check.model) {
+				attempts++;
+				await childTool(options, "submit_check").execute(
+					"submit",
+					{ issues: [{ severity: "high", file: "a.ts", problem: "Must not survive." }] },
+					undefined,
+					undefined,
+					context,
+				);
+				throw new SubagentRunError(`check-${attempts}`, [], new Error("provider failed"));
+			}
+			const summary = await childTool(options, "run_check").execute(
+				"run",
+				{
+					checkName: "provider",
+					checkURI: pathToFileURL(checkPath).href,
+					diffDescription: "HEAD",
+					instructions: "Run.",
+				},
+				undefined,
+				undefined,
+				context,
+			);
+			expect(textOf(summary)).toBe("provider error.");
+			await submit(options, []);
+			return { sessionID: "main", answer: "", toolLog: [] };
+		});
+
+		const result = await createCodeReviewTool({ run } as any, BUILTIN_PROFILES, { globalRoots: [] }).execute(
+			"call",
+			{ diff_description: "HEAD" },
+			undefined,
+			undefined,
+			{ cwd: root } as any,
+		);
+
+		expect(attempts).toBe(2);
+		expect(textOf(result)).toContain("- provider — **error**");
+		expect(textOf(result)).not.toContain("Must not survive.");
+	});
+
+	it("propagates abort to an in-flight Check child", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-review-check-abort-"));
+		const checkPath = join(root, ".agents", "checks", "abort.md");
+		await mkdir(join(root, ".agents", "checks"), { recursive: true });
+		await writeFile(checkPath, "Abort instructions.");
+		const controller = new AbortController();
+		let markStarted!: () => void;
+		const started = new Promise<void>((resolve) => {
+			markStarted = resolve;
+		});
+		const run = vi.fn(async (options: RunOptions) => {
+			if (options.definition.model === BUILTIN_PROFILES.agents.review.check.model) {
+				expect(options.signal).toBe(controller.signal);
+				markStarted();
+				return new Promise<never>((_resolve, reject) => {
+					options.signal?.addEventListener("abort", () => reject(new SubagentAbortError("check-abort")), {
+						once: true,
+					});
+				});
+			}
+			await childTool(options, "run_check").execute(
+				"run",
+				{
+					checkName: "abort",
+					checkURI: pathToFileURL(checkPath).href,
+					diffDescription: "HEAD",
+					instructions: "Run.",
+				},
+				undefined,
+				undefined,
+				context,
+			);
+			throw new Error("unreachable");
+		});
+		const running = createCodeReviewTool({ run } as any, BUILTIN_PROFILES, { globalRoots: [] }).execute(
+			"call",
+			{ diff_description: "HEAD" },
+			controller.signal,
+			undefined,
+			{ cwd: root } as any,
+		);
+
+		await started;
+		controller.abort();
+		await expect(running).rejects.toBeInstanceOf(SubagentAbortError);
 	});
 
 	it("propagates abort and passes the signal to the child", async () => {

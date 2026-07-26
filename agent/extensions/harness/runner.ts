@@ -27,7 +27,7 @@ export interface ChildSession {
 	sessionID: string;
 	processes: BackgroundShellRegistry;
 	prompt(message: string): Promise<void>;
-	finalMessage(): string;
+	finalMessage(): string | undefined;
 	abort(): Promise<void>;
 	dispose(): void;
 	onToolCall?(listener: (toolCall: SubagentToolCall) => void): () => void;
@@ -98,6 +98,8 @@ export interface RunOptions {
 	onToolCall?(toolCall: SubagentToolCall): void;
 	toolbox?: ChildToolboxFactory;
 	signal?: AbortSignal;
+	/** Defaults to required; terminating-tool children may explicitly omit the final assistant message. */
+	finalMessage?: "required" | "optional";
 }
 
 /** The completed child run: session attribution, final answer, and tool log. */
@@ -157,7 +159,10 @@ export class SubagentRunner {
 				if (abortPromise) await abortPromise;
 				throw annotateFailure(abortError(), child);
 			}
-			return { sessionID: child.sessionID, answer: child.finalMessage(), toolLog: child.toolLog() };
+			const answer = child.finalMessage();
+			if (answer === undefined && options.finalMessage !== "optional")
+				throw new Error(`${options.definition.key} child returned no final message`);
+			return { sessionID: child.sessionID, answer: answer ?? "", toolLog: child.toolLog() };
 		} catch (error) {
 			if (parentAborted) {
 				if (abortPromise) await abortPromise;
@@ -248,11 +253,7 @@ export async function createSdkChildSession(config: ChildSessionConfig): Promise
 		sessionID: session.sessionId,
 		processes,
 		prompt: (message) => session.agent.prompt(message),
-		finalMessage: () => {
-			const message = session.getLastAssistantText();
-			if (message === undefined) throw new Error(`${config.definition.key} child returned no final message`);
-			return message;
-		},
+		finalMessage: () => session.getLastAssistantText(),
 		abort: () => session.abort(),
 		dispose: () => {
 			unsubscribeLog();
