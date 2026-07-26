@@ -18,7 +18,7 @@ A holistic quality question answered from gathered evidence in an isolated run, 
 _Avoid_: seat (informal alias), reviewer
 
 **Check**:
-A mechanical pattern scan over the changed lines of a diff, defined in a Markdown file and run by a cheap model; advisory, never gated.
+A mechanical pattern scan over the changed lines of a diff, defined in a Markdown file and run by a cheap model; advisory, never gated. Optionally scoped by globs; an unscoped Check applies to every diff.
 _Avoid_: rule, lint
 
 **Comment**:
