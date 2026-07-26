@@ -13,6 +13,6 @@ If the description is empty, use `uncommitted changes` as the diff description.
 
 Call `code_review` exactly once with that diff description. Do not call any other tool.
 
-If the description names no base ref and the merge base is not obvious from the conversation, ask which ref to diff against before calling `code_review`. Never assume `main` or `master`.
+Uncommitted or staged work, named refs, explicit ranges, and branch work against the upstream default resolve without help. Ask which ref to diff against only when the description needs a base, none is named, and no upstream default exists. Never assume `main` or `master`.
 
 After `code_review` completes, present its result as-is and stop. Do not summarize it or fix anything unless asked in a later message.
