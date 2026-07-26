@@ -96,4 +96,23 @@ describe("discoverChecks", () => {
 			["agents-only", "agents only"],
 		]);
 	});
+
+	it("rejects a malformed severity-default loudly, naming the file", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-checks-severity-"));
+		await check(root, "repo", "banana.md", "---\nseverity-default: banana\n---\nInstructions.");
+		await expect(discoverChecks({ cwd: join(root, "repo"), globalRoots: [] })).rejects.toThrow(
+			/banana\.md.*severity-default "banana" must be one of critical\|high\|medium\|low/,
+		);
+	});
+
+	it("parses a valid severity-default and defaults to medium", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-checks-severity-ok-"));
+		await check(root, "repo", "strict.md", "---\nseverity-default: critical\n---\nInstructions.");
+		await check(root, "repo", "plain.md", "Instructions.");
+		const checks = await discoverChecks({ cwd: join(root, "repo"), globalRoots: [] });
+		expect(checks.map(({ name, severityDefault }) => [name, severityDefault])).toEqual([
+			["plain", "medium"],
+			["strict", "critical"],
+		]);
+	});
 });

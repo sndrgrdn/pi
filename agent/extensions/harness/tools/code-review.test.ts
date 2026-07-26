@@ -124,6 +124,49 @@ No checks were run.
 		expect(textOf(result)).toContain("## Checks\n- error-paths — **not-run**");
 	});
 
+	it("briefs the check child with the severity-default and applies it to omitted severities", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-review-severity-default-"));
+		const checkPath = join(root, ".agents", "checks", "strict.md");
+		await mkdir(join(root, ".agents", "checks"), { recursive: true });
+		await writeFile(checkPath, "---\nname: strict\nseverity-default: high\n---\nStrict instructions.");
+		const run = vi.fn(async (options: RunOptions) => {
+			if (options.definition.model === BUILTIN_PROFILES.agents.review.check.model) {
+				expect(options.message).toContain("Default severity for submitted issues: high");
+				await childTool(options, "submit_check").execute(
+					"submit",
+					{ issues: [{ file: "a.ts", line: 3, problem: "Raw value flows inward." }] },
+					undefined,
+					undefined,
+					context,
+				);
+				return { sessionID: "check", answer: "", toolLog: [] };
+			}
+			await childTool(options, "run_check").execute(
+				"run",
+				{
+					checkName: "strict",
+					checkURI: pathToFileURL(checkPath).href,
+					diffDescription: "HEAD",
+					instructions: "Run.",
+				},
+				undefined,
+				undefined,
+				context,
+			);
+			await submit(options, []);
+			return { sessionID: "main", answer: "", toolLog: [] };
+		});
+		const result = await createCodeReviewTool({ run } as any, BUILTIN_PROFILES, { globalRoots: [] }).execute(
+			"call",
+			{ diff_description: "HEAD" },
+			undefined,
+			undefined,
+			{ cwd: root } as any,
+		);
+		expect(textOf(result)).toContain("**HIGH** line 3 — [strict] Raw value flows inward.");
+		expect(textOf(result)).toContain("- strict — **ran with 1 issue**");
+	});
+
 	it("runs a discovered Check through the main toolbox and merges its submitted issues", async () => {
 		const root = await mkdtemp(join(tmpdir(), "pi-review-run-check-"));
 		const checksDirectory = join(root, ".agents", "checks");
@@ -247,10 +290,13 @@ No checks were run.
 	it("synthesizes a valid unknown file Check and rejects garbage URIs", async () => {
 		const root = await mkdtemp(join(tmpdir(), "pi-review-synth-check-"));
 		const known = join(root, ".agents", "checks", "known.md");
-		const extra = join(root, "extra.md");
+		const extra = join(root, "packages", "pkg", ".agents", "checks", "extra.md");
+		const outside = join(root, "outside.md");
 		await mkdir(join(root, ".agents", "checks"), { recursive: true });
+		await mkdir(join(root, "packages", "pkg", ".agents", "checks"), { recursive: true });
 		await writeFile(known, "Known instructions.");
 		await writeFile(extra, "---\nname: synthesized\n---\nExtra instructions.");
+		await writeFile(outside, "---\nname: outside\n---\nOutside instructions.");
 		const run = vi.fn(async (options: RunOptions) => {
 			if (options.definition.model === BUILTIN_PROFILES.agents.review.check.model) {
 				await childTool(options, "submit_check").execute("submit", { issues: [] }, undefined, undefined, context);
@@ -266,6 +312,20 @@ No checks were run.
 					context,
 				),
 			).rejects.toThrow(`Valid Checks: known: ${pathToFileURL(known).href}`);
+			await expect(
+				tool.execute(
+					"outside",
+					{
+						checkName: "outside",
+						checkURI: pathToFileURL(outside).href,
+						diffDescription: "HEAD",
+						instructions: "Run.",
+					},
+					undefined,
+					undefined,
+					context,
+				),
+			).rejects.toThrow("outside every .agents/checks directory");
 			await tool.execute(
 				"synth",
 				{
@@ -295,8 +355,9 @@ No checks were run.
 	it("keeps same-name Check statuses isolated by URI and validates the supplied name", async () => {
 		const root = await mkdtemp(join(tmpdir(), "pi-review-check-identity-"));
 		const known = join(root, ".agents", "checks", "known.md");
-		const extra = join(root, "extra.md");
+		const extra = join(root, "packages", "pkg", ".agents", "checks", "extra.md");
 		await mkdir(join(root, ".agents", "checks"), { recursive: true });
+		await mkdir(join(root, "packages", "pkg", ".agents", "checks"), { recursive: true });
 		await writeFile(known, "---\nname: duplicate\n---\nKnown instructions.");
 		await writeFile(extra, "---\nname: duplicate\n---\nExtra instructions.");
 		const knownURI = pathToFileURL(known).href;
@@ -502,7 +563,10 @@ No checks were run.
 
 		await started;
 		controller.abort();
-		await expect(running).rejects.toBeInstanceOf(SubagentAbortError);
+		const result = await running;
+		expect(textOf(result)).toContain('<review_error sessionID="check-abort">');
+		expect(textOf(result)).toContain("- abort — **not-run**");
+		expect(result.details).toMatchObject({ trace: { state: "cancelled" } });
 	});
 
 	it("propagates abort and passes the signal to the child", async () => {
@@ -511,15 +575,15 @@ No checks were run.
 			expect(options.signal).toBe(controller.signal);
 			throw new SubagentAbortError("review-3");
 		});
-		await expect(
-			createCodeReviewTool({ run } as any, BUILTIN_PROFILES).execute(
-				"call",
-				{ diff_description: "HEAD" },
-				controller.signal,
-				undefined,
-				context,
-			),
-		).rejects.toBeInstanceOf(SubagentAbortError);
+		const result = await createCodeReviewTool({ run } as any, BUILTIN_PROFILES).execute(
+			"call",
+			{ diff_description: "HEAD" },
+			controller.signal,
+			undefined,
+			context,
+		);
+		expect(textOf(result)).toContain('<review_error sessionID="review-3">');
+		expect(result.details).toMatchObject({ trace: { state: "cancelled" } });
 	});
 
 	it("returns review_error with a submission captured before failure", async () => {
@@ -540,20 +604,19 @@ No checks were run.
 		expect(result.details).toMatchObject({ trace: { state: "failed" } });
 	});
 
-	it("returns review_error when the child fails before creating a session", async () => {
+	it("rethrows when the child fails before creating a session", async () => {
 		const run = vi.fn(async () => {
 			throw new Error("model unavailable");
 		});
-		const result = await createCodeReviewTool({ run } as any, BUILTIN_PROFILES).execute(
-			"call",
-			{ diff_description: "HEAD" },
-			undefined,
-			undefined,
-			context,
-		);
-		expect(textOf(result)).toContain('<review_error sessionID="unavailable">');
-		expect(textOf(result)).toContain("Review failed: model unavailable");
-		expect(result.details).toMatchObject({ trace: { state: "failed" } });
+		await expect(
+			createCodeReviewTool({ run } as any, BUILTIN_PROFILES).execute(
+				"call",
+				{ diff_description: "HEAD" },
+				undefined,
+				undefined,
+				context,
+			),
+		).rejects.toThrow("model unavailable");
 	});
 
 	it("renders review progress with tool tallies", () => {

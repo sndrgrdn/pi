@@ -1,3 +1,4 @@
+import { basename, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
@@ -5,34 +6,12 @@ import { type CheckDefinition, loadCheck } from "../check-discovery.ts";
 import type { ResolvedProfiles } from "../profiles.ts";
 import { isSubagentAbortError, type SubagentRunner } from "../runner.ts";
 import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
-
-export const reviewSeverities = ["critical", "high", "medium", "low"] as const;
-export type ReviewSeverity = (typeof reviewSeverities)[number];
-
-export interface ReviewLocation {
-	startLine: number;
-	endLine: number;
-}
-
-export interface ReviewComment {
-	filename: string;
-	location?: ReviewLocation;
-	severity: ReviewSeverity;
-	text: string;
-	source?: string;
-	why?: string;
-	fix?: string;
-}
-
-interface SubmittedCheckIssue {
-	severity: ReviewSeverity;
-	file: string;
-	line?: number;
-	endLine?: number;
-	problem: string;
-	why?: string;
-	fix?: string;
-}
+import {
+	commentFromCheckSubmission,
+	type ReviewComment,
+	type SubmittedCheckComment,
+	submittedCheckCommentSchema,
+} from "./review-comment.ts";
 
 export interface CheckRunParams {
 	checkName: string;
@@ -62,46 +41,21 @@ interface CheckCoordinatorOptions {
 	runner: Pick<SubagentRunner, "run">;
 	profiles: ResolvedProfiles;
 	cwd: string;
+	/** Directories self-discovered Checks may also come from (the discovery walk plus global roots). */
+	allowedDirectories: readonly string[];
 	signal?: AbortSignal;
 	parentSession?: string;
 }
-
-const submittedCheckIssueProperties = {
-	severity: Type.Union(reviewSeverities.map((severity) => Type.Literal(severity))),
-	file: Type.String(),
-	problem: Type.String(),
-	why: Type.Optional(Type.String()),
-	fix: Type.Optional(Type.String()),
-};
-
-const submittedCheckIssueSchema = Type.Union([
-	Type.Object(submittedCheckIssueProperties, { additionalProperties: false }),
-	Type.Object(
-		{ ...submittedCheckIssueProperties, line: Type.Integer({ minimum: 1 }) },
-		{ additionalProperties: false },
-	),
-	Type.Object(
-		{
-			...submittedCheckIssueProperties,
-			line: Type.Integer({ minimum: 1 }),
-			endLine: Type.Integer({ minimum: 1 }),
-		},
-		{ additionalProperties: false },
-	),
-]);
 
 const checkSystemPrompt = `You run one Code Review Check against an explicitly described diff.
 Inspect only; never modify files. Follow the supplied Check instructions and report only issues caused by the diff.
 Finish by calling submit_check exactly once. Do not write a final assistant message.`;
 
-function checkURI(check: CheckDefinition): string {
-	return pathToFileURL(check.path).href;
-}
-
 function checkMessage(params: CheckRunParams, check: CheckDefinition): string {
 	return [
 		`Check: ${check.name}`,
 		check.description ? `Description: ${check.description}` : undefined,
+		`Default severity for submitted issues: ${check.severityDefault}`,
 		`Diff description: ${params.diffDescription}`,
 		params.files?.length ? `Relevant files: ${params.files.join(", ")}` : undefined,
 		`Invocation brief: ${params.instructions}`,
@@ -112,33 +66,10 @@ function checkMessage(params: CheckRunParams, check: CheckDefinition): string {
 		.join("\n\n");
 }
 
-function parseLocation(issue: SubmittedCheckIssue): ReviewLocation | undefined {
-	if (issue.line === undefined) {
-		if (issue.endLine !== undefined) throw new Error("submit_check issue endLine requires line");
-		return undefined;
-	}
-	if (!Number.isInteger(issue.line) || issue.line < 1)
-		throw new Error("submit_check issue line must be a positive integer");
-	if (issue.endLine === undefined) return { startLine: issue.line, endLine: issue.line };
-	if (!Number.isInteger(issue.endLine) || issue.endLine < 1)
-		throw new Error("submit_check issue endLine must be a positive integer");
-	if (issue.endLine < issue.line) throw new Error("submit_check issue endLine must not be before line");
-	return { startLine: issue.line, endLine: issue.endLine };
-}
-
-function normalizeIssues(issues: readonly SubmittedCheckIssue[], source: string): ReviewComment[] {
-	return issues.map((issue) => {
-		const location = parseLocation(issue);
-		return {
-			filename: issue.file,
-			...(location ? { location } : {}),
-			severity: issue.severity,
-			text: issue.problem,
-			source,
-			why: issue.why,
-			fix: issue.fix,
-		};
-	});
+/** Self-discovered Checks must come from a `.agents/checks` directory or a configured global root. */
+function isAllowedCheckDirectory(directory: string, allowed: readonly string[]): boolean {
+	if (allowed.includes(directory)) return true;
+	return basename(directory) === "checks" && basename(dirname(directory)) === ".agents";
 }
 
 /** Coordinates URI-identified Check discovery state, execution, and normalized findings. */
@@ -175,9 +106,11 @@ export class CheckCoordinator {
 				name: "submit_check",
 				label: "submit_check",
 				description: "Submit all Check issues and terminate.",
-				parameters: Type.Object({ issues: Type.Array(submittedCheckIssueSchema) }),
-				async execute(_id, value: { issues: SubmittedCheckIssue[] }) {
-					submitted = normalizeIssues(value.issues, entry.definition.name);
+				parameters: Type.Object({ issues: Type.Array(submittedCheckCommentSchema) }),
+				async execute(_id, value: { issues: SubmittedCheckComment[] }) {
+					submitted = value.issues.map((issue) =>
+						commentFromCheckSubmission(issue, entry.definition.name, entry.definition.severityDefault),
+					);
 					return {
 						content: [{ type: "text", text: "Check submitted." }],
 						details: {},
@@ -230,7 +163,7 @@ export class CheckCoordinator {
 	}
 
 	private add(definition: CheckDefinition): MutableCheckCatalogEntry {
-		const uri = checkURI(definition);
+		const uri = pathToFileURL(definition.path).href;
 		const existing = this.catalog.get(uri);
 		if (existing) return existing;
 		const entry: MutableCheckCatalogEntry = {
@@ -260,6 +193,12 @@ export class CheckCoordinator {
 		const canonicalURI = pathToFileURL(path).href;
 		const canonical = this.catalog.get(canonicalURI);
 		if (canonical) return canonical;
+		if (!isAllowedCheckDirectory(dirname(path), this.options.allowedDirectories)) {
+			const valid = [...this.catalog.values()].map((entry) => `${entry.definition.name}: ${entry.uri}`).join(", ");
+			throw new Error(
+				`Check URI ${JSON.stringify(uriValue)} is outside every .agents/checks directory and configured global root. Valid Checks: ${valid || "none"}`,
+			);
+		}
 		let definition: CheckDefinition | undefined;
 		try {
 			definition = await loadCheck(path);

@@ -1,50 +1,38 @@
+/**
+ * Code Review — the fast review tier: one main reviewer child resolves an
+ * explicitly described diff and runs applicable Checks through `run_check`;
+ * results merge mechanically into one deterministic Comment list.
+ */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { type CheckDefinition, discoverChecks } from "../check-discovery.ts";
-import { buildEnvelope } from "../envelopes.ts";
+import { type AgentToolRecovery, type AgentToolSpec, createAgentTool } from "../agent-tool.ts";
+import { type CheckDefinition, checkDirectories, discoverChecks } from "../check-discovery.ts";
+import { escapeAttribute } from "../markup.ts";
 import type { ResolvedProfiles } from "../profiles.ts";
-import { isSubagentAbortError, SubagentRunError, type SubagentRunner } from "../runner.ts";
+import { isSubagentAbortError, type SubagentRunner } from "../runner.ts";
 import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
-import { createTraceRenderer, emitTraceRunning, withTraceDetails } from "../ui/trace.ts";
+import { type CheckCatalogEntry, CheckCoordinator, type CheckRunParams } from "./code-review-checks.ts";
 import {
-	type CheckCatalogEntry,
-	CheckCoordinator,
-	type CheckRunParams,
+	commentFromSubmission,
 	type ReviewComment,
 	reviewSeverities,
-} from "./code-review-checks.ts";
+	type SubmittedComment,
+	submittedCommentSchema,
+} from "./review-comment.ts";
 
-interface SubmittedComment {
-	filename: string;
-	startLine: number;
-	endLine: number;
-	severity: (typeof reviewSeverities)[number];
-	text: string;
-	why?: string;
-	fix?: string;
-}
 interface CodeReviewParams {
 	diff_description: string;
 	files?: string[];
 	instructions?: string;
 	thinking?: "low" | "high";
 }
+
 interface CodeReviewOptions {
 	globalRoots?: readonly string[];
 }
-
-const commentSchema = Type.Object({
-	filename: Type.String(),
-	startLine: Type.Integer({ minimum: 1 }),
-	endLine: Type.Integer({ minimum: 1 }),
-	severity: Type.Union(reviewSeverities.map((severity) => Type.Literal(severity))),
-	text: Type.String(),
-	why: Type.Optional(Type.String()),
-	fix: Type.Optional(Type.String()),
-});
 
 function formatReview(comments: readonly ReviewComment[], checks: readonly CheckCatalogEntry[]): string {
 	const ordered = [...comments].sort(
@@ -89,10 +77,6 @@ function formatReview(comments: readonly ReviewComment[], checks: readonly Check
 	return lines.join("\n");
 }
 
-function escapeAttribute(value: string): string {
-	return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-}
-
 function reviewMessage(params: CodeReviewParams, checks: readonly CheckDefinition[]): string {
 	return [
 		`Diff description: ${params.diff_description}`,
@@ -131,21 +115,9 @@ export function createCodeReviewTool(
 	profiles: ResolvedProfiles,
 	options: CodeReviewOptions = {},
 ): ToolDefinition<any, any, any> {
-	const renderer = createTraceRenderer<CodeReviewParams>({
-		invocation: (params) => ({ action: "review", target: params.diff_description }),
-		progress: (result) => {
-			if (typeof result.details !== "object" || result.details === null) return [];
-			const counts = (result.details as { toolCallCounts?: Record<string, number> }).toolCallCounts;
-			if (!counts) return [];
-			const tally = Object.entries(counts)
-				.map(([name, count]) => `${name} ×${count}`)
-				.join(", ");
-			return tally ? [tally] : [];
-		},
-	});
-	return {
+	const spec: AgentToolSpec<CodeReviewParams, "review"> = {
+		key: "review",
 		name: "code_review",
-		label: "code_review",
 		description:
 			"Run a formal Code Review only when the user explicitly requests one. Never use merely to inspect changes for context. If the merge base is ambiguous, ask the user first; never assume main or master.",
 		parameters: Type.Object({
@@ -154,129 +126,72 @@ export function createCodeReviewTool(
 			instructions: Type.Optional(Type.String()),
 			thinking: Type.Optional(Type.Union([Type.Literal("low"), Type.Literal("high")])),
 		}),
-		renderShell: "self",
-		async execute(_id, params: CodeReviewParams, signal, onUpdate, ctx) {
-			const toolCallCounts = new Map<string, number>();
-			const toolCalls: string[] = [];
-			const traceDetails = () => ({ toolCallCounts: Object.fromEntries(toolCallCounts), toolCalls: [...toolCalls] });
-			emitTraceRunning(onUpdate, traceDetails());
+		route(params) {
+			const route = profiles.agents.review.main;
+			return { ...route, reasoning: params.thinking ?? route.reasoning };
+		},
+		async plan(params, ctx) {
+			const checks = await discoverChecks({ cwd: ctx.cwd, globalRoots: options.globalRoots });
+			const coordinator = new CheckCoordinator(checks, {
+				runner,
+				profiles,
+				cwd: ctx.cwd,
+				allowedDirectories: checkDirectories({ cwd: ctx.cwd, globalRoots: options.globalRoots }),
+				signal: ctx.signal,
+				...(ctx.parentSession ? { parentSession: ctx.parentSession } : {}),
+			});
 			let submission: ReviewComment[] | undefined;
-			let checks: CheckDefinition[] = [];
-			let coordinator: CheckCoordinator | undefined;
 			const submitReview: ToolDefinition<any, any, any> = {
 				name: "submit_review",
 				label: "submit_review",
 				description: "Submit the complete Code Review and terminate.",
-				parameters: Type.Object({ comments: Type.Array(commentSchema) }),
+				parameters: Type.Object({ comments: Type.Array(submittedCommentSchema) }),
 				async execute(_toolCallID, input: { comments: SubmittedComment[] }) {
-					submission = structuredClone(input.comments).map((comment) => ({
-						filename: comment.filename,
-						location: { startLine: comment.startLine, endLine: comment.endLine },
-						severity: comment.severity,
-						text: comment.text,
-						why: comment.why,
-						fix: comment.fix,
-					}));
+					submission = structuredClone(input.comments).map(commentFromSubmission);
 					return { content: [{ type: "text", text: "Review submitted." }], details: {}, terminate: true } as any;
 				},
 			};
-			const route = profiles.agents.review.main;
-			const parentSession = ctx.sessionManager?.getSessionFile();
-			try {
-				checks = await discoverChecks({ cwd: ctx.cwd, globalRoots: options.globalRoots });
-				const activeCoordinator = new CheckCoordinator(checks, {
-					runner,
-					profiles,
-					cwd: ctx.cwd,
-					signal,
-					...(parentSession ? { parentSession } : {}),
-				});
-				coordinator = activeCoordinator;
-				const runCheck: ToolDefinition<any, any, any> = {
-					name: "run_check",
-					label: "run_check",
-					description: "Run one discovered Code Review Check. Returns only a one-line summary.",
-					parameters: Type.Object({
-						checkName: Type.String(),
-						checkURI: Type.String(),
-						diffDescription: Type.String(),
-						files: Type.Optional(Type.Array(Type.String())),
-						instructions: Type.String(),
-					}),
-					async execute(_toolCallID, input: CheckRunParams) {
-						const summary = await activeCoordinator.run(input);
-						return {
-							content: [{ type: "text", text: summary }],
-							details: {},
-						} as any;
-					},
-				};
-				const child = await runner.run({
-					definition: {
-						key: "review",
-						systemPrompt,
-						tools: ["read", "grep", "find", "ls", ...SHELL_TOOLBOX_NAMES, "run_check", "submit_review"],
-						allowMcp: false,
-						model: route.model,
-						reasoningEffort: params.thinking ?? route.reasoning,
-					},
-					cwd: ctx.cwd,
-					message: reviewMessage(params, checks),
-					finalMessage: "optional",
-					signal,
-					...(parentSession
-						? { record: { parentSession, name: `review: ${params.diff_description}`.slice(0, 120) } }
-						: {}),
-					onToolCall: (toolCall) => {
-						toolCallCounts.set(toolCall.tool, (toolCallCounts.get(toolCall.tool) ?? 0) + 1);
-						toolCalls.push(toolCall.summary);
-						emitTraceRunning(onUpdate, traceDetails());
-					},
-					toolbox: (processes) => [...createShellToolbox(processes), runCheck, submitReview],
-				});
-				if (!submission)
-					throw new SubagentRunError(
-						child.sessionID,
-						child.toolLog,
-						new Error("review child did not submit a review"),
-					);
-				return {
+			const runCheck: ToolDefinition<any, any, any> = {
+				name: "run_check",
+				label: "run_check",
+				description: "Run one discovered Code Review Check. Returns only a one-line summary.",
+				parameters: Type.Object({
+					checkName: Type.String(),
+					checkURI: Type.String(),
+					diffDescription: Type.String(),
+					files: Type.Optional(Type.Array(Type.String())),
+					instructions: Type.String(),
+				}),
+				async execute(_toolCallID, input: CheckRunParams) {
+					const summary = await coordinator.run(input);
+					return { content: [{ type: "text", text: summary }], details: {} } as any;
+				},
+			};
+			return {
+				systemPrompt,
+				message: reviewMessage(params, checks),
+				toolbox: (processes) => [...createShellToolbox(processes), runCheck, submitReview],
+				finalize: () => {
+					if (!submission) throw new Error("review child did not submit a review");
+					return { content: formatReview([...submission, ...coordinator.comments()], coordinator.entries()) };
+				},
+				recover: (error): AgentToolRecovery => ({
 					content: [
-						{
-							type: "text",
-							text: buildEnvelope({
-								kind: "review",
-								sessionID: child.sessionID,
-								content: formatReview(
-									[...submission, ...activeCoordinator.comments()],
-									activeCoordinator.entries(),
-								),
-							}),
-						},
-					],
-					details: withTraceDetails(traceDetails(), "success"),
-				};
-			} catch (error) {
-				if (isSubagentAbortError(error)) throw error;
-				const sessionID = error instanceof SubagentRunError ? error.sessionID : undefined;
-				const attributedSessionID = sessionID ?? "unavailable";
-				const content = [
-					`Review failed: ${error instanceof Error ? error.message : String(error)}`,
-					"",
-					formatReview([...(submission ?? []), ...(coordinator?.comments() ?? [])], coordinator?.entries() ?? []),
-				].join("\n");
-				return {
-					content: [
-						{
-							type: "text",
-							text: buildEnvelope({ kind: "error", agent: "review", sessionID: attributedSessionID, content }),
-						},
-					],
-					details: withTraceDetails(traceDetails(), "failed"),
-				};
-			}
+						`Review failed: ${error instanceof Error ? error.message : String(error)}`,
+						"",
+						formatReview([...(submission ?? []), ...coordinator.comments()], coordinator.entries()),
+					].join("\n"),
+					outcome: isSubagentAbortError(error) ? "cancelled" : "failed",
+				}),
+			};
 		},
-		renderCall: renderer.renderCall,
-		renderResult: renderer.renderResult,
-	} as ToolDefinition<any, any, any>;
+		finalize(answer) {
+			// Unreached in practice: every plan supplies a capture-based finalize. Identity keeps the spec total.
+			return { content: answer };
+		},
+		presentation: { action: "review", target: (params) => params.diff_description },
+		tools: ["read", "grep", "find", "ls", ...SHELL_TOOLBOX_NAMES, "run_check", "submit_review"],
+		allowMcp: false,
+	};
+	return createAgentTool(spec, runner);
 }

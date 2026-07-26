@@ -1,13 +1,12 @@
-import type { Dirent } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, extname, join } from "node:path";
-import { parse } from "yaml";
+import { dirname, join } from "node:path";
+import { loadMarkdownResource, type MarkdownResource, readMarkdownResources } from "./markdown-resources.ts";
+import { parseSeverity, type ReviewSeverity, reviewSeverities } from "./tools/review-comment.ts";
 
 export interface CheckDefinition {
 	name: string;
 	description?: string;
-	severityDefault: string;
+	severityDefault: ReviewSeverity;
 	body: string;
 	path: string;
 }
@@ -17,66 +16,13 @@ export interface CheckDiscoveryOptions {
 	globalRoots?: readonly string[];
 }
 
-export const defaultCheckRoots = (): string[] => [
+const defaultGlobalRoots = (): string[] => [
 	join(homedir(), ".pi", "agent", "checks"),
 	join(homedir(), ".agents", "checks"),
 ];
 
-export function parseCheck(path: string, source: string): CheckDefinition | undefined {
-	if (!source.trim()) return undefined;
-	let body = source;
-	let metadata: Record<string, unknown> = {};
-	const frontmatter = source.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
-	if (frontmatter) {
-		try {
-			const parsed = parse(frontmatter[1] ?? "");
-			if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) metadata = parsed;
-			body = source.slice(frontmatter[0].length);
-		} catch {
-			// Invalid frontmatter is treated as check instructions.
-		}
-	}
-	const instructions = body.trim();
-	if (!instructions) return undefined;
-	const fallbackName = basename(path, extname(path));
-	return {
-		name: typeof metadata.name === "string" && metadata.name.trim() ? metadata.name.trim() : fallbackName,
-		description:
-			typeof metadata.description === "string" && metadata.description.trim()
-				? metadata.description.trim()
-				: undefined,
-		severityDefault:
-			typeof metadata["severity-default"] === "string" && metadata["severity-default"].trim()
-				? metadata["severity-default"].trim()
-				: "medium",
-		body: instructions,
-		path,
-	};
-}
-
-export async function loadCheck(path: string): Promise<CheckDefinition | undefined> {
-	return parseCheck(path, await readFile(path, "utf8"));
-}
-
-async function readChecks(directory: string): Promise<CheckDefinition[]> {
-	let entries: Dirent[];
-	try {
-		entries = await readdir(directory, { withFileTypes: true });
-	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-		throw error;
-	}
-	const checks: CheckDefinition[] = [];
-	for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
-		if (!entry.isFile() || extname(entry.name) !== ".md") continue;
-		const path = join(directory, entry.name);
-		const parsed = await loadCheck(path);
-		if (parsed) checks.push(parsed);
-	}
-	return checks;
-}
-
-export async function discoverChecks(options: CheckDiscoveryOptions): Promise<CheckDefinition[]> {
+/** Every directory Checks may live in for this cwd: ancestor `.agents/checks` walk (nearest first), then the global roots. */
+export function checkDirectories(options: CheckDiscoveryOptions): string[] {
 	const directories: string[] = [];
 	let current = options.cwd;
 	while (true) {
@@ -85,11 +31,41 @@ export async function discoverChecks(options: CheckDiscoveryOptions): Promise<Ch
 		if (parent === current) break;
 		current = parent;
 	}
-	directories.push(...(options.globalRoots ?? defaultCheckRoots()));
+	directories.push(...(options.globalRoots ?? defaultGlobalRoots()));
+	return directories;
+}
 
+/** Refine a Markdown resource into a Check; a malformed `severity-default` fails loudly, naming the file. */
+function checkFromResource(resource: MarkdownResource): CheckDefinition {
+	const raw = resource.frontmatter["severity-default"];
+	let severityDefault: ReviewSeverity = "medium";
+	if (raw !== undefined) {
+		const parsed = typeof raw === "string" ? parseSeverity(raw.trim()) : undefined;
+		if (!parsed)
+			throw new Error(
+				`${resource.path}: severity-default ${JSON.stringify(raw)} must be one of ${reviewSeverities.join("|")}`,
+			);
+		severityDefault = parsed;
+	}
+	return {
+		name: resource.name,
+		description: resource.description,
+		severityDefault,
+		body: resource.body,
+		path: resource.path,
+	};
+}
+
+export async function loadCheck(path: string): Promise<CheckDefinition | undefined> {
+	const resource = await loadMarkdownResource(path);
+	return resource && checkFromResource(resource);
+}
+
+export async function discoverChecks(options: CheckDiscoveryOptions): Promise<CheckDefinition[]> {
 	const discovered = new Map<string, CheckDefinition>();
-	for (const directory of directories) {
-		for (const check of await readChecks(directory)) {
+	for (const directory of checkDirectories(options)) {
+		for (const resource of await readMarkdownResources(directory)) {
+			const check = checkFromResource(resource);
 			if (!discovered.has(check.name)) discovered.set(check.name, check);
 		}
 	}
