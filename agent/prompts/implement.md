@@ -1,5 +1,5 @@
 ---
-description: "Implement a spec or set of tickets through tested, reviewable slices."
+description: Implement a spec or set of tickets through tested, reviewable slices.
 ---
 
 ## Work
