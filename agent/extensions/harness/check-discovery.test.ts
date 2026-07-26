@@ -21,6 +21,7 @@ describe("discoverChecks", () => {
 			"---\nname: error-handling\ndescription: Find swallowed errors\nseverity-default: high\n---\nInspect changed error paths.\n",
 		);
 		await check(root, "repo", "empty.md", "");
+		await check(root, "repo", "metadata-only.md", "---\nname: metadata-only\n---\n   \n");
 		await check(root, "repo", "ignored.txt", "not a check");
 		await mkdir(join(root, "repo", ".agents", "checks", "nested"));
 		await writeFile(join(root, "repo", ".agents", "checks", "nested", "nested.md"), "ignored");
@@ -44,6 +45,28 @@ describe("discoverChecks", () => {
 				severityDefault: "medium",
 				body: "Review authentication boundaries.",
 				path: join(root, "repo", ".agents", "checks", "security.md"),
+			},
+		]);
+	});
+
+	it("normalizes metadata and uses locale-independent file ordering for collisions", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-checks-"));
+		await check(root, "repo", "a.md", "---\nname: ' duplicate '\n---\nlowercase file");
+		await check(
+			root,
+			"repo",
+			"B.md",
+			"---\nname: duplicate\ndescription: '  padded description  '\nseverity-default: ' high '\n---\nuppercase file",
+		);
+
+		const checks = await discoverChecks({ cwd: join(root, "repo"), globalRoots: [] });
+
+		expect(checks).toMatchObject([
+			{
+				name: "duplicate",
+				description: "padded description",
+				severityDefault: "high",
+				body: "uppercase file",
 			},
 		]);
 	});

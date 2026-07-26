@@ -36,15 +36,20 @@ function parseCheck(path: string, source: string): CheckDefinition | undefined {
 			// Invalid frontmatter is treated as check instructions.
 		}
 	}
+	const instructions = body.trim();
+	if (!instructions) return undefined;
 	const fallbackName = basename(path, extname(path));
 	return {
-		name: typeof metadata.name === "string" && metadata.name.trim() ? metadata.name : fallbackName,
-		description: typeof metadata.description === "string" ? metadata.description : undefined,
+		name: typeof metadata.name === "string" && metadata.name.trim() ? metadata.name.trim() : fallbackName,
+		description:
+			typeof metadata.description === "string" && metadata.description.trim()
+				? metadata.description.trim()
+				: undefined,
 		severityDefault:
 			typeof metadata["severity-default"] === "string" && metadata["severity-default"].trim()
-				? metadata["severity-default"]
+				? metadata["severity-default"].trim()
 				: "medium",
-		body: body.trim(),
+		body: instructions,
 		path,
 	};
 }
@@ -58,7 +63,7 @@ async function readChecks(directory: string): Promise<CheckDefinition[]> {
 		throw error;
 	}
 	const checks: CheckDefinition[] = [];
-	for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+	for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
 		if (!entry.isFile() || extname(entry.name) !== ".md") continue;
 		const path = join(directory, entry.name);
 		const parsed = parseCheck(path, await readFile(path, "utf8"));
