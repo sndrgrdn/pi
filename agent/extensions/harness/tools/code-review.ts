@@ -14,6 +14,7 @@ import { escapeAttribute } from "../markup.ts";
 import type { ResolvedProfiles } from "../profiles.ts";
 import { isSubagentAbortError, type SubagentRunner } from "../runner.ts";
 import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
+import { createTraceRenderer } from "../ui/trace.ts";
 import { type CheckCatalogEntry, CheckCoordinator, type CheckRunParams } from "./code-review-checks.ts";
 import {
 	commentFromSubmission,
@@ -33,6 +34,17 @@ interface CodeReviewParams {
 interface CodeReviewOptions {
 	globalRoots?: readonly string[];
 }
+
+const runCheckTraceRenderer = createTraceRenderer<CheckRunParams>({
+	invocation: (args) => ({ action: "run_check", target: args.checkName }),
+});
+
+const submitReviewTraceRenderer = createTraceRenderer<{ comments: SubmittedComment[] }>({
+	invocation: (args) => ({
+		action: "submit_review",
+		target: `${args.comments?.length ?? 0} ${args.comments?.length === 1 ? "comment" : "comments"}`,
+	}),
+});
 
 /** The deterministic output contract: order by file, severity (low last), location, text. */
 function formatReview(comments: readonly ReviewComment[], checks: readonly CheckCatalogEntry[]): string {
@@ -143,7 +155,7 @@ export function createCodeReviewTool(
 				...(ctx.parentSession ? { parentSession: ctx.parentSession } : {}),
 			});
 			let submission: ReviewComment[] | undefined;
-			const submitReview: ToolDefinition<any, any, any> = {
+			const submitReview = {
 				name: "submit_review",
 				label: "submit_review",
 				description: "Submit the complete Code Review and terminate.",
@@ -152,8 +164,10 @@ export function createCodeReviewTool(
 					submission = structuredClone(input.comments).map(commentFromSubmission);
 					return { content: [{ type: "text", text: "Review submitted." }], details: {}, terminate: true } as any;
 				},
-			};
-			const runCheck: ToolDefinition<any, any, any> = {
+				renderCall: submitReviewTraceRenderer.renderCall,
+				renderResult: submitReviewTraceRenderer.renderResult,
+			} as ToolDefinition<any, any, any>;
+			const runCheck = {
 				name: "run_check",
 				label: "run_check",
 				description: "Run one discovered Code Review Check. Returns only a one-line summary.",
@@ -168,7 +182,9 @@ export function createCodeReviewTool(
 					const summary = await coordinator.run(input);
 					return { content: [{ type: "text", text: summary }], details: {} } as any;
 				},
-			};
+				renderCall: runCheckTraceRenderer.renderCall,
+				renderResult: runCheckTraceRenderer.renderResult,
+			} as ToolDefinition<any, any, any>;
 			return {
 				systemPrompt,
 				message: reviewMessage(params, checks),

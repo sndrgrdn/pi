@@ -7,12 +7,20 @@ import { type CheckDefinition, loadCheck } from "../check-discovery.ts";
 import type { ResolvedProfiles } from "../profiles.ts";
 import { isSubagentAbortError, type SubagentRunner } from "../runner.ts";
 import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
+import { createTraceRenderer } from "../ui/trace.ts";
 import {
 	commentFromCheckSubmission,
 	type ReviewComment,
 	type SubmittedCheckComment,
 	submittedCheckCommentSchema,
 } from "./review-comment.ts";
+
+const submitCheckTraceRenderer = createTraceRenderer<{ issues: SubmittedCheckComment[] }>({
+	invocation: (args) => ({
+		action: "submit_check",
+		target: `${args.issues?.length ?? 0} ${args.issues?.length === 1 ? "issue" : "issues"}`,
+	}),
+});
 
 /** The `run_check` wire shape. */
 export interface CheckRunParams {
@@ -110,7 +118,7 @@ export class CheckCoordinator {
 		let lastError: unknown;
 		for (let attempt = 0; attempt < 2; attempt++) {
 			submitted = undefined;
-			const submitCheck: ToolDefinition<any, any, any> = {
+			const submitCheck = {
 				name: "submit_check",
 				label: "submit_check",
 				description: "Submit all Check issues and terminate.",
@@ -125,7 +133,9 @@ export class CheckCoordinator {
 						terminate: true,
 					} as any;
 				},
-			};
+				renderCall: submitCheckTraceRenderer.renderCall,
+				renderResult: submitCheckTraceRenderer.renderResult,
+			} as ToolDefinition<any, any, any>;
 
 			try {
 				const route = this.options.profiles.agents.review.check;
