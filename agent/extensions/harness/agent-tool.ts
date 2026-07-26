@@ -28,10 +28,26 @@ import {
 } from "./ui/trace.ts";
 
 /** Per-call assembly produced by a spec's `plan` hook. */
-export interface AgentToolPlan {
+export interface AgentToolPlan<TParams = unknown, K extends AgentKey = AgentKey> {
 	systemPrompt: string;
 	message: string;
 	toolbox?: ChildToolboxFactory;
+	/**
+	 * Capture-based finalization for a plan whose toolbox carries a terminating
+	 * submit tool: the closure reads the capture, and its presence makes the
+	 * child's final assistant message optional. Overrides the spec's `finalize`.
+	 */
+	finalize?(answer: string): AgentToolResult<K>;
+	/** Per-call recovery closed over the plan's capture; overrides the spec's `recover`. */
+	recover?(error: unknown, ctx: AgentToolRecoverContext<TParams>): AgentToolRecovery | Promise<AgentToolRecovery>;
+}
+
+/** The per-call facts a `plan` hook may need beyond its params. */
+export interface AgentToolPlanContext {
+	cwd: string;
+	signal: AbortSignal | undefined;
+	/** The user session file, when the harness can attribute subagent records. */
+	parentSession: string | undefined;
 }
 
 /**
@@ -68,7 +84,7 @@ export interface AgentToolSpec<TParams, K extends AgentKey> {
 	description: string;
 	parameters: unknown;
 	route(params: TParams): Route;
-	plan(params: TParams, ctx: { cwd: string }): AgentToolPlan | Promise<AgentToolPlan>;
+	plan(params: TParams, ctx: AgentToolPlanContext): AgentToolPlan<TParams, K> | Promise<AgentToolPlan<TParams, K>>;
 	finalize(answer: string): AgentToolResult<K>;
 	recover?(error: unknown, ctx: AgentToolRecoverContext<TParams>): AgentToolRecovery | Promise<AgentToolRecovery>;
 	presentation: AgentToolPresentation<TParams>;
@@ -171,10 +187,11 @@ function failureSessionID(error: unknown): string | undefined {
 /** A finalize throw is a child-run failure: annotate it with the child's session and log. */
 function finalizeAnswer<TParams, K extends AgentKey>(
 	spec: AgentToolSpec<TParams, K>,
+	planned: AgentToolPlan<TParams, K>,
 	child: SubagentRunResult,
 ): AgentToolResult<K> {
 	try {
-		return spec.finalize(child.answer);
+		return (planned.finalize ?? spec.finalize)(child.answer);
 	} catch (error) {
 		throw new SubagentRunError(child.sessionID, child.toolLog, error);
 	}
@@ -209,7 +226,8 @@ export function createAgentTool<TParams, K extends AgentKey>(
 			const traceDetails = spec.traceDetails?.(params);
 			const progress = createToolCallProgress(onUpdate, traceDetails);
 			if (signal?.aborted) throw new SubagentAbortError();
-			const planned = await spec.plan(params, { cwd: ctx.cwd });
+			const parentSession = ctx.sessionManager?.getSessionFile();
+			const planned = await spec.plan(params, { cwd: ctx.cwd, signal, parentSession });
 			const route = spec.route(params);
 			const definition: AgentDefinition = {
 				key: spec.key,
@@ -219,7 +237,6 @@ export function createAgentTool<TParams, K extends AgentKey>(
 				model: route.model,
 				reasoningEffort: route.reasoning,
 			};
-			const parentSession = ctx.sessionManager?.getSessionFile();
 			try {
 				const child = await runner.run({
 					definition,
@@ -227,10 +244,11 @@ export function createAgentTool<TParams, K extends AgentKey>(
 					message: planned.message,
 					signal,
 					onToolCall: progress.record,
+					...(planned.finalize ? { finalMessage: "optional" as const } : {}),
 					...(parentSession ? { record: { parentSession, name: subagentRecordName(spec, params) } } : {}),
 					...(planned.toolbox ? { toolbox: planned.toolbox } : {}),
 				});
-				const finalized = finalizeAnswer(spec, child);
+				const finalized = finalizeAnswer(spec, planned, child);
 				return {
 					content: [{ type: "text", text: buildEnvelope(envelopeFor[spec.key](child.sessionID, finalized)) }],
 					details: withTraceDetails(
@@ -244,8 +262,9 @@ export function createAgentTool<TParams, K extends AgentKey>(
 					),
 				};
 			} catch (error) {
-				if (!spec.recover) throw error;
-				const recovery = await spec.recover(error, { params, cwd: ctx.cwd, signal }); // a rethrow here replaces the failure
+				const recover = planned.recover ?? spec.recover;
+				if (!recover) throw error;
+				const recovery = await recover(error, { params, cwd: ctx.cwd, signal }); // a rethrow here replaces the failure
 				const sessionID = failureSessionID(error);
 				if (sessionID === undefined) throw error; // no child session — nothing to attribute the report to
 				return {

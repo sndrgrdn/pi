@@ -98,7 +98,11 @@ export interface RunOptions {
 	onToolCall?(toolCall: SubagentToolCall): void;
 	toolbox?: ChildToolboxFactory;
 	signal?: AbortSignal;
-	/** Defaults to required; terminating-tool children may explicitly omit the final assistant message. */
+	/**
+	 * Defaults to required. Set to "optional" only alongside a toolbox whose
+	 * terminating submit tool captures the result the final assistant message
+	 * would otherwise carry (the agent-tool factory couples the two).
+	 */
 	finalMessage?: "required" | "optional";
 }
 
