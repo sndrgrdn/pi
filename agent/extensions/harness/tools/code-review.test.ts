@@ -134,4 +134,36 @@ No checks were run.
 		expect(textOf(result)).toContain("**MEDIUM** line 2 — Captured.");
 		expect(result.details).toMatchObject({ trace: { state: "failed" } });
 	});
+
+	it("returns review_error when the child fails before creating a session", async () => {
+		const run = vi.fn(async () => {
+			throw new Error("model unavailable");
+		});
+		const result = await createCodeReviewTool({ run } as any, BUILTIN_PROFILES).execute(
+			"call",
+			{ diff_description: "HEAD" },
+			undefined,
+			undefined,
+			context,
+		);
+		expect(textOf(result)).toContain('<review_error sessionID="unavailable">');
+		expect(textOf(result)).toContain("Review failed: model unavailable");
+		expect(result.details).toMatchObject({ trace: { state: "failed" } });
+	});
+
+	it("renders review progress with tool tallies", () => {
+		const tool = createCodeReviewTool({ run: vi.fn() } as any, BUILTIN_PROFILES);
+		const theme = { fg: (_color: string, value: string) => value, bold: (value: string) => value } as any;
+		const row = tool.renderCall?.({ diff_description: "HEAD~1" }, theme, { lastComponent: undefined } as any) as any;
+		tool.renderResult?.(
+			{
+				content: [{ type: "text", text: "" }],
+				details: { trace: { state: "running" }, toolCallCounts: { read: 2 } },
+			},
+			{ expanded: false, isPartial: true },
+			theme,
+			{ args: { diff_description: "HEAD~1" }, cwd: "/repo", isError: false, lastComponent: row } as any,
+		);
+		expect(row.render(100).map((line: string) => line.trimEnd())).toEqual([" ◐ review HEAD~1 · read ×2"]);
+	});
 });

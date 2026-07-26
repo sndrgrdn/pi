@@ -1,10 +1,13 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { buildEnvelope } from "../envelopes.ts";
 import type { ResolvedProfiles } from "../profiles.ts";
 import { isSubagentAbortError, SubagentRunError, type SubagentRunner } from "../runner.ts";
 import { createShellToolbox, SHELL_TOOLBOX_NAMES } from "../shell/toolbox.ts";
-import { emitTraceRunning, withTraceDetails } from "../ui/trace.ts";
+import { createTraceRenderer, emitTraceRunning, withTraceDetails } from "../ui/trace.ts";
 
 const severities = ["critical", "high", "medium", "low"] as const;
 type Severity = (typeof severities)[number];
@@ -74,13 +77,27 @@ function reviewMessage(params: CodeReviewParams): string {
 		.join("\n\n");
 }
 
-const systemPrompt =
-	"Review the explicitly described diff. Resolve the diff yourself with the shell; do not assume main or master as a base. Inspect only—never modify files. Report every actionable Comment, including low severity. Finish by calling submit_review exactly once; do not write a final assistant message.";
+const systemPrompt = readFileSync(
+	join(dirname(fileURLToPath(import.meta.url)), "..", "agents", "prompts", "review.md"),
+	"utf8",
+).trim();
 
 export function createCodeReviewTool(
 	runner: Pick<SubagentRunner, "run">,
 	profiles: ResolvedProfiles,
 ): ToolDefinition<any, any, any> {
+	const renderer = createTraceRenderer<CodeReviewParams>({
+		invocation: (params) => ({ action: "review", target: params.diff_description }),
+		progress: (result) => {
+			if (typeof result.details !== "object" || result.details === null) return [];
+			const counts = (result.details as { toolCallCounts?: Record<string, number> }).toolCallCounts;
+			if (!counts) return [];
+			const tally = Object.entries(counts)
+				.map(([name, count]) => `${name} ×${count}`)
+				.join(", ");
+			return tally ? [tally] : [];
+		},
+	});
 	return {
 		name: "code_review",
 		label: "code_review",
@@ -170,17 +187,24 @@ export function createCodeReviewTool(
 						],
 						details: withTraceDetails(traceDetails(), "success"),
 					};
-				if (!sessionID) throw error;
+				const attributedSessionID = sessionID ?? "unavailable";
 				const content = [
 					`Review failed: ${error instanceof Error ? error.message : String(error)}`,
 					"",
 					formatReview(submission ?? []),
 				].join("\n");
 				return {
-					content: [{ type: "text", text: buildEnvelope({ kind: "error", agent: "review", sessionID, content }) }],
+					content: [
+						{
+							type: "text",
+							text: buildEnvelope({ kind: "error", agent: "review", sessionID: attributedSessionID, content }),
+						},
+					],
 					details: withTraceDetails(traceDetails(), "failed"),
 				};
 			}
 		},
+		renderCall: renderer.renderCall,
+		renderResult: renderer.renderResult,
 	} as ToolDefinition<any, any, any>;
 }
