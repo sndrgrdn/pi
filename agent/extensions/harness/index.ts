@@ -13,6 +13,7 @@ import { registerShellCommand } from "./shell/command.ts";
 import { BackgroundShellRegistry } from "./shell/registry.ts";
 import { currentShellRegistry } from "./shell/session-registry.ts";
 import { registerShellStatus } from "./shell/status.ts";
+import { createCodeReviewTool } from "./tools/code-review.ts";
 import { createFinderTool } from "./tools/finder.ts";
 import { createLibrarianTool } from "./tools/librarian.ts";
 import { createOracleTool } from "./tools/oracle.ts";
@@ -30,6 +31,7 @@ export const MAIN_TOOL_NAMES = [
 	"oracle",
 	"librarian",
 	"task",
+	"code_review",
 	"mcp",
 ] as const;
 
@@ -57,6 +59,7 @@ export default function harness(pi: ExtensionAPI) {
 	traceTools.register(createLibrarianTool(runner, profiles));
 	traceTools.register(createOracleTool(runner, profiles));
 	traceTools.register(createTaskTool(runner, profiles));
+	traceTools.register(createCodeReviewTool(runner, profiles));
 
 	// Action methods become available only after pi binds the extension runtime.
 	// Lock every started/reloaded session at that seam.

@@ -10,13 +10,18 @@ export interface Route {
 	reasoning: ReasoningLevel;
 }
 
-export type AgentKey = "finder" | "librarian" | "oracle" | "task";
-export type FixedAgentKey = Exclude<AgentKey, "task">;
+export type AgentKey = "finder" | "librarian" | "oracle" | "review" | "task";
+export type FixedAgentKey = Exclude<AgentKey, "review" | "task">;
 export type TaskEffort = "standard" | "high";
 export const TASK_EFFORTS = ["standard", "high"] as const satisfies readonly TaskEffort[];
+export type ReviewRole = "main" | "check";
+export const REVIEW_ROLES = ["main", "check"] as const satisfies readonly ReviewRole[];
 
 export interface ResolvedProfiles {
-	agents: Record<FixedAgentKey, Route> & { task: Record<TaskEffort, Route> };
+	agents: Record<FixedAgentKey, Route> & {
+		review: Record<ReviewRole, Route>;
+		task: Record<TaskEffort, Route>;
+	};
 }
 
 const SOL = "openai-codex/gpt-5.6-sol";
@@ -27,6 +32,10 @@ export const BUILTIN_PROFILES: ResolvedProfiles = {
 		finder: { model: HAIKU, reasoning: "minimal" },
 		librarian: { model: SOL, reasoning: "off" },
 		oracle: { model: SOL, reasoning: "high" },
+		review: {
+			main: { model: SOL, reasoning: "low" },
+			check: { model: HAIKU, reasoning: "minimal" },
+		},
 		task: {
 			standard: { model: SOL, reasoning: "low" },
 			high: { model: SOL, reasoning: "high" },
@@ -41,11 +50,12 @@ export interface RouteOverride {
 
 export interface ProfilesOverride {
 	agents?: Partial<Record<FixedAgentKey, RouteOverride>> & {
+		review?: Partial<Record<ReviewRole, RouteOverride>>;
 		task?: Partial<Record<TaskEffort, RouteOverride>>;
 	};
 }
 
-export const AGENT_KEYS: readonly AgentKey[] = ["finder", "librarian", "oracle", "task"];
+export const AGENT_KEYS: readonly AgentKey[] = ["finder", "librarian", "oracle", "review", "task"];
 const MODEL_ID_RE = /^[^\s/]+\/[^\s/][^\s]*$/;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -87,16 +97,19 @@ export function validateProfilesOverride(raw: unknown): ProfilesOverride {
 		if (!(AGENT_KEYS as readonly string[]).includes(agent)) {
 			throw new Error(`Invalid profiles.json: unknown agent "${agent}"`);
 		}
-		if (agent === "task") {
-			if (!isPlainObject(value)) throw new Error("Invalid profiles.json: agents.task: expected an object");
-			const routes: Partial<Record<TaskEffort, RouteOverride>> = {};
-			for (const [effort, route] of Object.entries(value)) {
-				if (!(TASK_EFFORTS as readonly string[]).includes(effort)) {
-					throw new Error(`Invalid profiles.json: agents.task: unknown effort "${effort}"`);
+		if (agent === "task" || agent === "review") {
+			if (!isPlainObject(value)) throw new Error(`Invalid profiles.json: agents.${agent}: expected an object`);
+			const names = agent === "task" ? TASK_EFFORTS : REVIEW_ROLES;
+			const routes: Record<string, RouteOverride> = {};
+			for (const [name, route] of Object.entries(value)) {
+				if (!(names as readonly string[]).includes(name)) {
+					const noun = agent === "task" ? "effort" : "route";
+					throw new Error(`Invalid profiles.json: agents.${agent}: unknown ${noun} "${name}"`);
 				}
-				routes[effort as TaskEffort] = parseRoute(`agents.task.${effort}`, route);
+				routes[name] = parseRoute(`agents.${agent}.${name}`, route);
 			}
-			agents.task = routes;
+			if (agent === "task") agents.task = routes;
+			else agents.review = routes;
 		} else {
 			agents[agent as FixedAgentKey] = parseRoute(`agents.${agent}`, value);
 		}
@@ -114,6 +127,10 @@ export function mergeProfiles(base: ResolvedProfiles, override: ProfilesOverride
 			finder: mergeRoute(base.agents.finder, override.agents?.finder),
 			librarian: mergeRoute(base.agents.librarian, override.agents?.librarian),
 			oracle: mergeRoute(base.agents.oracle, override.agents?.oracle),
+			review: {
+				main: mergeRoute(base.agents.review.main, override.agents?.review?.main),
+				check: mergeRoute(base.agents.review.check, override.agents?.review?.check),
+			},
 			task: {
 				standard: mergeRoute(base.agents.task.standard, override.agents?.task?.standard),
 				high: mergeRoute(base.agents.task.high, override.agents?.task?.high),

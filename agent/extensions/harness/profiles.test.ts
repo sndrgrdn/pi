@@ -18,6 +18,11 @@ describe("agent routes", () => {
 		expect(BUILTIN_PROFILES.agents.task.standard).toEqual({ model: SOL, reasoning: "low" });
 		expect(BUILTIN_PROFILES.agents.task.high).toEqual({ model: SOL, reasoning: "high" });
 	});
+
+	it("gives Code Review main and Check routes", () => {
+		expect(BUILTIN_PROFILES.agents.review.main).toEqual({ model: SOL, reasoning: "low" });
+		expect(BUILTIN_PROFILES.agents.review.check).toEqual({ model: HAIKU, reasoning: "minimal" });
+	});
 });
 
 describe("validateProfilesOverride", () => {
@@ -27,6 +32,7 @@ describe("validateProfilesOverride", () => {
 				finder: { model: "anthropic/claude-haiku-4-5" },
 				oracle: { reasoning: "xhigh" },
 				task: { high: { model: "anthropic/claude-fable-5" } },
+				review: { check: { reasoning: "low" } },
 			},
 		};
 		expect(validateProfilesOverride(raw)).toEqual(raw);
@@ -52,6 +58,7 @@ describe("mergeProfiles", () => {
 				finder: { reasoning: "low" },
 				oracle: { model: "anthropic/claude-fable-5" },
 				task: { high: { reasoning: "xhigh" } },
+				review: { main: { reasoning: "medium" } },
 			},
 		});
 
@@ -62,6 +69,8 @@ describe("mergeProfiles", () => {
 		});
 		expect(merged.agents.task.high).toEqual({ model: SOL, reasoning: "xhigh" });
 		expect(merged.agents.task.standard).toEqual(BUILTIN_PROFILES.agents.task.standard);
+		expect(merged.agents.review.main).toEqual({ model: SOL, reasoning: "medium" });
+		expect(merged.agents.review.check).toEqual(BUILTIN_PROFILES.agents.review.check);
 		expect(BUILTIN_PROFILES).toEqual(before);
 	});
 });

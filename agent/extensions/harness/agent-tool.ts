@@ -111,6 +111,7 @@ const envelopeFor: { [K in AgentKey]: (sessionID: string, result: AgentToolResul
 	finder: (sessionID, result) => ({ kind: "finder", sessionID, title: result.title, content: result.content }),
 	librarian: (sessionID, result) => ({ kind: "librarian", sessionID, content: result.content }),
 	oracle: (sessionID, result) => ({ kind: "oracle", sessionID, content: result.content }),
+	review: (sessionID, result) => ({ kind: "review", sessionID, content: result.content }),
 	task: (sessionID, result) => ({ kind: "task", sessionID, content: result.content }),
 };
 
