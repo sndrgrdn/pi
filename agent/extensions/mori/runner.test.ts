@@ -91,6 +91,43 @@ describe("shared subagent runner", () => {
 		});
 	});
 
+	it("sends one follow-up prompt in the same session when needed() reports the capture is missing", async () => {
+		const prompts: string[] = [];
+		let captured = false;
+		const child = fakeChild(
+			vi.fn(async (...args: unknown[]) => {
+				prompts.push(args[0] as string);
+				if (prompts.length === 2) captured = true;
+			}),
+		);
+		const runner = new SubagentRunner(async () => child);
+
+		const result = await runner.run({
+			definition,
+			cwd: "/tmp",
+			message: "Review the diff",
+			finalMessage: "optional",
+			followUp: { message: "Submit now.", needed: () => !captured },
+		});
+
+		expect(prompts).toEqual(["Review the diff", "Submit now."]);
+		expect(result.sessionID).toBe("child-7");
+	});
+
+	it("skips the follow-up prompt when the capture is already satisfied", async () => {
+		const child = fakeChild(vi.fn(async () => {}));
+		const runner = new SubagentRunner(async () => child);
+
+		await runner.run({
+			definition,
+			cwd: "/tmp",
+			message: "Review the diff",
+			followUp: { message: "Submit now.", needed: () => false },
+		});
+
+		expect(child.prompt).toHaveBeenCalledExactlyOnceWith("Review the diff");
+	});
+
 	it("does not hide provider errors when the final message is optional", async () => {
 		const child = fakeChild(async () => {
 			throw new Error("provider failed");

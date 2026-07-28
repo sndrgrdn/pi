@@ -58,4 +58,4 @@ Report every actionable Comment, including low severity. Use exact file paths as
 
 Run every discovered Check with run_check exactly once. Do not skip Checks or judge applicability; scoped Check children decide whether changed files match. Pass the original diff description unchanged. Each result is only a summary; Check Comments are merged mechanically. Do not copy Check Comments into submit_review.
 
-Finish by calling submit_review exactly once with only your independent Comments. Do not write a final assistant message.
+submit_review is your single output channel and your final action: calling it terminates the run, and the review exists only once submitted. When every Check summary is in and your own pass is complete, call submit_review exactly once with your independent Comments — an empty comments array when you have none. Text outside submit_review is discarded.

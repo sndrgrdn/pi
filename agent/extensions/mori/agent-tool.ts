@@ -38,6 +38,11 @@ export interface AgentToolPlan<TParams = unknown, K extends AgentKey = AgentKey>
 	 * child's final assistant message optional. Overrides the spec's `finalize`.
 	 */
 	finalize?(answer: string): AgentToolResult<K>;
+	/**
+	 * One corrective prompt sent in the same child session when the first turn
+	 * ends without satisfying the plan's capture; forwarded to the runner.
+	 */
+	followUp?: { message: string; needed(): boolean };
 	/** Per-call recovery closed over the plan's capture; overrides the spec's `recover`. */
 	recover?(error: unknown, ctx: AgentToolRecoverContext<TParams>): AgentToolRecovery | Promise<AgentToolRecovery>;
 }
@@ -245,6 +250,7 @@ export function createAgentTool<TParams, K extends AgentKey>(
 					signal,
 					onToolCall: progress.record,
 					...(planned.finalize ? { finalMessage: "optional" as const } : {}),
+					...(planned.followUp ? { followUp: planned.followUp } : {}),
 					...(parentSession ? { record: { parentSession, name: subagentRecordName(spec, params) } } : {}),
 					...(planned.toolbox ? { toolbox: planned.toolbox } : {}),
 				});

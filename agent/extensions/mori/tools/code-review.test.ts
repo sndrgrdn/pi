@@ -373,6 +373,26 @@ No checks were run.
 		expect(textOf(result)).toContain("No comments.");
 	});
 
+	it("nudges a main reviewer that stops without submitting and accepts the follow-up submission", async () => {
+		const run = vi.fn(async (options: RunOptions) => {
+			// First turn ends without submit_review; the follow-up prompt triggers the submission.
+			expect(options.followUp?.needed()).toBe(true);
+			expect(options.followUp?.message).toContain("Call submit_review now");
+			await submit(options, [{ filename: "a.ts", startLine: 3, endLine: 3, severity: "medium", text: "Nudged." }]);
+			expect(options.followUp?.needed()).toBe(false);
+			return { sessionID: "review-nudge", answer: "", toolLog: [] };
+		});
+		const result = await createCodeReviewTool({ run } as any, BUILTIN_PROFILES).execute(
+			"call",
+			{ diff_description: "HEAD" },
+			undefined,
+			undefined,
+			context,
+		);
+		expect(textOf(result)).toContain('<review_result sessionID="review-nudge">');
+		expect(textOf(result)).toContain("**MEDIUM** line 3 — Nudged.");
+	});
+
 	it("retries a never-submitting Check once", async () => {
 		const root = await mkdtemp(join(tmpdir(), "pi-review-retry-check-"));
 		const checkPath = join(root, ".agents", "checks", "retry.md");

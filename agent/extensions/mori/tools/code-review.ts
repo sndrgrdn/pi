@@ -197,6 +197,11 @@ export function createCodeReviewTool(
 				systemPrompt,
 				message: reviewMessage(params, checks),
 				toolbox: (processes) => [...createShellToolbox(processes), runCheck, submitReview],
+				followUp: {
+					message:
+						"The review is not submitted yet. Call submit_review now, exactly once, with your independent Comments — an empty comments array when you have none.",
+					needed: () => submission === undefined,
+				},
 				finalize: () => {
 					if (!submission) throw new Error("review child did not submit a review");
 					return { content: formatReview([...submission, ...coordinator.comments()], coordinator.entries()) };

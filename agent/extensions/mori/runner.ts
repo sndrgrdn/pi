@@ -99,6 +99,12 @@ export interface RunOptions {
 	toolbox?: ChildToolboxFactory;
 	signal?: AbortSignal;
 	/**
+	 * One corrective prompt sent in the same session when the first turn ends
+	 * without satisfying the caller's capture: `needed()` is consulted once,
+	 * after the initial prompt completes.
+	 */
+	followUp?: { message: string; needed(): boolean };
+	/**
 	 * Defaults to required. Set to "optional" only when the caller captures
 	 * the result some other way — the agent-tool factory sets it exactly when
 	 * a plan supplies a capture-based finalize.
@@ -162,6 +168,13 @@ export class SubagentRunner {
 			if (parentAborted) {
 				if (abortPromise) await abortPromise;
 				throw annotateFailure(abortError(), child);
+			}
+			if (options.followUp?.needed()) {
+				await child.prompt(options.followUp.message);
+				if (parentAborted) {
+					if (abortPromise) await abortPromise;
+					throw annotateFailure(abortError(), child);
+				}
 			}
 			const answer = child.finalMessage();
 			if (answer === undefined && options.finalMessage !== "optional")
