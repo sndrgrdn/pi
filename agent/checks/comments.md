@@ -6,10 +6,7 @@ severity-default: low
 
 A comment earns its place by recording what the code cannot say — intent, ownership, invariants, tradeoffs. Everything else **narrates**.
 
-Two rules bind the policy:
-
-- **The diff scopes it.** Judge only comments the diff added, changed, or made stale; pre-existing comment debt is out of scope.
-- **Absence is a judgement call, narration is not.** A missing comment is a labelled heuristic ("possible Undocumented Internal Interface"); a narrating comment is a hard violation.
+**Absence is a judgement call; narration is not.** A missing comment is a labelled heuristic ("possible Undocumented Internal Interface"); a narrating comment is a hard violation.
 
 Each rule reads *what it is* → *how to fix*; match it against the diff:
 

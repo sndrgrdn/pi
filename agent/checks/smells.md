@@ -4,9 +4,7 @@ description: Report the diff-visible Fowler smell baseline as possible, non-bloc
 severity-default: low
 ---
 
-Scan only changed lines. A documented repo standard overrides any item below; skip anything tooling already enforces. Ignore pre-existing code.
-
-This baseline is deliberately small — the diff-visible, tooling-uncovered, high-precision subset of the catalog. Smells are judgment calls, never blockers — label each "possible <smell>". Anchor every finding to the exact changed lines where the smell appears and name the concrete symbols involved.
+This baseline is deliberately small and high-precision. Smells are judgment calls, never blockers — label each "possible <smell>" and name the concrete symbols involved.
 
 - **Mysterious Name** — a name that hides what it does or holds. → Rename; if no honest name comes, the design's murky.
 - **Duplicated Code** — the same logic shape in more than one hunk or file. → Extract the shared shape, call it from both.

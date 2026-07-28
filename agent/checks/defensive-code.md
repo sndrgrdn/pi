@@ -4,8 +4,6 @@ description: Find guards that should be designed out of the state model.
 severity-default: high
 ---
 
-Scan only changed lines. A documented repo standard overrides the rule below; skip anything tooling already enforces. Ignore pre-existing code.
-
 Generated code drifts defensive: fallbacks where invariants belong, guards for states the design forbids, machinery papering over unclear contracts. **The guard is the finding** — the strong invariant is the fix; a handler for an impossible case is misinformation about the contract.
 
 - **Illegal states** (Minsky; Ousterhout ch. 10: define errors out of existence) — design types, models, schemas, and constructors so invalid combinations cannot be expressed in the first place; a runtime guard for a state the design already prevents is misinformation about the contract.
@@ -14,4 +12,4 @@ Generated code drifts defensive: fallbacks where invariants belong, guards for s
   - Precise operation inputs, required values; push optionality outward. When a guard looks justified by a schema's optionality, audit the schema: optionality encoding a **prose-only invariant** ("only when X") is the finding — a discriminated union or per-variant type deletes the illegal state and every guard it spawned.
   - **State machines over contradictory flags**; **exhaustive case analysis** for closed variants — a default branch that masks newly added cases is a hole in the contract.
   - Strictest for persisted data and core infrastructure: fail loudly on invariant violations — a fallback masks corruption rather than preventing it. If the design allows the bad state, fix the design; a guard papering over the gap is the finding, never the fix.
-  → Tighten the type, delete the guard. Evidence: the representable illegal combination plus a guard it spawned (file:line).
+  → Tighten the type, delete the guard. **Presumptive blocker.** Evidence: the representable illegal combination plus a guard it spawned (file:line).
