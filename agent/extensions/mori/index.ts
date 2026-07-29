@@ -19,6 +19,7 @@ import { createLibrarianTool } from "./tools/librarian.ts";
 import { createOracleTool } from "./tools/oracle.ts";
 import registerRead from "./tools/read.ts";
 import { createTaskTool } from "./tools/task.ts";
+import { registerHeader } from "./ui/header.ts";
 import { createTraceToolRegistrar } from "./ui/trace.ts";
 
 export const MAIN_TOOL_NAMES = [
@@ -60,6 +61,9 @@ export default function mori(pi: ExtensionAPI) {
 	traceTools.register(createOracleTool(runner, profiles));
 	traceTools.register(createTaskTool(runner, profiles));
 	traceTools.register(createCodeReviewTool(runner, profiles));
+
+	// Custom startup header (ASCII art + session facts).
+	registerHeader(pi);
 
 	// Action methods become available only after pi binds the extension runtime.
 	// Lock every started/reloaded session at that seam.
