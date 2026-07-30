@@ -2,12 +2,11 @@
 description: Implement a spec or set of tickets through tested, reviewable slices.
 ---
 
-## Work
-
+<work>
 $@
+</work>
 
-## Process
-
+<process>
 Implement the work described by the spec or tickets.
 
 Before changing code, resolve and record the current `HEAD` commit SHA as the review fixed point and note any pre-existing changes.
@@ -19,3 +18,4 @@ Commit only this task's changes, then call `code_review` exactly once with `git 
 Commit any review fixes to the current branch. Leave pre-existing changes untouched.
 
 If the work came from a tracker ticket, close the ticket with a comment noting the branch and commit SHA once the slice is committed and all review findings are resolved. Do not close or modify any parent issue.
+</process>
