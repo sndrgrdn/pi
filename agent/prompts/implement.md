@@ -12,7 +12,7 @@ Implement the work described by the spec or tickets.
 
 Before changing code, resolve and record the current `HEAD` commit SHA as the review fixed point and note any pre-existing changes.
 
-Use `/tdd` where possible, at pre-agreed seams. Run focused tests and typechecking regularly, and the full test suite once at the end.
+Use `/tdd` where possible, at pre-agreed seams. Run focused tests and typechecking regularly, and rerun the affected tests once at the end.
 
 Commit only this task's changes, then call `code_review` exactly once with `git diff <fixed-point-sha>...HEAD` as the diff description, substituting the recorded SHA. Pass the original work item in `instructions` and ask the review to flag requirements that are missing or only partially implemented, behavior the work item did not request, and implementations that look wrong against the work item. Resolve or account for every Comment and rerun affected checks.
 
