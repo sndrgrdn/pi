@@ -1,18 +1,24 @@
 ---
 name: behavioral-tests
-description: Find tests coupled to implementation instead of specifying observable behavior.
+description: Find changed tests that are fragile, obscure, or specify implementation instead of behavior.
 severity-default: medium
 ---
 
-Apply to tests, including inline test modules.
+Scope: changed test code, including inline test modules. Use production code only as context. A diff without changed tests yields zero issues.
 
-**Tests are executable specifications** — each test should state a concrete scenario and assert an observable outcome. Report these diff-visible violations:
+Tests are executable specifications: given a concrete scenario, when behavior occurs, an observable outcome follows. Report a changed test when direct evidence shows that it:
 
-- asserting that an internal method was called rather than checking the resulting state, output, side effect, or externally visible interaction;
-- reaching through private state or private methods to arrange or assert behavior;
-- asserting an internal cache representation, incidental ordering, or redundant success signal instead of the resulting behavior;
-- reproducing the production branch or calculation in the test and comparing the implementation with itself.
+- lacks a concrete scenario or leaves its claimed outcome unobserved;
+- asserts private state, private methods, or internal collaborator sequencing;
+- stubs internal code that can reasonably run in the test;
+- reproduces a production branch or calculation and compares the implementation with itself;
+- asserts incidental representation, redundant success signals, or arbitrary ordering rather than essential behavior;
+- passes through a different condition than the behavior it claims to exercise;
+- uses loops, branching, mutable counters, or setup machinery substantial enough to obscure the specification;
+- buries the scenario beneath arbitrary data or incidental setup instead of a concrete example.
 
-→ Exercise the public seam and assert the end result that would remain valid after an implementation-preserving refactor. Stub only boundaries that cannot reasonably run in the test.
+Exercise the module's deliberate interface and assert an outcome that survives implementation-preserving changes behind it. Interaction assertions are valid when the interaction crosses that interface and is itself the observable effect, such as a request to an external adapter. Assert only the essential interaction, not incidental formatting or internal orchestration. Stub external adapters and genuinely impractical boundaries; let internal collaborators run where practical.
 
-Evidence: cite the coupled assertion or setup and name the observable outcome the test should specify. An interaction assertion is valid when that interaction is the public contract or an external boundary.
+Framework conventions remain valid unless they make the specific test fragile. Choose the smallest test-only correction at the module's existing interface.
+
+Evidence must cite the fragile setup or assertion and name the concrete scenario and outcome it should specify. Use `low` for readability alone and `high` only when the test can pass without exercising critical behavior it claims to cover.

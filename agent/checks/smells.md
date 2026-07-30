@@ -4,16 +4,20 @@ description: Report the diff-visible Fowler smell baseline as possible, non-bloc
 severity-default: low
 ---
 
-This baseline is deliberately small and high-precision. Smells are judgment calls, never blockers — label each "possible <smell>" and name the concrete symbols involved.
+Smells are supporting craftsmanship signals, not defects or blockers. Submit at most the three highest-confidence findings, label each `possible <smell>`, and keep every finding at `low` severity.
 
-- **Mysterious Name** — a name that hides what it does or holds. → Rename; if no honest name comes, the design's murky.
-- **Duplicated Code** — the same logic shape in more than one hunk or file. → Extract the shared shape, call it from both.
-- **Feature Envy** — a method reaching into another object's data more than its own. → Move the method onto the data it envies.
-- **Data Clumps** — the same few fields or params travelling together. → Bundle them into one type, pass that.
-- **Primitive Obsession** — a primitive standing in for a domain concept. → Give the concept its own small type.
-- **Repeated Switches** — the same `switch`/`if`-cascade on the same type recurring. → Polymorphism, or one map both sites share.
-- **Shotgun Surgery** — one logical change forcing scattered edits across many files. → Gather what changes together into one module.
-- **Divergent Change** — one module edited for several unrelated reasons. → Split so each module changes for one reason.
-- **Message Chains** — long `a.b().c().d()` navigation the caller shouldn't depend on. → Hide the walk behind one method on the first object.
-- **Middle Man** — a class or function that mostly delegates onward. → Cut it, call the real target direct.
-- **Refused Bequest** — an implementer ignoring most of what it inherits. → Drop the inheritance, use composition.
+Require concrete repetition, coupling, or interface burden in changed lines:
+
+- **Mysterious Name** — a name prevents understanding and an established, more precise term exists.
+- **Duplicated Code** — the same non-trivial logic appears in multiple sites that must change together.
+- **Feature Envy** — behavior reconstructs another module's policy from its internals; serializers, presenters, and adapters may legitimately read another representation.
+- **Data Clumps** — the same values repeatedly travel and change together across several interfaces as one established concept.
+- **Primitive Obsession** — repeated validation or behavior around primitives demonstrates an existing domain concept; a primitive alone is not evidence.
+- **Repeated Switches** — the same branching decision is reimplemented across multiple sites and can already be owned in one existing place.
+- **Shotgun Surgery** — one logical change demonstrably requires scattered edits for the same reason.
+- **Divergent Change** — changed code gives one module multiple unrelated reasons to change.
+- **Message Chains** — multiple callers repeatedly navigate the same internal structure and become coupled to it; representation adapters are excluded.
+- **Middle Man** — an interface primarily delegates and leaves callers with equal or less knowledge after deletion.
+- **Refused Bequest** — an implementer cannot honor substantial parts of its inherited interface, shown by ignored methods, dummy values, or unsupported-operation failures.
+
+Recommend an existing correction only when it removes more concepts or code than it adds; otherwise submit zero issues.

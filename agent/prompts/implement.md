@@ -7,15 +7,19 @@ $@
 </work>
 
 <process>
-Implement the work described by the spec or tickets.
+1. Before editing, record the current `HEAD` SHA as the review fixed point and note every pre-existing change.
 
-Before changing code, resolve and record the current `HEAD` commit SHA as the review fixed point and note any pre-existing changes.
+2. Implement the work through tested slices. Use `/tdd` where possible at pre-agreed seams; run focused tests and typechecking regularly.
 
-Use `/tdd` where possible, at pre-agreed seams. Run focused tests and typechecking regularly, and rerun the affected tests once at the end.
+3. Rerun every affected test, then commit only this task's changes.
 
-Commit only this task's changes, then call `code_review` exactly once with `git diff <fixed-point-sha>...HEAD` as the diff description, substituting the recorded SHA. Pass the original work item in `instructions` and ask the review to flag requirements that are missing or only partially implemented, behavior the work item did not request, and implementations that look wrong against the work item. Resolve or account for every Comment and rerun affected checks.
+4. Call `code_review` exactly once with `git diff <fixed-point-sha>...HEAD`, substituting the recorded SHA. Pass the original work item in `instructions`; ask for missing or partial requirements, unrequested behavior, and implementations that contradict the work item.
 
-Commit any review fixes to the current branch. Leave pre-existing changes untouched.
+5. Disposition every Comment before editing as `fix`, `reject`, or `already covered`. Validate it against the work item, a reachable code path, repository contracts and conventions, and existing tests. Use severity to order validation; the evidence decides. Record a concise reason for each rejection.
 
-If the work came from a tracker ticket, close the ticket with a comment noting the branch and commit SHA once the slice is committed and all review findings are resolved. Do not close or modify any parent issue.
+6. Fix concrete behavior failures and proven simplifications with the smallest correction, in this order: delete code, reuse an existing primitive, make a local edit. Add a guard, abstraction, schema, result type, configuration option, lifecycle state, or module only when the work item or current system requires it. `low` and `possible <smell>` Comments warrant changes only when the change directly removes code or concepts. When Comments conflict, the work item and existing repository contract decide.
+
+7. Rerun affected tests and repository-native verification. Review disposition is complete when every Comment has one disposition and verification passes. Commit any review fixes; leave pre-existing changes untouched.
+
+8. For tracker work, close the ticket with a comment naming the branch and commit SHA after review disposition is complete. Do not close or modify a parent issue.
 </process>

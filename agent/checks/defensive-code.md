@@ -1,15 +1,17 @@
 ---
 name: defensive-code
-description: Find guards that should be designed out of the state model.
-severity-default: high
+description: Find redundant or speculative guards and fallbacks.
+severity-default: medium
 ---
 
-Generated code drifts defensive: fallbacks where invariants belong, guards for states the design forbids, machinery papering over unclear contracts. **The guard is the finding** — the strong invariant is the fix; a handler for an impossible case is misinformation about the contract.
+**Reality, not hypotheticals.** Report a changed guard or fallback only when direct evidence establishes one case:
 
-- **Illegal states** (Minsky; Ousterhout ch. 10: define errors out of existence) — design types, models, schemas, and constructors so invalid combinations cannot be expressed in the first place; a runtime guard for a state the design already prevents is misinformation about the contract.
-  - A domain concept owns its invariants in one home: supporting types, **smart constructors**, legal transitions, predicates co-located — callers use its operations rather than reimplementing checks or casting past them.
-  - Persistence mirrors the invariants with constraints — a model invariant the schema doesn't enforce is one process restart away from false.
-  - Precise operation inputs, required values; push optionality outward. When a guard looks justified by a schema's optionality, audit the schema: optionality encoding a **prose-only invariant** ("only when X") is the finding — a discriminated union or per-variant type deletes the illegal state and every guard it spawned.
-  - **State machines over contradictory flags**; **exhaustive case analysis** for closed variants — a default branch that masks newly added cases is a hole in the contract.
-  - Strictest for persisted data and core infrastructure: fail loudly on invariant violations — a fallback masks corruption rather than preventing it. If the design allows the bad state, fix the design; a guard papering over the gap is the finding, never the fix.
-  → Tighten the type, delete the guard. **Presumptive blocker.** Evidence: the representable illegal combination plus a guard it spawned (file:line).
+- an existing type, constructor, constraint, framework contract, or immediately preceding operation already excludes the guarded state;
+- repository search finds no current producer or caller that can supply the guarded state, and the value does not come from an external boundary;
+- an invariant violation is converted into false success, empty data, or continued execution.
+
+Fix in order: delete the guard; rely on the enforced invariant; tighten an existing local type or constructor when that is smaller. New state machinery needs independent current justification.
+
+Guards for boundary input and expected failures are valid. A reachable state or an unproven "unlikely" state yields zero issues from this Check.
+
+Evidence must cite the guard and the existing invariant or current producer/caller search that proves it unnecessary. Use `high` only when the fallback can silently corrupt data or report success for failed work.

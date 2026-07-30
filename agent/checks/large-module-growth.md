@@ -1,7 +1,13 @@
 ---
-name: large-module-growth
-description: Large-module growth — substantial growth of an already-large function or module without decomposition.
-severity-default: high
+name: responsibility-growth
+description: Find changed modules taking on a responsibility already owned elsewhere.
+severity-default: medium
 ---
 
-**Large-module growth** — substantial growth of an already-large function or module without decomposition. → Split the new responsibility behind a named helper or module. **Presumptive blocker.** Evidence: the function/module plus its before/after size.
+**Existing owner.** Report growth only when changed code gives a module a clearly unrelated responsibility that an existing module already owns.
+
+Evidence must name the changed module's established responsibility, the new unrelated responsibility, and its existing owner. Size, line count, percentage growth, or function length are not evidence by themselves.
+
+Move the decision or behavior to that existing owner. An absent owner yields zero issues from this Check.
+
+Cohesive local growth and linear orchestration satisfy this Check regardless of length. Keep findings at `medium` severity or lower.

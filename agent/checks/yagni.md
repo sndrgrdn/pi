@@ -1,9 +1,18 @@
 ---
 name: yagni
-description: Find speculative abstractions, patterns, or seams introduced without a current need.
+description: Find new machinery that can be deleted or inlined without losing requested behavior or current callers.
 severity-default: high
 ---
 
-**YAGNI** (Beck, *XP Explained*; absorbs Fowler's Speculative Generality) — a new abstraction, pattern, library, or seam serving no current need; machinery introduced without inspecting existing contracts, modules, and tests. → Inline until a real need arrives; make the smallest coherent change that serves what exists now.
+**Deletion proof.** Report new machinery only when repository evidence proves it can be deleted or inlined while preserving requested behavior and every current caller:
 
-**Single-implementer generality** is the high-severity subtype: machinery advertised as generic with one adapter is a hypothetical seam — a stronger finding when the mechanism cannot support a second implementer as built (a clobbering write, a hardcoded key). **Presumptive blocker.** Evidence: the generality claim (quoted), the single implementer, and where applicable the mechanism that blocks a second.
+- a generic seam, interface, strategy, registry, or adapter role with one current implementation and no current variation;
+- an option, mode, hook, fallback, or configuration surface with no current caller or requirement;
+- claimed generality contradicted by hard-coded behavior that permits only one case;
+- lifecycle or extension machinery supporting only hypothetical future behavior.
+
+Delete or inline the machinery; that simpler direct flow is the complete correction.
+
+Framework-required structure, repository conventions, explicit requirements, and modules that hide signing, sequencing, translation, policy, or other caller knowledge satisfy this Check. One implementation and line count are insufficient evidence.
+
+Evidence must cite the generality claim or extension point, account for every current implementation and caller, and explain what remains after deletion. If preserving behavior is uncertain, submit zero issues rather than lowering severity.

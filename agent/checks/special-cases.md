@@ -1,7 +1,17 @@
 ---
 name: special-cases
-description: Special cases — new ad-hoc conditionals, one-off booleans/modes/flags, special cases inserted into flows that had no reason to know about them.
-severity-default: high
+description: Find feature-specific decisions duplicated or threaded through unrelated code.
+severity-default: medium
 ---
 
-**Special cases** (Ousterhout ch. 2: complexity is incremental) — new ad-hoc conditionals, one-off booleans/modes/flags, or feature-specific cases inserted into a flow that otherwise has no reason to know about them. → Reframe the state model so the branch disappears. When multiple present variations already exist, put them behind the concept that varies. **Presumptive blocker.** Evidence: the flag or branch (file:line) plus the unrelated flow it was inserted into.
+**Localize variation.** Report feature-specific knowledge leaking through unrelated code only when changed lines prove one case:
+
+- the same feature condition is added in multiple unrelated modules;
+- a boolean or mode is threaded through multiple layers only to alter behavior at one leaf;
+- a branch duplicates a decision already owned by an existing domain module.
+
+Move the decision to the nearest existing owner and delete the duplicated or threaded knowledge. When that costs a new abstraction or more code than the branches, submit zero issues.
+
+One local conditional, required product variation, authorization, boundary handling, and exhaustive closed-variant branching satisfy this Check.
+
+Evidence must cite every duplicated site or trace the flag through the unrelated layers to its only consumer. Use `high` only when the duplicated decisions already produce contradictory behavior.

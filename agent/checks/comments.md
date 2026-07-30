@@ -1,20 +1,18 @@
 ---
 name: comments
-description: Comment policy — when a comment earns its place and when it must go. Use when writing, reviewing, or pruning code comments, or when another skill's review needs the comment policy.
+description: Find changed comments that narrate obvious code or sprawl beyond the non-obvious fact they preserve.
 severity-default: low
 ---
 
-A comment earns its place by recording what the code cannot say — intent, ownership, invariants, tradeoffs. Everything else **narrates**.
+**Explain surprises.** Inspect only comments added or modified by the diff. Report a comment when it:
 
-**Absence is a judgement call; narration is not.** A missing comment is a labelled heuristic ("possible Undocumented Internal Interface"); a narrating comment is a hard violation.
+- restates names, syntax, transformations, or control flow that the code already makes obvious;
+- adds decorative documentation to an ordinary public function, wrapper, job, or leaf helper;
+- duplicates an explanation already present nearby;
+- sprawls beyond the shortest statement of the non-obvious fact it preserves.
 
-Each rule reads *what it is* → *how to fix*; match it against the diff:
+A comment earns its place by recording what code cannot say clearly: a gotcha, footgun, invariant, ownership or ordering rule, tradeoff, or why the obvious implementation is wrong.
 
-- **Undocumented Entry Point** — a major entry-point module with no design comment. → add a short one: ownership, boundary, key invariants.
-- **Undocumented Public Function** — an exported/public function with no doc comment (JSDoc, YARD, whatever the repo uses). → add one line stating intent.
-- **Undocumented Internal Interface** — a private function defining a boundary others depend on (handler/factory, wire or storage format, signing, durable state change, retry/resume policy) with no doc comment. → add one; plain leaf helpers need none.
-- **Unexplained Behavior** — a non-obvious invariant, tradeoff, or policy-driven decision left uncommented. → comment the why, not the what.
-- **Narration** — a comment restating the code: obvious transformations, control flow, leaf helpers. → delete it, never improve it.
-- **Stale Comment** — a comment the diff invalidated, or one too vague to check. → rewrite it short, concrete, current.
+Delete narration. When it contains a non-obvious fact, reduce it to the shortest statement of that fact. Comment absence and symbol visibility are outside this Check.
 
-Done when every hunk in scope has been matched against every rule.
+Evidence must cite the changed comment and the code that makes it redundant, or identify the single non-obvious fact to retain. Keep all findings at `low` severity.

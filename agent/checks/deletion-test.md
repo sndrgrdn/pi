@@ -1,7 +1,13 @@
 ---
 name: deletion-test
-description: Find pass-through modules that hide no meaningful complexity from their callers.
-severity-default: high
+description: Find new pass-through modules whose interfaces hide no meaningful knowledge from callers.
+severity-default: medium
 ---
 
-**Deletion test** (Ousterhout ch. 4) — imagine the module gone: if complexity vanishes, it was a pass-through; if complexity reappears across N callers, it earns its keep. Every interface must hide meaningful invariants, policy, sequencing, or translation; a module that fails the test is plumbing to delete, keeping the direct flow. **Presumptive blocker.** Evidence: the module's table row (interface vs. what it hides) plus what happens on deletion.
+**Deletion test.** Report a new module only when it forwards the same inputs and output to one target, hides no invariant, policy, sequencing, translation, lifecycle, or repeated knowledge, and leaves callers with equal or less knowledge after deletion.
+
+Short does not mean shallow. A small function can earn its place by owning policy or giving several callers one operation whose details would otherwise be repeated. Jobs, controllers, commands, serializers, and framework hooks may be necessarily thin when their interface supplies a framework entry point, lifecycle, or protocol role.
+
+Delete the pass-through and call the real target directly; the direct call is the complete correction.
+
+Evidence must show the module's interface, everything its implementation does, and the resulting direct call after deletion. Use `high` only when several callers or modules duplicate the pass-through architecture.
