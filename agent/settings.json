@@ -1,29 +1,24 @@
 {
-  "lastChangelogVersion": "0.83.0",
-  "defaultThinkingLevel": "medium",
-  "hideThinkingBlock": true,
+  "lastChangelogVersion": "0.85.1",
+  "theme": "catppuccin-macchiato",
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.6-sol",
-  "enabledModels": [
-    "anthropic/claude-opus-4-6",
-    "anthropic/claude-fable-5",
-    "openai-codex/gpt-5.6-sol"
-  ],
-  "steeringMode": "all",
-  "doubleEscapeAction": "tree",
-  "treeFilterMode": "no-tools",
-  "transport": "auto",
-  "httpIdleTimeoutMs": 300000,
-  "warnings": {
-    "anthropicExtraUsage": false
-  },
-  "packages": [
-    "npm:pi-mcp-adapter@2.11.0",
-    "npm:@plannotator/pi-extension@0.24.2"
-  ],
-  "theme": "catppuccin-macchiato",
-  "quietStartup": true,
+  "defaultThinkingLevel": "medium",
   "showCacheMissNotices": true,
-  "autocompleteMaxVisible": 10,
-  "defaultProjectTrust": "ask"
+  "tuiMode": "regular",
+  "hideThinkingBlock": true,
+  "steeringMode": "all",
+  "followUpMode": "all",
+  "treeFilterMode": "no-tools",
+  "defaultProjectTrust": "always",
+  "fullscreenScrollbar": "always",
+  "packages": [
+    "git:github.com/dmmulroy/pi-mcp",
+    "npm:@tintinweb/pi-subagents@0.19.0"
+  ],
+  "enabledModels": [
+    "opencode-go/*flash*",
+    "openai-codex/gpt-5.6-*",
+    "openai-codex/gpt-6*"
+  ]
 }

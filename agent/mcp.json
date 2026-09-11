@@ -1,0 +1,28 @@
+{
+  "mcp": {
+    "startup": "lazy",
+    "toolMode": "proxy",
+    "servers": {
+      "playwright": {
+        "type": "local",
+        "command": [
+          "pnpx",
+          "@playwright/mcp@latest"
+        ]
+      },
+      "chrome-devtools": {
+        "type": "local",
+        "command": [
+          "pnpx",
+          "chrome-devtools-mcp@latest",
+          "--executablePath=/Applications/Helium.app/Contents/MacOS/Helium"
+        ]
+      },
+      "homeassistant": {
+        "type": "remote",
+        "url": "http://homeassistant.local:9583/private_L6cMaK8XnXnfqNMAX8IGeQ",
+        "oauth": false
+      }
+    }
+  }
+}

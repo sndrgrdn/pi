@@ -1,20 +1,30 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "Node16",
-    "lib": ["ES2023"],
-    "strict": true,
-    "erasableSyntaxOnly": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "Node16",
-    "resolveJsonModule": true,
+    // Environment setup & latest features
+    "lib": ["ESNext"],
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleDetection": "force",
+    "jsx": "react-jsx",
+    "allowJs": true,
+
+    // Bundler mode
+    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "rewriteRelativeImportExtensions": true,
-    "useDefineForClassFields": false,
+    "verbatimModuleSyntax": true,
     "noEmit": true,
-    "types": ["node"]
+
+    // Best practices
+    "strict": true,
+    "skipLibCheck": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+
+    // Some stricter flags (disabled by default)
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noPropertyAccessFromIndexSignature": false
   },
   "include": ["**/*.ts"],
   "exclude": ["**/node_modules/**", "**/dist/**", "agent/git/**", "agent/npm/**", "agent/sessions/**"]

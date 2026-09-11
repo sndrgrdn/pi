@@ -1,12 +1,7 @@
-.cache
-node_modules
-sessions
 *.disabled
 auth.json
-APPEND_SYSTEM.md
-mcp-oauth/
-mcp.json
-mcp-cache.json
-mcp-npx-cache.json
-trust.json
 models-store.json
+sessions
+node_modules
+mcp-auth.json
+settings.json
