@@ -36,8 +36,6 @@ afterAll(async () => {
 
 const noEnv = () => undefined;
 
-/** A fake HTTP boundary that records requests and serves one canned response. */
-/** JSON-RPC response payloads are JSON; the result field can hold any JSON value. */
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
 function fakeHttp(handler: (url: string, init: RequestInit) => Response): FakeHttpProbe {

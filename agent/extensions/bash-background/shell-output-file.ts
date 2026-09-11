@@ -1,21 +1,18 @@
-/** Ported from the mori/shell toolbox: every chunk is written to the temp file immediately; a capped in-memory tail serves the status display. */
+/** Persists complete process output and retains a bounded in-memory tail for status. */
 
 import { closeSync, openSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_MAX_BYTES } from "@earendil-works/pi-coding-agent";
 
-/** Point-in-time view of a process's output: capped tail plus the full file path. */
+/** Current output tail, byte count, and complete-output path. */
 export interface OutputSnapshot {
   tail: string;
   totalBytes: number;
   fullPath: string;
 }
 
-/**
- * Appends every chunk to a temp file immediately; keeps a capped in-memory
- * tail for the status display. Thread-safe only via single-writer callers.
- */
+/** Requires serialized writes and retains only a bounded decoded tail in memory. */
 export class ShellOutputFile {
   readonly path: string;
   bytesWritten = 0;
@@ -34,7 +31,7 @@ export class ShellOutputFile {
     this.fd = openSync(this.path, "a");
   }
 
-  /** Append raw output; the file gets the full bytes, the tail only the cap. */
+  /** Appends raw output to the full file and bounded tail. */
   appendOutput(chunk: Buffer): void {
     if (this.fd === undefined || this.closed || chunk.length === 0) return;
     writeSync(this.fd, chunk);
@@ -44,7 +41,7 @@ export class ShellOutputFile {
     if (text.length > 0) this.tail = (this.tail + text).slice(-this.maxTailChars);
   }
 
-  /** Flush the decoder, close the fd, and mark the file appendable-no-more. */
+  /** Flushes pending text and closes the output file. */
   close(): void {
     if (this.closed) return;
     this.closed = true;
@@ -58,7 +55,7 @@ export class ShellOutputFile {
     }
   }
 
-  /** Safe to call while the process is still running. */
+  /** Returns a snapshot without closing the running output stream. */
   outputSnapshot(): OutputSnapshot {
     return { tail: this.tail, totalBytes: this.bytesWritten, fullPath: this.path };
   }

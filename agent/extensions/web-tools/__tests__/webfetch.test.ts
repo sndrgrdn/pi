@@ -17,7 +17,6 @@ import {
 import { webFetchParameters } from "../webfetch.ts";
 import { findExitError } from "./find-exit-error.ts";
 
-/** Run fetchAndConvert against a fake HTTP boundary, returning the Exit. */
 function runFetch(
   input: { url: string; format?: FetchFormat; timeout?: number },
   handler: (url: string, init: RequestInit) => Promise<Response>,

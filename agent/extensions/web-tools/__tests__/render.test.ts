@@ -3,11 +3,9 @@ import { Text } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
 import { emptyToolResult, toolErrorResult, toolPreview } from "../../utils/tool-render.ts";
 
-/** Theme stub: colors are ANSI wrapping, invisible to the text assertions. */
-// SAFETY: These tests exercise only Theme.fg; no other structural members are accessed.
+// SAFETY: These tests access only Theme.fg.
 const theme = { fg: (_color: string, text: string) => text } as Theme;
 
-/** Render a Text component as it would appear on a wide row (lines are width-padded). */
 const rendered = (component: Text) =>
   component
     .render(200)

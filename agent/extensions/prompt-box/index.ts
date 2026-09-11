@@ -20,13 +20,9 @@ const THINK_LABEL = {
   max: "max",
 } satisfies Record<string, string>;
 
-/**
- * Install the complete bordered editor and an empty footer on session_start.
- */
+/** Replaces the editor with a bordered prompt box for each session. */
 export default function promptBox(pi: ExtensionAPI) {
   let branch: string | null = null;
-
-  // ── tr: model · thinking ──
 
   const tr = (ctx: ExtensionContext) => {
     const theme = ctx.ui.theme;
@@ -46,8 +42,6 @@ export default function promptBox(pi: ExtensionAPI) {
 
     return parts.join(dot);
   };
-
-  // ── bl: tokens · cache hit rate ──
 
   const bl = (ctx: ExtensionContext) => {
     const theme = ctx.ui.theme;
@@ -74,8 +68,6 @@ export default function promptBox(pi: ExtensionAPI) {
 
     return parts.join(dot);
   };
-
-  // ── br: cwd (branch) ─────────────
 
   const br = (ctx: ExtensionContext) => {
     const theme = ctx.ui.theme;
@@ -120,14 +112,7 @@ export default function promptBox(pi: ExtensionAPI) {
   });
 }
 
-/**
- * Prompt-cache hit rate (0-100) of the latest assistant message, or undefined
- * when no assistant message has reported cache activity. Hit rate is
- * `cacheRead / (input + cacheRead + cacheWrite)` of that message's usage, the
- * same definition pi's built-in footer uses. A rate of 0 is returned when
- * cache activity was reported earlier in the session but the latest turn read
- * none from cache.
- */
+/** Latest assistant-turn prompt-cache hit rate, if cache activity has been reported. */
 export function latestCacheHitRate(entries: readonly SessionEntry[]): number | undefined {
   let rate: number | undefined;
   let reportedCache = false;

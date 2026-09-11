@@ -1,5 +1,3 @@
-/** Truncate to pi's limits; when truncated, park the full text in a temp file; output is never truncated silently. */
-
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -18,13 +16,13 @@ async function writeTempFile(content: string, prefix: string): Promise<string> {
   return filePath;
 }
 
-/** Truncated text plus the temp-file path to the full output, when truncation happened. */
+/** Bounded output and optional path to its complete content. */
 export interface ParkedOutput {
   text: string;
   fullOutputPath?: string;
 }
 
-/** Truncate to pi's limits; when truncated, park the full text in a temp file; output is never truncated silently. */
+/** Returns Pi-limited text and parks the complete output when truncated. */
 export async function parkTruncatedOutput(content: string, prefix: string): Promise<ParkedOutput> {
   const truncated = truncateHead(content, {
     maxBytes: DEFAULT_MAX_BYTES,

@@ -32,14 +32,13 @@ import {
 } from "./registry.ts";
 import { ProcessSpawner, type ProcessSpawnerContract } from "./process.ts";
 
-/** Seconds a foreground command may run before it is moved to the background. */
+/** Auto-background delay in seconds. */
 export const AUTO_BACKGROUND_SECONDS = 30;
 
-/** Dependencies and knobs for the backgrounding bash tool. */
+/** Process services and auto-background delay for the bash tool. */
 export interface BackgroundingBashOptions {
   processes: BackgroundProcessesContract;
   spawner: ProcessSpawnerContract;
-  /** Tests use small values. */
   autoBackgroundSeconds?: number;
 }
 
@@ -98,7 +97,7 @@ export function createBackgroundingBashOperations(
   };
 }
 
-/** Everything the direct-spawn path (immediate backgrounding) needs. */
+/** Input and process services for immediate backgrounding. */
 export interface BackgroundCommandInput {
   command: string;
   cwd: string;
@@ -107,7 +106,7 @@ export interface BackgroundCommandInput {
   spawner: ProcessSpawnerContract;
 }
 
-/** Spawn the command already backgrounded; resolves to the background notice. */
+/** Starts a background command and returns its process notice. */
 export function runBackgroundCommand(input: BackgroundCommandInput): Promise<string> {
   return execProgram({
     ...input,
@@ -274,7 +273,7 @@ function resolveSessionEnv(ctx: ExtensionContext): NodeJS.ProcessEnv {
   return env;
 }
 
-/** The bash override: backgrounding operations plus the tool definition, registered as `bash`. */
+/** Creates the bash override with automatic and immediate backgrounding. */
 export function createBackgroundingBashDefinition(
   cwd: string,
   options: BackgroundingBashOptions,

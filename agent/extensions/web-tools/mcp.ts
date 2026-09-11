@@ -1,22 +1,17 @@
-/**
- * MCP JSON-RPC 2.0 client shared by the `websearch` engines (ported from
- * opencode's plugin/websearch/mcp.ts): a `tools/call` POST with a 256 KiB
- * response bound, a 25 s timeout, and tolerance of `data:`-prefixed SSE
- * lines. Engine request shapes and result parsing live in the adapters.
- */
+/** Shared bounded and timed MCP tools/call client for websearch engines. */
 
 import { Duration, Effect } from "effect";
 import * as Schema from "effect/Schema";
 import { collectBoundedBody, type HttpFetchContract } from "./http.ts";
 import { createWebSearchError, type SearchEngine, type WebSearchError } from "./search.ts";
 
-/** Byte cap on an MCP response body; larger declared or streamed responses fail `tooLarge`. */
+/** Maximum MCP response size in bytes. */
 export const MCP_MAX_RESPONSE_BYTES = 256 * 1024;
 
-/** Timeout (seconds) applied to each MCP call via `AbortSignal.timeout` and `Effect.timeoutOrElse`. */
+/** MCP call timeout in seconds. */
 export const MCP_TIMEOUT_SECONDS = 25;
 
-/** One MCP `tools/call` request; `engine`/`tool` are carried on every failure for attribution. */
+/** MCP call input with engine and tool failure attribution. */
 export interface McpCallInput {
   http: HttpFetchContract;
   url: string;
@@ -24,11 +19,10 @@ export interface McpCallInput {
   body: McpRequestBody;
   headers?: Record<string, string>;
   signal?: AbortSignal | undefined;
-  /** The engine making the call; carried on failures for attribution. */
   engine: SearchEngine;
 }
 
-/** JSON-RPC 2.0 `tools/call` request body. */
+/** JSON-RPC tools/call request body. */
 export interface McpRequestBody {
   jsonrpc: string;
   id: number;
@@ -39,10 +33,10 @@ export interface McpRequestBody {
   };
 }
 
-/** A validated JSON value returned in an MCP JSON-RPC result envelope. */
+/** Validated MCP result value. */
 export type McpResult = Schema.Json;
 
-/** Raw JSON-RPC `result`, or undefined when absent (callers treat that as no results); tolerates `data:`-prefixed SSE lines. */
+/** Parses a JSON-RPC result or returns undefined for an absent result payload. */
 export const parseMcpResponse = Effect.fn("MCP.parseResponse")(function* (
   body: string,
 ): Effect.fn.Return<McpResult | undefined, WebSearchError> {
@@ -80,7 +74,7 @@ export const parseMcpResponse = Effect.fn("MCP.parseResponse")(function* (
 
 const isMcpToolError = Schema.is(Schema.Struct({ isError: Schema.Literal(true) }));
 
-/** POST one MCP `tools/call`; explicit tool errors fail before engine parsing, with engine/tool attribution. */
+/** Calls one MCP tool and rejects explicit tool errors before engine parsing. */
 export const mcpCall = Effect.fn("MCP.call")(function* (
   input: McpCallInput,
 ): Effect.fn.Return<McpResult | undefined, WebSearchError> {

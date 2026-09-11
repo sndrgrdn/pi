@@ -1,20 +1,3 @@
-/**
- * /session-breakdown
- *
- * Interactive TUI that analyzes ~/.pi/agent/sessions (recursively, *.jsonl) and shows
- * last 7/30/90 days of:
- * - sessions/day
- * - messages/day
- * - tokens/day (if available)
- * - cost/day (if available)
- * - model breakdown (sessions/messages/tokens + cost)
- *
- * Graph:
- * - GitHub-contributions-style calendar (weeks x weekdays)
- * - Hue: weighted mix of popular model colors (weighted by the selected metric)
- * - Brightness: selected metric per day (log-scaled)
- */
-
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { BorderedLoader } from "@earendil-works/pi-coding-agent";
 import {
@@ -36,9 +19,9 @@ type ModelKey = string; // `${provider}/${model}`
 
 type CwdKey = string; // normalized cwd path
 
-type DowKey = string; // "Mon", "Tue", etc.
+type DowKey = string;
 
-type TodKey = string; // "after-midnight", "morning", "afternoon", "evening", "night"
+type TodKey = string;
 
 type BreakdownView = "model" | "cwd" | "dow" | "tod";
 
@@ -130,10 +113,9 @@ interface RangeAgg {
   totalTokens: number;
   totalCost: number;
   modelCost: Map<ModelKey, number>;
-  modelSessions: Map<ModelKey, number>; // number of sessions where model was used
+  modelSessions: Map<ModelKey, number>;
   modelMessages: Map<ModelKey, number>;
   modelTokens: Map<ModelKey, number>;
-  // Provider-agnostic (grouped by model name, e.g. radius/foo + openai/foo → foo)
   groupedModelCost: Map<ModelKey, number>;
   groupedModelSessions: Map<ModelKey, number>;
   groupedModelMessages: Map<ModelKey, number>;
@@ -215,18 +197,16 @@ function setBorderedLoaderMessage(loader: BorderedLoader, message: string) {
   }
 }
 
-// Dark-ish background and empty cell color (close to GitHub dark)
 const DEFAULT_BG: RGB = { r: 13, g: 17, b: 23 };
 
 const EMPTY_CELL_BG: RGB = { r: 22, g: 27, b: 34 };
 
-// Default palette (assigned to top models)
 const PALETTE: RGB[] = [
-  { r: 64, g: 196, b: 99 }, // green
-  { r: 47, g: 129, b: 247 }, // blue
-  { r: 163, g: 113, b: 247 }, // purple
-  { r: 255, g: 159, b: 10 }, // orange
-  { r: 244, g: 67, b: 54 }, // red
+  { r: 64, g: 196, b: 99 },
+  { r: 47, g: 129, b: 247 },
+  { r: 163, g: 113, b: 247 },
+  { r: 255, g: 159, b: 10 },
+  { r: 244, g: 67, b: 54 },
 ];
 
 function clamp01(x: number): number {
@@ -318,12 +298,10 @@ function abbreviatePath(p: string, maxWidth = 40): string {
 
   const parts = display.split("/").filter(Boolean);
 
-  // Always keep the first part (~ or root indicator) and try to keep as many trailing parts as possible
   if (parts.length <= 2) return display;
 
-  const prefix = parts[0]; // typically "~"
+  const prefix = parts[0];
 
-  // Try keeping last N parts, increasing until it fits
   for (let keep = parts.length - 1; keep >= 1; keep--) {
     const tail = parts.slice(parts.length - keep);
     const candidate = prefix + "/…/" + tail.join("/");
@@ -375,7 +353,6 @@ function countDaysInclusiveLocal(start: Date, end: Date): number {
 }
 
 function mondayIndex(date: Date): number {
-  // Mon=0 .. Sun=6
   return (date.getDay() + 6) % 7;
 }
 
@@ -541,7 +518,6 @@ function extractTokensTotal(usage: JsonValue | undefined): number {
   if (!record) return 0;
 
   let total = 0;
-  // direct totals
   total =
     readNum(record.totalTokens) ||
     readNum(record.total_tokens) ||
@@ -551,13 +527,11 @@ function extractTokensTotal(usage: JsonValue | undefined): number {
 
   if (total > 0) return total;
 
-  // nested tokens object
   const tokens = asJsonRecord(record.tokens);
   total = readNum(tokens?.total) || readNum(tokens?.totalTokens) || readNum(tokens?.total_tokens);
 
   if (total > 0) return total;
 
-  // sum of parts
   const a =
     readNum(record.promptTokens) ||
     readNum(record.prompt_tokens) ||
@@ -877,31 +851,26 @@ function addSessionToRange(range: RangeAgg, session: ParsedSession): void {
   day.messages += session.messages;
   day.tokens += session.tokens;
 
-  // Sessions-per-model (presence)
   for (const mk of session.modelsUsed) {
     day.sessionsByModel.set(mk, (day.sessionsByModel.get(mk) ?? 0) + 1);
     range.modelSessions.set(mk, (range.modelSessions.get(mk) ?? 0) + 1);
   }
 
-  // Messages-per-model
   for (const [mk, n] of session.messagesByModel.entries()) {
     day.messagesByModel.set(mk, (day.messagesByModel.get(mk) ?? 0) + n);
     range.modelMessages.set(mk, (range.modelMessages.get(mk) ?? 0) + n);
   }
 
-  // Tokens-per-model
   for (const [mk, n] of session.tokensByModel.entries()) {
     day.tokensByModel.set(mk, (day.tokensByModel.get(mk) ?? 0) + n);
     range.modelTokens.set(mk, (range.modelTokens.get(mk) ?? 0) + n);
   }
 
-  // Cost-per-model
   for (const [mk, cost] of session.costByModel.entries()) {
     range.modelCost.set(mk, (range.modelCost.get(mk) ?? 0) + cost);
   }
 
-  // Provider-agnostic (grouped) model aggregation.
-  // Collapse `${provider}/${model}` → `${model}` and de-duplicate session presence.
+  // Group by model name and count each model at most once per session.
   const groupedModels = new Set<ModelKey>();
 
   for (const mk of session.modelsUsed) groupedModels.add(displayModelName(mk));
@@ -928,7 +897,6 @@ function addSessionToRange(range: RangeAgg, session: ParsedSession): void {
     range.groupedModelCost.set(gk, (range.groupedModelCost.get(gk) ?? 0) + cost);
   }
 
-  // CWD aggregation
   const cwd = session.cwd;
 
   if (cwd) {
@@ -941,14 +909,12 @@ function addSessionToRange(range: RangeAgg, session: ParsedSession): void {
     range.cwdCost.set(cwd, (range.cwdCost.get(cwd) ?? 0) + session.totalCost);
   }
 
-  // Day-of-week aggregation
   const dow = session.dow;
   range.dowSessions.set(dow, (range.dowSessions.get(dow) ?? 0) + 1);
   range.dowMessages.set(dow, (range.dowMessages.get(dow) ?? 0) + session.messages);
   range.dowTokens.set(dow, (range.dowTokens.get(dow) ?? 0) + session.tokens);
   range.dowCost.set(dow, (range.dowCost.get(dow) ?? 0) + session.totalCost);
 
-  // Time-of-day aggregation
   const tod = session.tod;
   day.sessionsByTod.set(tod, (day.sessionsByTod.get(tod) ?? 0) + 1);
   day.messagesByTod.set(tod, (day.messagesByTod.get(tod) ?? 0) + session.messages);
@@ -1023,15 +989,14 @@ function chooseCwdPaletteFromLast30Days(range30: RangeAgg, topN = 4) {
   };
 }
 
-// Fixed palette for day-of-week: weekdays get cool tones, weekend gets warm
 const DOW_PALETTE: RGB[] = [
-  { r: 47, g: 129, b: 247 }, // Mon – blue
-  { r: 64, g: 196, b: 99 }, // Tue – green
-  { r: 163, g: 113, b: 247 }, // Wed – purple
-  { r: 47, g: 175, b: 200 }, // Thu – teal
-  { r: 100, g: 200, b: 150 }, // Fri – mint
-  { r: 255, g: 159, b: 10 }, // Sat – orange
-  { r: 244, g: 67, b: 54 }, // Sun – red
+  { r: 47, g: 129, b: 247 },
+  { r: 64, g: 196, b: 99 },
+  { r: 163, g: 113, b: 247 },
+  { r: 47, g: 175, b: 200 },
+  { r: 100, g: 200, b: 150 },
+  { r: 255, g: 159, b: 10 },
+  { r: 244, g: 67, b: 54 },
 ];
 
 function buildDowPalette() {
@@ -1047,13 +1012,12 @@ function buildDowPalette() {
   return { dowColors, orderedDows: [...DOW_NAMES] };
 }
 
-// Fixed palette for time-of-day buckets
 const TOD_PALETTE: Map<TodKey, RGB> = new Map([
-  ["after-midnight", { r: 100, g: 60, b: 180 }], // deep purple
-  ["morning", { r: 255, g: 200, b: 50 }], // golden yellow
-  ["afternoon", { r: 64, g: 196, b: 99 }], // green
-  ["evening", { r: 47, g: 129, b: 247 }], // blue
-  ["night", { r: 60, g: 40, b: 140 }], // dark indigo
+  ["after-midnight", { r: 100, g: 60, b: 180 }],
+  ["morning", { r: 255, g: 200, b: 50 }],
+  ["afternoon", { r: 64, g: 196, b: 99 }],
+  ["evening", { r: 47, g: 129, b: 247 }],
+  ["night", { r: 60, g: 40, b: 140 }],
 ]);
 
 function buildTodPalette() {
@@ -1084,7 +1048,6 @@ function dayMixedColor(
   let map: Map<string, number>;
 
   if (view === "dow") {
-    // For dow, each day IS a single dow – use the dow color directly
     const dowKey = dowName(mondayIndex(day.date));
     const c = colorMap.get(dowKey);
 
@@ -1145,7 +1108,6 @@ function graphMetricForRange(range: RangeAgg, mode: MeasurementMode): GraphMetri
     const maxTokens = Math.max(0, ...range.days.map((d) => d.tokens));
 
     if (maxTokens > 0) return { kind: "tokens", max: maxTokens, denom: Math.log1p(maxTokens) };
-    // fall back if tokens aren't available
     mode = "messages";
   }
 
@@ -1154,7 +1116,6 @@ function graphMetricForRange(range: RangeAgg, mode: MeasurementMode): GraphMetri
 
     if (maxMessages > 0)
       return { kind: "messages", max: maxMessages, denom: Math.log1p(maxMessages) };
-    // fall back if messages aren't available
     mode = "sessions";
   }
 
@@ -1196,7 +1157,6 @@ function renderGraphLines(
   const metric = graphMetricForRange(range, mode);
   const denom = metric.denom;
 
-  // Label only Mon/Wed/Fri like GitHub (saves space)
   const labelByRow = new Map<number, string>([
     [0, "Mon"],
     [2, "Wed"],
@@ -1261,7 +1221,6 @@ function renderModelTable(
   maxRows = 8,
   groupProviders = false,
 ): string[] {
-  // Keep this relatively narrow: model + selected metric + cost + cost/session + share.
   const metric = graphMetricForRange(range, mode);
   const kind = metric.kind;
 
@@ -1444,7 +1403,6 @@ function renderDowTable(range: RangeAgg, mode: MeasurementMode): string[] {
     `${"-".repeat(dowWidth)}  ${"-".repeat(valueWidth)}  ${"-".repeat(10)}  ${"-".repeat(8)}  ${"-".repeat(6)}`,
   );
 
-  // Always show in Mon–Sun order
   for (const dow of DOW_NAMES) {
     const value = perDow.get(dow) ?? 0;
     const cost = range.dowCost.get(dow) ?? 0;
@@ -1488,7 +1446,6 @@ function renderTodTable(range: RangeAgg, mode: MeasurementMode): string[] {
     `${"-".repeat(todWidth)}  ${"-".repeat(valueWidth)}  ${"-".repeat(10)}  ${"-".repeat(8)}  ${"-".repeat(6)}`,
   );
 
-  // Always show in chronological order
   for (const b of TOD_BUCKETS) {
     const value = perTod.get(b.key) ?? 0;
     const cost = range.todCost.get(b.key) ?? 0;
@@ -1763,7 +1720,6 @@ class BreakdownComponent implements Component {
         );
       })();
 
-    // Choose colors and legend based on current view
     let activeColorMap: Map<string, RGB>;
     let activeOtherColor: RGB = { r: 160, g: 160, b: 160 };
     const legendItems: string[] = [];
@@ -1835,7 +1791,6 @@ class BreakdownComponent implements Component {
       const leftMargin = 4; // "Mon " (or 4 spaces)
       const gap = 1;
       const graphArea = Math.max(1, width - leftMargin);
-      // Each week column uses: cellWidth + gap. Last column also gets gap (fine; we truncate anyway).
       const idealCellWidth = Math.floor((graphArea + gap) / Math.max(1, weeks)) - gap;
       const cellWidth = Math.min(maxScale, Math.max(1, idealCellWidth));
 
@@ -1879,7 +1834,6 @@ class BreakdownComponent implements Component {
     if (this.view === "dow") {
       for (const gl of graphLines) lines.push(truncateToWidth(gl, width));
     } else {
-      // Render legend on the RIGHT of the graph if there is space.
       const graphWidth = Math.max(0, ...graphLines.map((l) => visibleWidth(l)));
       const sep = 2;
       const legendWidth = width - graphWidth - sep;
@@ -1892,7 +1846,6 @@ class BreakdownComponent implements Component {
 
         legendBlock.push(dim(legendTitle));
         legendBlock.push(...legendItems);
-        // Fit into 7 rows (same as graph). If too many, show a final "+N more" line.
         const maxLegendRows = graphLines.length;
         let legendLines = legendBlock.slice(0, maxLegendRows);
 
@@ -1915,11 +1868,9 @@ class BreakdownComponent implements Component {
           lines.push(truncateToWidth(left + " ".repeat(sep) + right, width));
         }
       } else {
-        // Fallback: graph only (legend will be shown below).
         for (const gl of graphLines) lines.push(truncateToWidth(gl, width));
         lines.push("");
 
-        // Compact legend below, left-aligned.
         const legendTitleBelow = legendTitleForView(this.view);
 
         lines.push(truncateToWidth(dim(legendTitleBelow), width));
@@ -1932,7 +1883,6 @@ class BreakdownComponent implements Component {
 
     for (const tl of tableLines) lines.push(truncateToWidth(tl, width));
 
-    // Ensure no overly long lines (truncateToWidth already), but keep at least 1 line.
     this.cachedWidth = width;
     this.cachedRows = termRows;
     this.cachedLines = lines.map((l) => (visibleWidth(l) > width ? truncateToWidth(l, width) : l));
@@ -1952,7 +1902,6 @@ export default function sessionBreakdownExtension(pi: ExtensionAPI) {
       "Interactive breakdown of last 7/30/90 days of ~/.pi session usage (sessions/messages/tokens + cost by model)",
     handler: async (_args, ctx: ExtensionContext) => {
       if (!ctx.hasUI) {
-        // Non-interactive fallback: just notify.
         const data = await computeBreakdown(undefined);
         const range = rangeFor(data.ranges, 30);
         const skipped = data.skipped;
@@ -2012,7 +1961,6 @@ export default function sessionBreakdownExtension(pi: ExtensionAPI) {
           }
         };
 
-        // Update every 0.5s so long-running scans show some visible progress.
         setBorderedLoaderMessage(loader, renderMessage());
         intervalId = setInterval(() => {
           setBorderedLoaderMessage(loader, renderMessage());

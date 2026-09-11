@@ -16,14 +16,13 @@ import { createBackgroundProcesses, type BackgroundProcessesContract } from "./r
 import { createRealProcessSpawner } from "./process.ts";
 import { bashStatusToolDefinition } from "./status.ts";
 
-/** SIGKILLs the process group, so children die with the shell. */
 const bashCancelParameters = Type.Object({
   id: Type.Number({
     description: "Id (pid) of the background process to cancel.",
   }),
 });
 
-/** The bash_cancel tool: SIGKILL a background process and its children by pid. */
+/** Creates a cancellation tool that kills the process group, including children. */
 export function bashCancelToolDefinition(
   processes: BackgroundProcessesContract,
 ): ToolDefinition<typeof bashCancelParameters> {
@@ -53,7 +52,7 @@ export function bashCancelToolDefinition(
   });
 }
 
-/** Extension entrypoint: registers the three bash tools and kills all backgrounds on shutdown. */
+/** Registers bash process tools and kills remaining background processes on shutdown. */
 export default function bashBackground(pi: ExtensionAPI): void {
   const spawner = createRealProcessSpawner();
   const processes = createBackgroundProcesses(spawner);

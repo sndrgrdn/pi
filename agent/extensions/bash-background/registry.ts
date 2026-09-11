@@ -17,7 +17,7 @@ export type ProcessState = Data.TaggedEnum<{
 
 const processState = Data.taggedEnum<ProcessState>();
 
-/** Constructors and exhaustive matching helpers for process lifecycle states. */
+/** Constructors and matchers for process lifecycle states. */
 export const ProcessState = {
   Running: processState.running,
   Completed: processState.completed,
@@ -33,11 +33,8 @@ export const ProcessState = {
  * "running". `backgrounded` controls visibility in `bash_status`.
  */
 export class BackgroundProcess {
-  /** Whether the process was moved to the background (visible to bash_status). */
   backgrounded = false;
-  /** Lifecycle tag: running → completed | cancelled. */
   state: ProcessState = ProcessState.Running();
-  /** Timestamp (ms) when the process left "running", if it has. */
   finishedAt: number | undefined;
   readonly pid: number;
   readonly command: string;
@@ -63,13 +60,13 @@ export class BackgroundProcess {
   }
 }
 
-/** Context tag for the BackgroundProcesses service. */
+/** Effect service tag for the background-process registry. */
 export class BackgroundProcesses extends Context.Service<
   BackgroundProcesses,
   BackgroundProcessesContract
 >()("@pi/bash-background/Processes") {}
 
-/** Service contract for the background-process registry. */
+/** Tracks spawned processes and controls their background lifecycle. */
 export interface BackgroundProcessesContract {
   /** Fails with BashError("output") if the output file cannot be created. */
   register(input: {
@@ -93,13 +90,12 @@ export interface BackgroundProcessesContract {
   killAllBackgrounded(): Effect.Effect<number, never>;
 }
 
-/** Build the in-memory registry; `spawner.killTree` backs kill operations. */
+/** Creates an in-memory registry whose kill operations use the process spawner. */
 export function createBackgroundProcesses(
   spawner: ProcessSpawnerContract,
 ): BackgroundProcessesContract {
   const entries = new Map<number, BackgroundProcess>();
 
-  /** Shared by kill and killAllBackgrounded. */
   const killEntry = Effect.fn("BashBackground.killEntry")(function* (entry: BackgroundProcess) {
     yield* spawner.killTree(entry.pid);
     entry.state = ProcessState.Cancelled();

@@ -1,4 +1,4 @@
-/** Exa engine adapter for `websearch` (ported from opencode's plugin/websearch/exa.ts). The HTTP boundary is a parameter, not `yield* HttpFetch`, so tests can fake it. */
+/** Exa MCP adapter for websearch. */
 
 import { Effect } from "effect";
 import * as Schema from "effect/Schema";
@@ -11,14 +11,14 @@ import {
   type WebSearchError,
 } from "./search.ts";
 
-/** Exa's MCP endpoint; the API key travels as the `exaApiKey` query parameter. */
+/** Exa MCP endpoint. */
 export const EXA_ENDPOINT = "https://mcp.exa.ai/mcp";
 
 const ExaOutput = Schema.Struct({
   content: Schema.Array(Schema.Struct({ type: Schema.Literal("text"), text: Schema.String })),
 });
 
-/** Parse Exa's `---`-separated result blocks; blocks without a URL are skipped. */
+/** Parses Exa result blocks and skips entries without a URL. */
 export function parseExaResults(text: string): SearchResult[] {
   return text.split(/\n\n---\n\n/).flatMap((block) => {
     const url = block.match(/^URL:\s*(.+)$/m)?.[1]?.trim();
@@ -59,7 +59,7 @@ const exaUrl = (key: string | undefined) => {
 
 const decodeExaOutput = Schema.decodeUnknownSync(ExaOutput);
 
-/** Search Exa via MCP; a missing result payload yields no results, malformed payloads fail `decode`. */
+/** Searches Exa; absent results are empty and malformed results fail decoding. */
 export const exaSearch = Effect.fn("Exa.search")(function* (
   http: HttpFetchContract,
   query: string,

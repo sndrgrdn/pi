@@ -1,9 +1,7 @@
-/** CustomEditor wrapped in a complete box with dynamic corner labels. */
-
 import { CustomEditor, type KeybindingsManager, type Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth, type EditorTheme, type TUI } from "@earendil-works/pi-tui";
 
-/** Box-drawing glyphs for the editor borders. */
+/** Glyphs used to build the prompt-box border. */
 export const BOX_GLYPHS = {
   tl: "╭",
   tr: "╮",
@@ -23,7 +21,7 @@ function padLine(text: string, width: number): string {
   return t + " ".repeat(Math.max(0, width - visibleWidth(t)));
 }
 
-/** Draws the editor's top and bottom borders with aligned edges. */
+/** Builds one border with optional left and right labels. */
 export function boxBorder(
   theme: Theme,
   left: string,
@@ -58,14 +56,11 @@ export interface CornerLabels {
   br: () => string;
 }
 
-/** CustomEditor draws all borders, including around autocomplete suggestions. */
+/** Editor with one border around its body and autocomplete suggestions. */
 export class PromptBoxEditor extends CustomEditor {
   private readonly piTheme: Theme;
   private readonly corners: CornerLabels;
 
-  /**
-   * @param corners - Dynamic corner label providers, called per render.
-   */
   constructor(
     tui: TUI,
     editorTheme: EditorTheme,
@@ -78,7 +73,7 @@ export class PromptBoxEditor extends CustomEditor {
     this.corners = corners;
   }
 
-  /** Draws the bordered editor; delegates to the built-in render for widths < 16. */
+  /** Delegates to CustomEditor below the minimum box width. */
   override render(width: number): string[] {
     if (width < 16) return super.render(width);
 

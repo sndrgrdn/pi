@@ -1,4 +1,4 @@
-/** Registration module of `webfetch` (ported from opencode V2): schema, execute bridge, rendering. Domain core in `fetch-page.ts`. */
+/** Registers webfetch and bridges Pi tool calls to the fetch core. */
 
 import {
   type AgentToolResult,
@@ -21,7 +21,7 @@ import {
 import { parkTruncatedOutput } from "./tool-output.ts";
 import { emptyToolResult, toolErrorResult, toolPreview } from "../utils/tool-render.ts";
 
-/** The webfetch tool's parameter schema (typebox); `timeout` is capped at `MAX_TIMEOUT_SECONDS`. */
+/** Webfetch parameter schema with a bounded timeout. */
 export const webFetchParameters = Type.Object({
   url: Type.String({ description: "The HTTP or HTTPS URL to fetch content from" }),
   format: Type.Optional(
@@ -41,7 +41,7 @@ export const webFetchParameters = Type.Object({
 
 type WebFetchParams = Static<typeof webFetchParameters>;
 
-/** Tool-result details the model sees for a successful fetch. */
+/** Successful webfetch details. */
 export interface WebFetchDetails {
   url: string;
   contentType: string;
@@ -49,7 +49,6 @@ export interface WebFetchDetails {
   fullOutputPath?: string;
 }
 
-/** Throwing (not returning) is what marks the tool call isError. */
 async function toAgentResult(page: FetchedPage): Promise<AgentToolResult<WebFetchDetails>> {
   const details: WebFetchDetails = {
     url: page.url,
@@ -64,7 +63,7 @@ async function toAgentResult(page: FetchedPage): Promise<AgentToolResult<WebFetc
   return { content: [{ type: "text", text }], details };
 }
 
-/** Register the `webfetch` tool with pi; domain behavior lives in `fetch-page.ts`. */
+/** Registers the webfetch tool. */
 export default function webFetchOverride(pi: ExtensionAPI) {
   pi.registerTool({
     name: "webfetch",

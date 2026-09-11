@@ -14,15 +14,10 @@ import { getShellConfig } from "@earendil-works/pi-coding-agent";
 import { Context, Deferred, Effect } from "effect";
 import { bashError, toErrorString, type BashError } from "./errors.ts";
 
-/** Grace period after exit before declaring stdio drained (mirrors pi). */
+/** Grace period for late output after process exit. */
 const EXIT_STDIO_GRACE_MS = 100;
 
-/**
- * macOS ships bash 3.2, whose `$()` parser mishandles quotes inside
- * heredocs (e.g. an apostrophe in a heredoc body inside "$(cat <<'EOF' …)"
- * is read as an unterminated string). Prefer Homebrew's bash 5 when
- * present (proven in the mori/shell toolbox).
- */
+/** Prefer Homebrew bash because macOS bash 3.2 mishandles quoted heredocs in command substitutions. */
 const HOMEBREW_BASH = "/opt/homebrew/bin/bash";
 
 function resolveShellConfig() {
@@ -35,12 +30,12 @@ export interface SpawnedProcess {
   readonly wait: Effect.Effect<{ exitCode: number | null }, BashError>;
 }
 
-/** Context tag for the ProcessSpawner service. */
+/** Effect service tag for the process-spawn boundary. */
 export class ProcessSpawner extends Context.Service<ProcessSpawner, ProcessSpawnerContract>()(
   "@pi/bash-background/ProcessSpawner",
 ) {}
 
-/** Input to `ProcessSpawnerContract.spawn`: the shell line and its environment. */
+/** Shell process input and output callback. */
 export interface SpawnShellOptions {
   command: string;
   cwd: string;
@@ -48,14 +43,14 @@ export interface SpawnShellOptions {
   onData: (chunk: Buffer) => void;
 }
 
-/** Service contract for spawning and killing background shell processes. */
+/** Spawns shell processes and kills their process trees. */
 export interface ProcessSpawnerContract {
   readonly spawn: (options: SpawnShellOptions) => Effect.Effect<SpawnedProcess, BashError>;
   /** SIGKILL the process group; never fails. */
   readonly killTree: (pid: number) => Effect.Effect<void, never>;
 }
 
-/** Real child_process-based spawner; spawn/kill failures are translated to BashError. */
+/** Creates the Node child-process implementation of ProcessSpawnerContract. */
 export function createRealProcessSpawner(): ProcessSpawnerContract {
   return ProcessSpawner.of({
     spawn: Effect.fn("BashBackground.spawn")(function* ({ command, cwd, env, onData }) {
@@ -161,11 +156,7 @@ function killProcessTree(pid: number): void {
   }
 }
 
-/**
- * Ported from pi's `waitForChildProcess` (dist/utils/child-process.js):
- * resolves when the process exited AND both streams ended, with a grace
- * timer after exit so late-arriving output is not truncated.
- */
+/** Waits for exit and both output streams, with a short grace period for late output. */
 function waitForChildProcess(child: ChildProcess): Promise<{ exitCode: number | null }> {
   return new Promise((resolve, reject) => {
     let settled = false;

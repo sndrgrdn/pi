@@ -1,17 +1,16 @@
-/** Typed failures for the bash backgrounding extension. The `message` field is what the model sees. */
+/** Model-facing failures for background bash operations. */
 
 import * as Schema from "effect/Schema";
 
-/** Single definition site: the type and the schema both derive from this array. */
 const BASH_ERROR_KINDS = ["spawn", "not_found", "not_running", "output", "aborted"] as const;
 
-/** Tagged union of every failure mode the extension reports to the model. */
+/** Failure kinds reported by background bash operations. */
 export type BashErrorKind = (typeof BASH_ERROR_KINDS)[number];
 
-/** Schema for BashErrorKind; used as the `kind` field schema. */
+/** Runtime schema for background bash failure kinds. */
 export const BashErrorKind = Schema.Union(BASH_ERROR_KINDS.map((kind) => Schema.Literal(kind)));
 
-/** Tagged error for a bash backgrounding failure; the `message` field is what the model sees. */
+/** Background bash failure with a stable model-facing message. */
 export class BashError extends Schema.TaggedError<BashError>()("Bash.Error", {
   kind: BashErrorKind,
   message: Schema.String,
@@ -22,7 +21,7 @@ export class BashError extends Schema.TaggedError<BashError>()("Bash.Error", {
   cause: Schema.optionalKey(Schema.String),
 }) {}
 
-/** Optional context fields carried on a BashError, derived from its schema. */
+/** Optional process context for a background bash failure. */
 export type BashErrorFields = Pick<BashError, "id" | "command" | "cause">;
 
 const MESSAGES = {
@@ -34,15 +33,10 @@ const MESSAGES = {
   aborted: () => "Status check aborted",
 } satisfies Record<BashErrorKind, (fields: BashErrorFields) => string>;
 
-/**
- * Build a BashError with the kind's stable, model-facing message.
- *
- * @param kind - Failure mode; selects the message template.
- * @param fields - Optional context carried on the error.
- */
+/** Creates a background bash failure with its stable message. */
 export const bashError = (kind: BashErrorKind, fields: BashErrorFields = {}): BashError =>
   new BashError({ kind, message: MESSAGES[kind](fields), ...fields });
 
-/** Stringify an unknown cause for the schema's string-only `cause` field. */
+/** Converts an unknown cause to its serializable message. */
 export const toErrorString = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);

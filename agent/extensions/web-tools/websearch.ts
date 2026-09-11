@@ -1,8 +1,4 @@
-/**
- * Registration module of `websearch` (ported from opencode V2): schema,
- * settings-aware engine selection, execute bridge, rendering. Domain core
- * in `search.ts`; engine adapters in `exa.ts` / `parallel.ts`.
- */
+/** Registers websearch and bridges Pi tool calls to the search core. */
 
 import {
   type AgentToolResult,
@@ -32,7 +28,7 @@ const webSearchParameters = Type.Object({
 
 type WebSearchParams = Static<typeof webSearchParameters>;
 
-/** Register the `websearch` tool with pi; domain behavior lives in `search.ts`, engine adapters in `exa.ts`/`parallel.ts`. */
+/** Registers the websearch tool. */
 export default function webSearchOverride(pi: ExtensionAPI) {
   pi.registerTool({
     name: "websearch",
@@ -82,7 +78,6 @@ export default function webSearchOverride(pi: ExtensionAPI) {
           { query: params.query, engine, signal },
         ).pipe(Effect.runPromise);
 
-        /** Optional full-output path, assigned when truncation parked the text. */
         interface WebSearchDetailsExtras {
           fullOutputPath?: string;
         }

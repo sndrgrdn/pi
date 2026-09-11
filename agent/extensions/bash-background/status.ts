@@ -13,10 +13,10 @@ import {
 } from "./registry.ts";
 import type { OutputSnapshot } from "./shell-output-file.ts";
 
-/** Maximum tail characters rendered in a process detail view. */
+/** Character limit for status output tails. */
 export const STATUS_OUTPUT_TAIL_CHARS = 2000;
 
-/** Parameters for bash_status: optional id and optional wait bound. */
+/** Input schema for listing or waiting on background processes. */
 export const bashStatusParameters = Type.Object({
   id: Type.Optional(
     Type.Number({
@@ -31,12 +31,11 @@ export const bashStatusParameters = Type.Object({
   ),
 });
 
-/** Format milliseconds as seconds with one decimal. */
+/** Formats milliseconds as decimal seconds. */
 export function formatElapsed(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-/** Exhaustive over ProcessState. */
 function formatProcessState(state: ProcessState): string {
   return ProcessState.$match(state, {
     running: () => "running",
@@ -46,14 +45,14 @@ function formatProcessState(state: ProcessState): string {
   });
 }
 
-/** One bullet line for a process in a list view. */
+/** Formats one process for the status list. */
 export function formatProcessLine(entry: BackgroundProcess, now = Date.now()): string {
   const state = formatProcessState(entry.state);
 
   return `- id ${entry.pid} · ${state} · ${formatElapsed(now - entry.startedAt)} · \`${entry.command}\``;
 }
 
-/** The full list body, or a "none" notice when empty. */
+/** Formats the background-process list. */
 export function formatProcessList(entries: BackgroundProcess[], now = Date.now()): string {
   if (entries.length === 0) return "No background processes.";
 
@@ -62,7 +61,7 @@ export function formatProcessList(entries: BackgroundProcess[], now = Date.now()
   );
 }
 
-/** Detail view for one process: state, cwd, output tail, and the full-file path. */
+/** Formats process state and output locations for status details. */
 export function formatProcessDetail(entry: BackgroundProcess, snapshot: OutputSnapshot): string {
   const lines = [formatProcessLine(entry), `Working directory: ${entry.cwd}`];
 
@@ -109,13 +108,13 @@ const waitForProcess = (
   return Effect.raceFirst(wait, abortStatusWait(signal));
 };
 
-/** Persists for the tool row; re-read on every render. */
+/** Render state retained across status-tool renders. */
 interface StatusWaitRenderState {
   startedAt?: number;
   interval: ReturnType<typeof setInterval> | undefined;
 }
 
-/** The bash_status tool: list processes, or inspect one with an optional wait bound. */
+/** Creates the bash_status tool definition. */
 export function bashStatusToolDefinition(
   processes: BackgroundProcessesContract,
 ): ToolDefinition<typeof bashStatusParameters, unknown, StatusWaitRenderState> {

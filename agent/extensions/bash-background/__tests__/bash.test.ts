@@ -103,7 +103,6 @@ const waitUntilStatus = async (id: number, status: ProcessState["_tag"], timeout
   throw new Error(`process ${id} never reached ${status}`);
 };
 
-/** First text part of a tool result; the tools under test always emit one. */
 function textOf(result: AgentToolResult<unknown>): string {
   const text = result.content.find((part): part is TextContent => part.type === "text");
 
@@ -112,7 +111,6 @@ function textOf(result: AgentToolResult<unknown>): string {
   return text.text;
 }
 
-/** First backgrounded entry; every caller has backgrounded one before reading. */
 const firstEntry = async (): Promise<BackgroundProcess> => {
   const entries = await Effect.runPromise(ctx.processes.listBackgrounded());
   const entry = entries[0];
@@ -220,7 +218,6 @@ describe("bash operations", () => {
     expect(result.exitCode).toBeNull();
     const entry = await firstEntry();
 
-    // An external kill (not bash_cancel) terminates the process by signal.
     process.kill(entry.pid, "SIGKILL");
     const finished = await waitUntilStatus(entry.pid, "completed");
     expect(finished.state).toEqual(ProcessState.Completed({ exitCode: null }));
@@ -253,7 +250,6 @@ describe("bash definition", () => {
 
     const result = await tool().execute(
       "tool-id",
-      // 0.05s bogus timeout; if honored, the command would die at 50ms.
       // SAFETY: legacy raw args may carry a timeout key the schema drops; the
       // tool's execute reads only command (and background).
       { command: "sleep 0.15; echo DONE", timeout: 0.05 } as never,
@@ -337,7 +333,6 @@ describe("bash_status and bash_cancel tool definitions", () => {
   const statusTool = () => bashStatusToolDefinition(ctx.processes);
   const killTool = () => bashCancelToolDefinition(ctx.processes);
 
-  /** Minimal mutable state the status tool's renderCall writes into. */
   interface RenderStateProbe {
     startedAt?: number;
     interval?: ReturnType<typeof setInterval>;

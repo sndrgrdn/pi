@@ -1,20 +1,4 @@
-/**
- * Two behaviors, one format:
- *
- * - `read` override: reading a SKILL.md returns the opencode `skill` tool's
- *   output (markdown body and a `<skill_files>` listing) with pi's
- *   `<skill name location>` outer tag so the TUI renders it as a skill.
- *   All other files keep the builtin behavior.
- * - `/skill:name` intercept: the same block replaces the builtin expansion,
- *   so both loading paths produce identical output.
- *
- * Parity note: both paths read the SKILL.md fresh from disk, so the block
- * is never truncated by the builtin read tool's offset/limit handling.
- * Remaining deliberate difference: skills outside the three standard skill
- * directories are not found by the lookup and fall through to the builtin
- * `/skill:` expansion, whose block omits the `<skill_files>` listing and
- * emits "References are relative to <dir>" instead.
- */
+/** Renders SKILL.md reads and `/skill:` expansion through one skill-block format. */
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -31,10 +15,10 @@ import {
 import { Effect, Option, Ref } from "effect";
 import * as Schema from "effect/Schema";
 
-/** Max files in a <skill_files> listing (opencode's ripgrep limit); at this count the listing is flagged as sampled. */
+/** File-list limit; reaching it marks the listing as sampled. */
 export const SKILL_FILE_LIST_LIMIT = 10;
 
-/** Typed read failures. All call sites treat these as "give up quietly". */
+/** Filesystem failure while constructing a skill block. */
 export class ReadError extends Schema.TaggedError<ReadError>()("Read.Error", {
   kind: Schema.Union([Schema.Literal("io")]),
   message: Schema.String,
@@ -42,14 +26,14 @@ export class ReadError extends Schema.TaggedError<ReadError>()("Read.Error", {
   code: Schema.optionalKey(Schema.String),
 }) {}
 
-/** Error factory for ReadError; call sites give up quietly or fall through. */
+/** Creates a model-facing skill-read failure. */
 export const readError = (
   kind: ReadError["kind"],
   fields: Partial<Omit<ReadError, "_tag" | "kind" | "message">> = {},
 ): ReadError =>
   new ReadError({ kind, message: `Read failed: ${fields.path ?? "(unknown path)"}`, ...fields });
 
-/** Skill-directory fs capability with fs errors translated to ReadError. */
+/** Skill-directory filesystem boundary that maps failures to ReadError. */
 export interface ReadFileSystemContract {
   readonly readdir: (dir: string) => Effect.Effect<string[], ReadError>;
   readonly stat: (
@@ -58,10 +42,9 @@ export interface ReadFileSystemContract {
   readonly readText: (absolutePath: string) => Effect.Effect<string, ReadError>;
 }
 
-/** Node fs errors carry an errno-style `code`; anything else is treated as absent. */
 const ErrnoCode = Schema.Struct({ code: Schema.optional(Schema.String) });
 
-/** Real fs implementation; each operation maps Node rejections to ReadError. */
+/** Creates the Node-backed skill filesystem boundary. */
 export function makeReadFileSystem(): ReadFileSystemContract {
   const ioError = (absolutePath: string, err: Error) => {
     const code = Option.getOrUndefined(Schema.decodeUnknownOption(ErrnoCode)(err))?.code;
@@ -91,7 +74,7 @@ export function makeReadFileSystem(): ReadFileSystemContract {
   };
 }
 
-/** Enumerate files under the skill directory, skipping unreadable entries. */
+/** Lists readable skill files up to a fixed caller-supplied limit. */
 export const listSkillFiles = Effect.fn("Read.listSkillFiles")(function* (
   fs: ReadFileSystemContract,
   dir: string,
@@ -126,7 +109,7 @@ export const listSkillFiles = Effect.fn("Read.listSkillFiles")(function* (
   return yield* Ref.get(files);
 });
 
-/** Find a skill by name in the standard skill directories; unreadable roots are skipped. */
+/** Finds a named skill in the standard roots, skipping unreadable roots. */
 export const findSkill = Effect.fn("Read.findSkill")(function* (
   name: string,
   roots: string[] = [
@@ -155,7 +138,7 @@ export const findSkill = Effect.fn("Read.findSkill")(function* (
   return undefined;
 });
 
-/** Swap a SKILL.md read for the skill block; other files pass through untouched. */
+/** Converts a SKILL.md result to a complete skill block. */
 export const toSkillContentBlock = Effect.fn("Read.toSkillContentBlock")(function* <TDetails>(
   fs: ReadFileSystemContract,
   result: AgentToolResult<TDetails>,
@@ -185,21 +168,21 @@ export const toSkillContentBlock = Effect.fn("Read.toSkillContentBlock")(functio
   return { ...result, content: [{ type: "text", text: block }] };
 });
 
-/** The skill's display name: its YAML `name:` field, else the directory name. */
+/** Reads a skill name from frontmatter, with the directory name as fallback. */
 export function skillName(content: string, dir: string): string {
   const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? "";
 
   return frontmatter.match(/^name:\s*(.+)$/m)?.[1]?.trim() || path.basename(dir);
 }
 
-/** Strip the YAML frontmatter and the blank line after it. */
+/** Removes YAML frontmatter from skill content. */
 export function stripFrontmatter(content: string): string {
   const match = content.match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n)+/);
 
   return match ? content.slice(match[0].length) : content;
 }
 
-/** The skill block: pi's `<skill name location>` tag (the TUI's contract), the body, and the absolute-path `<skill_files>` listing. */
+/** Formats skill content and its file list for Pi's skill renderer. */
 export function formatSkillContentBlock(
   name: string,
   location: string,
@@ -223,11 +206,7 @@ export function formatSkillContentBlock(
   return lines.join("\n");
 }
 
-/**
- * Override the read tool so SKILL.md renders the skill block (with the
- * `<skill_files>` listing), and intercept `/skill:name` input with the same
- * block; all other reads and inputs pass through untouched.
- */
+/** Registers matching SKILL.md read and `/skill:` expansion behavior. */
 export default function readOverride(pi: ExtensionAPI) {
   pi.on("session_start", (_event, ctx) => {
     const original = createReadToolDefinition(ctx.cwd);

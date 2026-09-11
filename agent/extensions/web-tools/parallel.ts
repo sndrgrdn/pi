@@ -1,4 +1,4 @@
-/** Parallel engine adapter for `websearch` (ported from opencode's plugin/websearch/parallel.ts): `web_search` over the shared MCP client, key as Bearer header, `structuredContent` parsing. */
+/** Parallel MCP adapter for websearch. */
 
 import { Effect } from "effect";
 import * as Schema from "effect/Schema";
@@ -11,7 +11,7 @@ import {
   type WebSearchError,
 } from "./search.ts";
 
-/** Parallel's MCP endpoint; the API key travels as a `Bearer` authorization header. */
+/** Parallel MCP endpoint. */
 export const PARALLEL_ENDPOINT = "https://search.parallel.ai/mcp";
 
 const ParallelOutput = Schema.Struct({
@@ -28,7 +28,7 @@ const ParallelOutput = Schema.Struct({
   }),
 });
 
-/** One Parallel result as the JSON-RPC payload carries it, before SearchResult mapping. */
+/** Parallel result payload before normalization. */
 export interface ParallelResultItem {
   readonly url: string;
   readonly title?: string | null | undefined;
@@ -36,7 +36,7 @@ export interface ParallelResultItem {
   readonly excerpts: readonly string[];
 }
 
-/** Map Parallel's structured results to `SearchResult`; unparseable dates are dropped. */
+/** Normalizes Parallel results and drops unparseable dates. */
 export function parseParallelResults(output: {
   structuredContent: { results: readonly ParallelResultItem[] };
 }): SearchResult[] {
@@ -60,7 +60,7 @@ export function parseParallelResults(output: {
 
 const decodeParallelOutput = Schema.decodeUnknownSync(ParallelOutput);
 
-/** Search Parallel via MCP; a missing result payload yields no results, malformed payloads fail `decode`. */
+/** Searches Parallel; absent results are empty and malformed results fail decoding. */
 export const parallelSearch = Effect.fn("Parallel.search")(function* (
   http: HttpFetchContract,
   query: string,

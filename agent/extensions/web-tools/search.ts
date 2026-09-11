@@ -1,8 +1,4 @@
-/**
- * `websearch` domain core: typed failures, engine/key resolution, strict
- * one-engine orchestration, result rendering. The typed error lives here so
- * the engine adapters can import it without an import cycle.
- */
+/** Websearch engine selection, failures, orchestration, and result rendering. */
 
 import { readStoredCredential } from "@earendil-works/pi-coding-agent";
 import { Effect } from "effect";
@@ -11,16 +7,16 @@ import { exaSearch } from "./exa.ts";
 import { type HttpFetchContract } from "./http.ts";
 import { parallelSearch } from "./parallel.ts";
 
-/** The websearch backends pi ships; project/global settings select one, no failover. */
+/** Supported websearch engines. */
 export type SearchEngine = "exa" | "parallel";
 
-/** The engine used when settings do not name one. */
+/** Default websearch engine. */
 export const DEFAULT_ENGINE: SearchEngine = "exa";
 
-/** Rendered when a search yields no results. */
+/** Model-facing message for an empty search result. */
 export const NO_RESULTS = "No search results found. Please try a different query.";
 
-/** One search hit: the URL, optional title/content, and optional publish timestamp. */
+/** Normalized websearch result. */
 export interface SearchResult {
   readonly url: string;
   readonly title?: string;
@@ -28,23 +24,20 @@ export interface SearchResult {
   readonly time: { readonly published?: number };
 }
 
-/**
- * Mutable display fields collected during parsing. Spread into a SearchResult
- * after the guard clauses; the readonly contract stays on SearchResult.
- */
+/** Optional fields collected while parsing a search result. */
 export interface SearchResultExtras {
   title?: string;
   content?: string;
 }
 
-/** Tool-result details the model sees for a completed search. */
+/** Completed websearch details. */
 export interface WebSearchDetails {
   readonly engine: SearchEngine;
   readonly results: readonly SearchResult[];
   readonly fullOutputPath?: string;
 }
 
-/** Typed search failures; each carries `message` with the engine/tool context and the fields needed to recover. */
+/** Websearch failure with a stable model-facing message. */
 export class WebSearchError extends Schema.TaggedError<WebSearchError>()("WebSearch.Error", {
   kind: Schema.Union([
     Schema.Literal("invalidEngine"),
@@ -60,7 +53,7 @@ export class WebSearchError extends Schema.TaggedError<WebSearchError>()("WebSea
   cause: Schema.optionalKey(Schema.Unknown),
 }) {}
 
-/** Build a `WebSearchError` with the stable message its kind owns; fields carry engine/tool/cause context. */
+/** Creates a WebSearchError with its stable message. */
 export const createWebSearchError = (
   kind: WebSearchError["kind"],
   fields: Partial<Omit<WebSearchError, "_tag" | "kind" | "message">> = {},
@@ -92,13 +85,13 @@ const EngineSettings = Schema.Struct({
   websearch: Schema.optional(Schema.Struct({ engine: Schema.optional(Schema.String) })),
 });
 
-/** The settings shape `resolveEngine` reads; unknown custom keys are tolerated at decode time. */
+/** Websearch engine settings decoded from the larger settings object. */
 export type EngineSettingsContract = Schema.Schema.Type<typeof EngineSettings>;
 
-/** Decode raw settings (which may carry unknown custom keys) into the engine selector view. */
+/** Decodes the websearch engine settings view. */
 export const decodeEngineSettings = Schema.decodeUnknownOption(EngineSettings);
 
-/** Resolve the engine from project-then-global settings; fails `invalidEngine` on an unrecognized value. */
+/** Resolves project then global engine settings and rejects unknown engines. */
 export const resolveEngine = Effect.fn("WebSearch.resolveEngine")(function* (
   globalSettings: EngineSettingsContract | undefined,
   projectSettings: EngineSettingsContract | undefined,
@@ -115,7 +108,7 @@ export const resolveEngine = Effect.fn("WebSearch.resolveEngine")(function* (
   return yield* Effect.fail(createWebSearchError("invalidEngine", { engine: raw }));
 });
 
-/** Env var → stored credential → keyless. Injectable `env`/`authPath` so tests control credentials without a ConfigProvider. */
+/** Resolves credentials in environment, stored-credential, then keyless order. */
 export const resolveEngineApiKey = (
   engine: SearchEngine,
   env: (name: string) => string | undefined = (name) => process.env[name],
@@ -130,18 +123,16 @@ export const resolveEngineApiKey = (
   return stored?.type === "api_key" && stored.key ? stored.key : undefined;
 };
 
-/** One websearch request: the query, the resolved engine, and the injectable test seams. */
+/** Resolved websearch request and optional credential sources. */
 export interface SearchInput {
   query: string;
   engine: SearchEngine;
   signal?: AbortSignal | undefined;
-  /** Injectable for tests. */
   env?: (name: string) => string | undefined;
-  /** Injectable for tests. */
   authPath?: string;
 }
 
-/** Strict: one engine, no failover. */
+/** Runs exactly one selected engine without failover. */
 export const runWebSearch = Effect.fn("WebSearch.runWebSearch")(function* (
   http: HttpFetchContract,
   input: SearchInput,
@@ -153,7 +144,7 @@ export const runWebSearch = Effect.fn("WebSearch.runWebSearch")(function* (
     : yield* parallelSearch(http, input.query, key, input.signal);
 });
 
-/** Render results as model-facing markdown, or `NO_RESULTS` when there are none. */
+/** Renders results as model-facing Markdown. */
 export function renderSearchResults(results: readonly SearchResult[]): string {
   if (results.length === 0) return NO_RESULTS;
 

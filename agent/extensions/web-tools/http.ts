@@ -1,17 +1,13 @@
-/**
- * Shared HTTP interface for the `webfetch` and `websearch` extensions.
- * Callers pass a plain `HttpFetchContract` object; the real implementation is
- * `{ fetch: (input, init) => fetch(input, init) }`.
- */
+/** Injectable HTTP boundary for web tools. */
 
 import { Effect } from "effect";
 
-/** The only HTTP boundary the web tools use; callers pass `{ fetch: (input, init) => fetch(input, init) }` so tests can fake it. */
+/** HTTP fetch implementation used by the web tools. */
 export interface HttpFetchContract {
   readonly fetch: (input: string, init: RequestInit) => Promise<Response>;
 }
 
-/** Stream a response body, failing exactly at the cap (a declared `content-length` over the cap fails before any read). Hand-rolled on purpose: interruption-safe and stops exactly at the cap. */
+/** Reads through the byte cap and rejects declared oversize bodies before reading. */
 export const collectBoundedBody = Effect.fn("Http.collectBoundedBody")(function* <E>(
   response: Response,
   maximumBytes: number,
