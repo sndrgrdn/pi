@@ -168,6 +168,19 @@ export const toSkillContentBlock = Effect.fn("Read.toSkillContentBlock")(functio
   return { ...result, content: [{ type: "text", text: block }] };
 });
 
+/** Reads and formats one discovered skill using its authoritative location. */
+export const readSkillContentBlock = Effect.fn("Read.readSkillContentBlock")(function* (
+  name: string,
+  filePath: string,
+  baseDir: string,
+): Effect.fn.Return<string, ReadError> {
+  const fs = makeReadFileSystem();
+  const content = yield* fs.readText(filePath);
+  const files = yield* listSkillFiles(fs, baseDir, SKILL_FILE_LIST_LIMIT);
+
+  return formatSkillContentBlock(name, filePath, content, files);
+});
+
 /** Reads a skill name from frontmatter, with the directory name as fallback. */
 export function skillName(content: string, dir: string): string {
   const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? "";
@@ -232,11 +245,8 @@ export default function readOverride(pi: ExtensionAPI) {
       const skill = yield* findSkill(skillName);
 
       if (!skill) return undefined;
-      const fs = makeReadFileSystem();
-      const content = yield* fs.readText(skill.filePath);
-      const files = yield* listSkillFiles(fs, skill.baseDir, SKILL_FILE_LIST_LIMIT);
 
-      return formatSkillContentBlock(skill.name, skill.filePath, content, files);
+      return yield* readSkillContentBlock(skill.name, skill.filePath, skill.baseDir);
     });
 
     try {
