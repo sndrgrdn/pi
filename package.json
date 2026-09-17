@@ -3,10 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "oxfmt --check \"agent/**/*.ts\" && oxlint --fix --deny-warnings . && tsc --noEmit",
+    "check": "oxfmt --check \"agent/**/*.ts\" && oxlint --deny-warnings . && tsc --noEmit",
     "fix": "oxfmt --write \"agent/**/*.ts\" && oxlint --fix .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --exclude 'agent/git/**' --exclude 'agent/npm/**' --exclude 'agent/sessions/**'"
+    "test": "vitest run --exclude 'agent/git/**' --exclude 'agent/npm/**' --exclude 'agent/sessions/**'",
+    "verify": "pnpm check && pnpm test"
   },
   "devDependencies": {
     "@earendil-works/pi-agent-core": "0.85.1",
@@ -25,7 +26,7 @@
     "yaml": "^2.9.0"
   },
   "dependencies": {
-    "effect": "4.0.0-rc.113",
+    "effect": "4.0.0-rc.115",
     "htmlparser2": "^12.0.0",
     "turndown": "^7.2.4"
   }

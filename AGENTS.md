@@ -1,6 +1,7 @@
 - Use `pnpm`.
 - There is no build step.
-- Run `pnpm typecheck` for non-mutating type checking.
+- Run `pnpm typecheck` for TypeScript type checking.
 - Run `pnpm test` for the test suite.
-- `pnpm check` runs oxlint (with auto-fixes) and oxfmt (format check) and then TypeScript; it may modify files.
-- `pnpm fix` runs oxfmt (format write) and oxlint auto-fixes.
+- Run `pnpm check` for non-mutating formatting, lint, and type checks.
+- Run `pnpm verify` for all non-mutating checks and tests.
+- `pnpm fix` writes formatting and lint fixes.
