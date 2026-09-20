@@ -88,8 +88,9 @@ export function createBackgroundingBashOperations(
       if (outcome.type === "background") {
         onData(Buffer.from(outcome.notice));
 
-        // Null exit code: the builtin treats it as "no error reported".
-        return { exitCode: null };
+        // The command is still running, but the builtin requires a successful
+        // exit code before it returns the background-process notice.
+        return { exitCode: 0 };
       }
 
       return { exitCode: outcome.exitCode };

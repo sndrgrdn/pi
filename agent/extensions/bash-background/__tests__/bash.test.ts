@@ -159,7 +159,7 @@ describe("bash operations", () => {
       env: process.env,
     });
 
-    expect(result.exitCode).toBeNull();
+    expect(result.exitCode).toBe(0);
     expect(output).toContain("Moved to the background");
     const entries = await Effect.runPromise(ctx.processes.listBackgrounded());
     expect(entries).toHaveLength(1);
@@ -188,7 +188,7 @@ describe("bash operations", () => {
       env: process.env,
     });
 
-    expect(result.exitCode).toBeNull();
+    expect(result.exitCode).toBe(0);
     expect(output).toContain("Moved to the background (id:");
     const entries = await Effect.runPromise(ctx.processes.listBackgrounded());
     expect(entries).toHaveLength(1);
@@ -207,7 +207,7 @@ describe("bash operations", () => {
 
   it("reports completion when a backgrounded command finishes", async () => {
     const result = await exec("sleep 0.4");
-    expect(result.exitCode).toBeNull();
+    expect(result.exitCode).toBe(0);
 
     const entry = await waitUntilStatus((await firstEntry()).pid, "completed");
     expect(entry.state).toEqual(ProcessState.Completed({ exitCode: 0 }));
@@ -215,7 +215,7 @@ describe("bash operations", () => {
 
   it("reports a signal exit as exited (signal), not completed with a null code", async () => {
     const result = await exec("sleep 30");
-    expect(result.exitCode).toBeNull();
+    expect(result.exitCode).toBe(0);
     const entry = await firstEntry();
 
     process.kill(entry.pid, "SIGKILL");
@@ -414,7 +414,7 @@ describe("bash_status and bash_cancel tool definitions", () => {
 
   it("bash_cancel kills and reports the process state", async () => {
     const { exitCode } = await exec("sleep 30");
-    expect(exitCode).toBeNull();
+    expect(exitCode).toBe(0);
     const pid = (await firstEntry()).pid;
 
     const result = await killTool().execute(
@@ -435,7 +435,7 @@ describe("bash_status and bash_cancel tool definitions", () => {
 
   it("waits for completion when wait_seconds is set", async () => {
     const { exitCode } = await exec("sleep 0.4; echo DONE");
-    expect(exitCode).toBeNull();
+    expect(exitCode).toBe(0);
     const pid = (await firstEntry()).pid;
 
     const result = await statusTool().execute(
@@ -452,7 +452,7 @@ describe("bash_status and bash_cancel tool definitions", () => {
 
   it("returns a running snapshot when the wait bound expires", async () => {
     const { exitCode } = await exec("sleep 30");
-    expect(exitCode).toBeNull();
+    expect(exitCode).toBe(0);
     const pid = (await firstEntry()).pid;
 
     const startedAt = Date.now();
@@ -471,7 +471,7 @@ describe("bash_status and bash_cancel tool definitions", () => {
 
   it("bash_cancel preempts an in-flight status wait", async () => {
     const { exitCode } = await exec("sleep 30");
-    expect(exitCode).toBeNull();
+    expect(exitCode).toBe(0);
     const pid = (await firstEntry()).pid;
 
     const pending = statusTool().execute(
@@ -490,7 +490,7 @@ describe("bash_status and bash_cancel tool definitions", () => {
 
   it("aborts the status wait when the signal fires", async () => {
     const { exitCode } = await exec("sleep 30");
-    expect(exitCode).toBeNull();
+    expect(exitCode).toBe(0);
     const pid = (await firstEntry()).pid;
 
     const controller = new AbortController();
@@ -511,7 +511,7 @@ describe("bash_status and bash_cancel tool definitions", () => {
 
   it("formats process lines and details", async () => {
     const { exitCode } = await exec("sleep 0.3");
-    expect(exitCode).toBeNull();
+    expect(exitCode).toBe(0);
     const entry = await waitUntilStatus((await firstEntry()).pid, "completed");
 
     const line = formatProcessLine(entry, entry.startedAt + 12_000);
