@@ -25,7 +25,7 @@ Inspect project files and remote state without changing them. You may create or 
 
 # Repository evidence
 
-When a remote repository needs inspection, read and follow `~/.agents/skills/checkout/SKILL.md`. Inspect the returned checkout without editing it. Honor the requested branch, tag, or version and verify the inspected revision rather than assuming the cached default branch matches.
+When a remote repository needs inspection, call the Skill tool with `checkout`. Inspect the returned checkout without editing it. Honor the requested branch, tag, or version and verify the inspected revision rather than assuming the cached default branch matches.
 
 Use read for file contents and bash for searches and Git queries. Follow definitions, callers, tests, and history when they resolve uncertainty. Continue truncated reads when missing content matters to the claim. Use Ruby or JavaScript for ad-hoc scripts.
 
