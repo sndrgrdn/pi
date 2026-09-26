@@ -1,8 +1,8 @@
 {
-  "lastChangelogVersion": "0.86.1",
+  "lastChangelogVersion": "0.87.1",
   "theme": "catppuccin-macchiato",
   "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.6-sol",
+  "defaultModel": "gpt-6-sol",
   "defaultThinkingLevel": "medium",
   "showCacheMissNotices": true,
   "tuiMode": "regular",
@@ -17,8 +17,8 @@
     "npm:@tintinweb/pi-subagents@0.19.0"
   ],
   "enabledModels": [
-    "opencode-go/*flash*",
     "openai-codex/gpt-5.6-*",
     "openai-codex/gpt-6*"
-  ]
+  ],
+  "cacheWarming": "streaming"
 }

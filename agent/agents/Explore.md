@@ -3,7 +3,7 @@ description: "Locate files, definitions, and references in the local codebase. U
 display_name: Explore
 tools: read, bash
 extensions: [bash-background]
-model: openai-codex/gpt-5.6-terra
+model: openai-codex/gpt-6-sol
 thinking: low
 prompt_mode: replace
 ---

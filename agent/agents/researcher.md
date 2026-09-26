@@ -4,7 +4,7 @@ display_name: Researcher
 tools: read, bash, write
 extensions: [bash-background, web-tools]
 skills: false
-model: openai-codex/gpt-5.6-sol
+model: openai-codex/gpt-6-sol
 thinking: "off"
 prompt_mode: replace
 ---
