@@ -19,4 +19,3 @@ Write all prose without em-dashes. When a sentence reaches for one, rewrite it w
 Package policy (npm):
 - Use `pnpm` for all package operations. Never run npm, yarn, or bun install.
 - Do not install packages whose latest publish is newer than 5 days without asking the user. Explicit user approval overrides this rule.
-- If an existing lockfile is present, prefer `pnpm install --frozen-lockfile`.
