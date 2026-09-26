@@ -22,6 +22,15 @@
         "type": "remote",
         "url": "http://homeassistant.local:9583/private_L6cMaK8XnXnfqNMAX8IGeQ",
         "oauth": false
+      },
+      "computer": {
+        "type": "local",
+        "command": [
+          "cua-driver",
+          "mcp"
+        ],
+        "enabled": true,
+        "timeout": 60000
       }
     }
   }
