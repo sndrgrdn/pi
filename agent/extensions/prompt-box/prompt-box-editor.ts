@@ -1,5 +1,12 @@
 import { CustomEditor, type KeybindingsManager, type Theme } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth, visibleWidth, type EditorTheme, type TUI } from "@earendil-works/pi-tui";
+import {
+  truncateToWidth,
+  visibleWidth,
+  type EditorTheme,
+  type TUI,
+  type TuiMouseEvent,
+  type TuiMouseEventResult,
+} from "@earendil-works/pi-tui";
 
 /** Glyphs used to build the prompt-box border. */
 export const BOX_GLYPHS = {
@@ -60,6 +67,7 @@ export interface CornerLabels {
 export class PromptBoxEditor extends CustomEditor {
   private readonly piTheme: Theme;
   private readonly corners: CornerLabels;
+  private mouseLayout?: { width: number; height: number; bodyRows: number; paddingRows: number };
 
   constructor(
     tui: TUI,
@@ -73,8 +81,31 @@ export class PromptBoxEditor extends CustomEditor {
     this.corners = corners;
   }
 
+  /** Maps the box inset and added body rows back to the base editor layout. */
+  override handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+    const layout = this.mouseLayout;
+
+    if (!layout) return super.handleMouse(event);
+
+    if (event.x < 2 || event.x >= layout.width + 2) return undefined;
+
+    return super.handleMouse({
+      ...event,
+      x: event.x - 2,
+      // Added blank rows map to the base bottom border, not autocomplete.
+      y:
+        event.y <= layout.bodyRows
+          ? event.y
+          : Math.max(layout.bodyRows + 1, event.y - layout.paddingRows),
+      width: layout.width,
+      height: layout.height,
+    });
+  }
+
   /** Delegates to CustomEditor below the minimum box width. */
   override render(width: number): string[] {
+    this.mouseLayout = undefined;
+
     if (width < 16) return super.render(width);
 
     const bdr = (s: string) => this.piTheme.fg("dim", s);
@@ -109,6 +140,13 @@ export class PromptBoxEditor extends CustomEditor {
     const bodyLines = body.length > 0 ? [...body] : [""];
 
     while (bodyLines.length < 2) bodyLines.push("");
+
+    this.mouseLayout = {
+      width: innerW,
+      height: raw.length,
+      bodyRows: body.length,
+      paddingRows: bodyLines.length - body.length,
+    };
 
     const lines = [top, ...bodyLines.map(wrap)];
 
