@@ -309,8 +309,8 @@ async function saveOutputStylePreference(
   }
 }
 
-function buildOutputStylePrompt(systemPrompt: string, style: OutputStyle): string {
-  return `${systemPrompt}\n\n## Active output style: ${style.name}\n\nThe active output style governs presentation. It does not override task, safety, project, or coding instructions.\n\n${style.instructions}`;
+function buildOutputStyleSection(style: OutputStyle): string {
+  return `## Active output style: ${style.name}\n\nThe active output style governs presentation. It does not override task, safety, project, or coding instructions.\n\n${style.instructions}`;
 }
 
 function notifyOutputStyleErrors(
@@ -482,7 +482,7 @@ export function registerOutputStylesExtension(
 
     if (!activeStyle) return;
 
-    return { systemPrompt: buildOutputStylePrompt(event.systemPrompt, activeStyle) };
+    event.systemPromptOptions.sections.output_style = buildOutputStyleSection(activeStyle);
   });
 }
 

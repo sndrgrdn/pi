@@ -4,7 +4,6 @@ import path from "node:path";
 import {
   type AgentToolResult,
   type ExtensionAPI,
-  formatSkillsForPrompt,
   type Skill,
   type Theme,
 } from "@earendil-works/pi-coding-agent";
@@ -66,7 +65,7 @@ function skillToolCatalog(skills: readonly Skill[]): string {
   if (visibleSkills.length === 0) return "";
 
   const lines = [
-    "\n\nThe following skills provide specialized instructions for specific tasks.",
+    "The following skills provide specialized instructions for specific tasks.",
     "When a task matches a skill's description, call the skill tool with its exact name before proceeding.",
     "",
     "<available_skills>",
@@ -84,14 +83,6 @@ function skillToolCatalog(skills: readonly Skill[]): string {
   lines.push("</available_skills>");
 
   return lines.join("\n");
-}
-
-export function replaceSkillCatalog(systemPrompt: string, skills: readonly Skill[]): string {
-  const renderedSkillBlock = formatSkillsForPrompt([...skills]);
-
-  if (!renderedSkillBlock) return systemPrompt;
-
-  return systemPrompt.replace(renderedSkillBlock, skillToolCatalog(skills));
 }
 
 function availableSkillsBlock(skills: ReadonlyMap<string, SkillEntry>): string {
@@ -244,14 +235,9 @@ export default function skillTool(pi: ExtensionAPI): void {
   });
 
   pi.on("before_agent_start", (event) => {
-    const skills = event.systemPromptOptions.skills ?? [];
-
-    const systemPrompt = replaceSkillCatalog(event.systemPrompt, skills);
+    const skills = event.systemPromptOptions.skills;
 
     replaceSkills(skills);
-
-    if (systemPrompt === event.systemPrompt) return;
-
-    return { systemPrompt };
+    event.systemPromptOptions.sections.skills = skillToolCatalog(skills);
   });
 }
