@@ -260,6 +260,7 @@ describe("bash definition", () => {
 
     expect(Date.now() - startedAt).toBeGreaterThanOrEqual(100);
     expect(textOf(result)).toContain("DONE");
+    expect(result.structuredContent).toMatchObject({ status: "completed", exit_code: 0 });
   });
 
   it("renders the call line without any timeout suffix, even for raw args", () => {
@@ -298,6 +299,16 @@ describe("bash definition", () => {
     expect(text).toContain(`Command still running after ${AUTO_BACKGROUND_SECONDS}s`);
     expect(text).toContain("bash_status");
     expect(text).toContain("bash_cancel");
+    const entries = await Effect.runPromise(ctx.processes.listBackgrounded());
+    expect(result.structuredContent).toMatchObject({
+      status: "backgrounded",
+      process_id: entries[0]?.pid,
+      exit_code: null,
+    });
+    const schema = tool().outputSchema;
+
+    if (!schema) throw new Error("test invariant: bash declares an output schema");
+    expect(Compile(schema).Check(result.structuredContent)).toBe(true);
   });
 
   it("starts a command in the background immediately when background is set", async () => {
@@ -320,12 +331,35 @@ describe("bash definition", () => {
 
     if (!entry) throw new Error("test invariant: expected a background entry");
     expect(entry.state).toEqual(ProcessState.Running());
+    expect(result.structuredContent).toMatchObject({
+      status: "backgrounded",
+      process_id: entry.pid,
+      output: "",
+      truncated: false,
+      exit_code: null,
+    });
+    const schema = tool().outputSchema;
+
+    if (!schema) throw new Error("test invariant: bash declares an output schema");
+    expect(Compile(schema).Check(result.structuredContent)).toBe(true);
   });
 
-  it("wraps a non-zero exit in the standard error", async () => {
-    await expect(
-      tool().execute("tool-id", { command: "exit 3" }, undefined, undefined, fakeExecuteCtx),
-    ).rejects.toThrow("Command exited with code 3");
+  it("returns an error result for a non-zero exit", async () => {
+    const result = await tool().execute(
+      "tool-id",
+      { command: "exit 3" },
+      undefined,
+      undefined,
+      fakeExecuteCtx,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      status: "completed",
+      exit_code: 3,
+      output: "",
+    });
+    expect(textOf(result)).toContain("Command exited with code 3");
   });
 });
 

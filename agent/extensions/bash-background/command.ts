@@ -11,7 +11,7 @@
  */
 
 import { delimiter, join } from "node:path";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { Type } from "typebox";
 import { Text } from "@earendil-works/pi-tui";
 import {
@@ -42,10 +42,46 @@ export interface BackgroundingBashOptions {
   autoBackgroundSeconds?: number;
 }
 
+const BashExecutionOutput = Schema.Struct({
+  output: Schema.String.annotate({
+    description: "Combined stdout and stderr collected before returning.",
+  }),
+  truncated: Schema.Boolean.annotate({
+    description: "Whether output omits part of the command output.",
+  }),
+  full_output_path: Schema.optionalKey(Schema.String),
+  exit_code: Schema.Number,
+  wall_time_seconds: Schema.Number,
+});
+
+interface BashExecutionOutput extends Schema.Schema.Type<typeof BashExecutionOutput> {}
+
+const BashCommandOutput = Schema.Union([
+  Schema.Struct({ ...BashExecutionOutput.fields, status: Schema.tag("completed") }),
+  Schema.Struct({
+    ...BashExecutionOutput.fields,
+    status: Schema.tag("backgrounded"),
+    process_id: Schema.Number.annotate({
+      description: "Process ID for bash_status and bash_cancel.",
+    }),
+    exit_code: Schema.Null.annotate({
+      description: "The process has not reported its final exit code.",
+    }),
+  }),
+]);
+
+const bashOutputDocument = Schema.toJsonSchemaDocument(BashCommandOutput);
+
+// SAFETY: TypeBox carries JSON Schema generated from the owning Effect schema, not unchecked input.
+const bashOutputSchema = Type.Unsafe<Schema.Schema.Type<typeof BashCommandOutput>>({
+  ...bashOutputDocument.schema,
+  $defs: bashOutputDocument.definitions,
+});
+
 type ExecOutcome =
   | { type: "exit"; exitCode: number | null }
   | { type: "abort" }
-  | { type: "background"; notice: string };
+  | { type: "background"; pid: number; notice: string };
 
 /** Plain object like the builtin: unknown keys (e.g. legacy timeout) pass validation and are dropped. */
 export const bashParameters = Type.Object({
@@ -60,6 +96,7 @@ export const bashParameters = Type.Object({
 /** Build the BashOperations seam that backs the foreground bash override. */
 export function createBackgroundingBashOperations(
   options: BackgroundingBashOptions,
+  onBackground?: (pid: number) => void,
 ): BashOperations {
   const backgroundSeconds = options.autoBackgroundSeconds ?? AUTO_BACKGROUND_SECONDS;
 
@@ -86,6 +123,7 @@ export function createBackgroundingBashOperations(
       }
 
       if (outcome.type === "background") {
+        onBackground?.(outcome.pid);
         onData(Buffer.from(outcome.notice));
 
         // The command is still running, but the builtin requires a successful
@@ -107,21 +145,26 @@ export interface BackgroundCommandInput {
   spawner: ProcessSpawnerContract;
 }
 
-/** Starts a background command and returns its process notice. */
-export function runBackgroundCommand(input: BackgroundCommandInput): Promise<string> {
+/** Starts a background command and returns its process ID and notice. */
+export function runBackgroundCommand(
+  input: BackgroundCommandInput,
+): Promise<Extract<ExecOutcome, { type: "background" }>> {
   return execProgram({
     ...input,
     onData: () => {},
     signal: undefined,
     backgroundSeconds: AUTO_BACKGROUND_SECONDS,
     startBackgrounded: true,
-  })
-    .pipe(
-      Effect.provideService(BackgroundProcesses, input.processes),
-      Effect.provideService(ProcessSpawner, input.spawner),
-      Effect.runPromise,
-    )
-    .then((outcome) => (outcome.type === "background" ? outcome.notice : ""));
+  }).pipe(
+    Effect.provideService(BackgroundProcesses, input.processes),
+    Effect.provideService(ProcessSpawner, input.spawner),
+    Effect.map((outcome) => {
+      if (outcome.type !== "background") throw new Error("Expected a background process handoff");
+
+      return outcome;
+    }),
+    Effect.runPromise,
+  );
 }
 
 const execProgram = Effect.fn("BashBackground.exec")(function* ({
@@ -184,7 +227,7 @@ const execProgram = Effect.fn("BashBackground.exec")(function* ({
     yield* processes.markBackgrounded(created.pid);
     foreground = false;
 
-    return { type: "background", notice: backgroundNotice(true) };
+    return { type: "background", pid: created.pid, notice: backgroundNotice(true) };
   }
 
   const waitExit = spawned.wait.pipe(
@@ -194,7 +237,11 @@ const execProgram = Effect.fn("BashBackground.exec")(function* ({
   const arms: Array<Effect.Effect<ExecOutcome, BashError, never>> = [
     waitExit,
     Effect.sleep(backgroundSeconds * 1000).pipe(
-      Effect.map(() => ({ type: "background" as const, notice: backgroundNotice(false) })),
+      Effect.map(() => ({
+        type: "background" as const,
+        pid: created.pid,
+        notice: backgroundNotice(false),
+      })),
     ),
   ];
 
@@ -279,13 +326,12 @@ export function createBackgroundingBashDefinition(
   cwd: string,
   options: BackgroundingBashOptions,
 ): ToolDefinition<typeof bashParameters, BashToolDetails | undefined> {
-  const bash = createBashToolDefinition(cwd, {
-    operations: createBackgroundingBashOperations(options),
-  });
+  const bash = createBashToolDefinition(cwd);
 
   return defineTool({
     ...bash,
     parameters: bashParameters,
+    outputSchema: bashOutputSchema,
     description: `Execute a bash command in the current working directory. Returns stdout and stderr, truncated to the last 2000 lines or 50KB (whichever is hit first); if truncated, the full output is saved to a temp file. Commands that run longer than ${AUTO_BACKGROUND_SECONDS} seconds background themselves: the call returns with the output so far and the command keeps running. Pass background: true to background a command immediately. Check background processes with bash_status and cancel them with bash_cancel.`,
     // Never render a timeout suffix; keep the builtin's startedAt state so
     // the elapsed timer in the result row still works.
@@ -309,20 +355,61 @@ export function createBackgroundingBashDefinition(
       return text;
     },
     async execute(toolCallId, params, signal, onUpdate, ctx) {
+      const startedAt = performance.now();
+
       if (params.background === true) {
         // The flag cannot travel through the ops seam, so spawn directly.
-        const text = await runBackgroundCommand({
+        const outcome = await runBackgroundCommand({
           command: params.command,
-          cwd,
+          cwd: ctx.cwd,
           env: resolveSessionEnv(ctx),
           processes: options.processes,
           spawner: options.spawner,
         });
 
-        return { content: [{ type: "text", text }], details: undefined };
+        return {
+          content: [{ type: "text", text: outcome.notice }],
+          details: undefined,
+          structuredContent: {
+            status: "backgrounded",
+            process_id: outcome.pid,
+            output: "",
+            truncated: false,
+            exit_code: null,
+            wall_time_seconds: (performance.now() - startedAt) / 1000,
+          },
+        };
       }
 
-      return bash.execute(toolCallId, { command: params.command }, signal, onUpdate, ctx);
+      let backgroundProcessId: number | undefined;
+
+      const foregroundBash = createBashToolDefinition(cwd, {
+        operations: createBackgroundingBashOperations(options, (pid) => {
+          backgroundProcessId = pid;
+        }),
+      });
+
+      const result = await foregroundBash.execute(
+        toolCallId,
+        { command: params.command },
+        signal,
+        onUpdate,
+        ctx,
+      );
+
+      const structuredContent = await Schema.decodeUnknownEffect(BashExecutionOutput)(
+        result.structuredContent,
+      ).pipe(Effect.orDie, Effect.runPromise);
+
+      return {
+        ...result,
+        structuredContent: {
+          ...structuredContent,
+          ...(backgroundProcessId === undefined
+            ? { status: "completed" }
+            : { status: "backgrounded", process_id: backgroundProcessId, exit_code: null }),
+        },
+      };
     },
   });
 }

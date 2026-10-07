@@ -1,24 +1,38 @@
 {
-  "lastChangelogVersion": "0.87.1",
+  "lastChangelogVersion": "1.0.4",
   "theme": "catppuccin-macchiato",
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-6-sol",
+  "defaultProvider": "openai",
+  "defaultModel": "gpt-6.1-sol",
   "defaultThinkingLevel": "medium",
   "showCacheMissNotices": true,
-  "tuiMode": "regular",
   "hideThinkingBlock": true,
-  "steeringMode": "all",
-  "followUpMode": "all",
   "treeFilterMode": "no-tools",
   "defaultProjectTrust": "always",
-  "fullscreenScrollbar": "always",
   "packages": [
-    "git:github.com/dmmulroy/pi-mcp",
-    "npm:@tintinweb/pi-subagents@0.19.0"
+    {
+      "source": "npm:pi-subagents",
+      "prompts": []
+    },
+    "npm:pi-context-view@0.6.0"
   ],
+  "subagents": {
+    "disableBuiltins": true,
+    "agentOverrides": {
+      "code-explorer": {
+        "model": "openai/gpt-6-luna",
+        "thinking": "low"
+      },
+      "researcher": {
+        "model": "openai/gpt-6.1-sol",
+        "thinking": "low"
+      }
+    }
+  },
   "enabledModels": [
-    "openai-codex/gpt-5.6-*",
-    "openai-codex/gpt-6*"
+    "openai/gpt-6-astra",
+    "openai/gpt-6-luna",
+    "openai/gpt-6.1-sol"
   ],
-  "cacheWarming": "streaming"
+}  "deviceId": "83f1f35a-cb2b-4ef1-acb3-9b09ae799904",
+  "steeringMode": "all"
 }

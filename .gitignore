@@ -5,3 +5,6 @@ sessions
 node_modules
 mcp-auth.json
 settings.json
+agent/missions
+agent/pi-subagents
+agent/run-history.jsonl

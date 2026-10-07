@@ -1,37 +1,27 @@
 {
-  "mcp": {
-    "startup": "lazy",
-    "toolMode": "proxy",
-    "servers": {
-      "playwright": {
-        "type": "local",
-        "command": [
-          "pnpx",
-          "@playwright/mcp@latest"
-        ]
-      },
-      "chrome-devtools": {
-        "type": "local",
-        "command": [
-          "pnpx",
-          "chrome-devtools-mcp@latest",
-          "--executablePath=/Applications/Helium.app/Contents/MacOS/Helium"
-        ]
-      },
-      "homeassistant": {
-        "type": "remote",
-        "url": "http://homeassistant.local:9583/private_L6cMaK8XnXnfqNMAX8IGeQ",
-        "oauth": false
-      },
-      "computer": {
-        "type": "local",
-        "command": [
-          "cua-driver",
-          "mcp"
-        ],
-        "enabled": true,
-        "timeout": 60000
-      }
+  "mcpServers": {
+    "playwright": {
+      "type": "stdio",
+      "command": "pnpx",
+      "args": ["@playwright/mcp@latest"]
+    },
+    "chrome-devtools": {
+      "type": "stdio",
+      "command": "pnpx",
+      "args": [
+        "chrome-devtools-mcp@latest",
+        "--executablePath=/Applications/Helium.app/Contents/MacOS/Helium"
+      ]
+    },
+    "homeassistant": {
+      "type": "http",
+      "url": "http://homeassistant.local:9583/private_L6cMaK8XnXnfqNMAX8IGeQ"
+    },
+    "computer": {
+      "type": "stdio",
+      "command": "cua-driver",
+      "args": ["mcp"],
+      "timeout": 60
     }
   }
 }
