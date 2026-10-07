@@ -8,10 +8,7 @@
     "chrome-devtools": {
       "type": "stdio",
       "command": "pnpx",
-      "args": [
-        "chrome-devtools-mcp@latest",
-        "--executablePath=/Applications/Helium.app/Contents/MacOS/Helium"
-      ]
+      "args": ["chrome-devtools-mcp@latest"]
     },
     "homeassistant": {
       "type": "http",

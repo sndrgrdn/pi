@@ -11,10 +11,17 @@
   "packages": [
     {
       "source": "npm:pi-subagents",
-      "prompts": []
+      "prompts": [],
+      "skills": []
     },
-    "npm:pi-context-view@0.6.0"
+    "npm:pi-context-view"
   ],
+  "enabledModels": [
+    "openai/gpt-6.1-sol:medium",
+    "openai/gpt-6-astra:low",
+    "openai/gpt-6-luna:xhigh"
+  ],
+  "steeringMode": "all",
   "subagents": {
     "disableBuiltins": true,
     "agentOverrides": {
@@ -27,12 +34,5 @@
         "thinking": "low"
       }
     }
-  },
-  "enabledModels": [
-    "openai/gpt-6-astra",
-    "openai/gpt-6-luna",
-    "openai/gpt-6.1-sol"
-  ],
-}  "deviceId": "83f1f35a-cb2b-4ef1-acb3-9b09ae799904",
-  "steeringMode": "all"
+  }
 }
