@@ -6,14 +6,13 @@
     "check": "oxfmt --check \"agent/**/*.ts\" && oxlint --deny-warnings . && tsc --noEmit",
     "fix": "oxfmt --write \"agent/**/*.ts\" && oxlint --fix .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --exclude 'agent/git/**' --exclude 'agent/npm/**' --exclude 'agent/sessions/**'",
-    "verify": "pnpm check && pnpm test"
+    "test": "vitest run --exclude 'agent/git/**' --exclude 'agent/npm/**' --exclude 'agent/sessions/**'"
   },
   "devDependencies": {
-    "@earendil-works/pi-agent-core": "1.0.4",
-    "@earendil-works/pi-ai": "1.0.4",
-    "@earendil-works/pi-coding-agent": "1.0.4",
-    "@earendil-works/pi-tui": "1.0.4",
+    "@earendil-works/pi-agent-core": "1.1.0",
+    "@earendil-works/pi-ai": "1.1.0",
+    "@earendil-works/pi-coding-agent": "1.1.0",
+    "@earendil-works/pi-tui": "1.1.0",
     "@oxlint/plugins": "1.82.0",
     "@types/node": "^26.5.1",
     "@types/turndown": "^5.0.6",

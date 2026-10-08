@@ -3,5 +3,4 @@
 - Run `pnpm typecheck` for TypeScript type checking.
 - Run `pnpm test` for the test suite.
 - Run `pnpm check` for non-mutating formatting, lint, and type checks.
-- Run `pnpm verify` for all non-mutating checks and tests.
 - `pnpm fix` writes formatting and lint fixes.
