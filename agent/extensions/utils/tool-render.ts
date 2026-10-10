@@ -6,7 +6,7 @@ export const emptyToolResult = (): Text => new Text("", 0, 0);
 export function toolErrorResult(
   result: AgentToolResult<unknown>,
   icon: string,
-  theme: Theme,
+  theme: Pick<Theme, "fg">,
 ): Text {
   const message = result.content[0]?.type === "text" ? result.content[0].text : "Tool failed";
 
@@ -20,7 +20,7 @@ export interface ToolPreviewOptions {
 
 export function toolPreview(
   result: AgentToolResult<unknown>,
-  theme: Theme,
+  theme: Pick<Theme, "fg">,
   options: ToolPreviewOptions = {},
 ): Text {
   const previewLines = options.previewLines ?? 15;

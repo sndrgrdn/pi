@@ -1,3 +1,4 @@
+import { stripVTControlCharacters } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Compile } from "typebox/compile";
 import { Effect } from "effect";
@@ -19,6 +20,7 @@ import {
   type BackgroundProcessesContract,
 } from "../registry.ts";
 import { createRealProcessSpawner, type ProcessSpawnerContract } from "../process.ts";
+import { createToolContext } from "./extension-context.ts";
 
 const AUTO_BACKGROUND_SECONDS = 0.2;
 
@@ -48,10 +50,7 @@ afterEach(async () => {
   await Effect.runPromise(ctx.processes.killAllBackgrounded());
 });
 
-const fakeExecuteCtx = {
-  cwd: process.cwd(),
-  sessionManager: { getSessionId: () => "test", getSessionFile: () => undefined },
-} as never;
+const executeContext = await createToolContext();
 
 const exec = (command: string, options: { signal?: AbortSignal; timeout?: number } = {}) => {
   const execOptions: Parameters<typeof ctx.ops.exec>[2] = {
@@ -117,13 +116,35 @@ const firstEntry = async (): Promise<BackgroundProcess> => {
   return entry;
 };
 
-const fakeTheme = {
-  fg: (_color: string, text: string) => text,
-  bold: (text: string) => text,
-} as never;
+const theme = executeContext.ui.theme;
 
-const fakeRenderContext = <TState>(state: TState, executionStarted: boolean) =>
-  ({ state, executionStarted, lastComponent: undefined }) as never;
+const lineOf = (text: { render: (width: number) => string[] }) =>
+  text
+    .render(200)
+    .map((line) => stripVTControlCharacters(line).trimEnd())
+    .filter(Boolean)
+    .join("|");
+
+const createRenderContext = <TState, TArgs>(
+  state: TState,
+  executionStarted: boolean,
+  args: TArgs,
+) => ({
+  args,
+  toolCallId: "test",
+  invalidate: () => {},
+  lastComponent: undefined,
+  state,
+  cwd: process.cwd(),
+  executionStarted,
+  argsComplete: true,
+  isPartial: false,
+  expanded: false,
+  showImages: false,
+  isError: false,
+  durationMs: undefined,
+  outputPad: 0,
+});
 
 describe("bash operations", () => {
   it("returns the exit code for a quick command", async () => {
@@ -234,14 +255,9 @@ describe("bash definition", () => {
 
   it("drops a legacy timeout parameter instead of killing the command at it", async () => {
     const startedAt = Date.now();
+    const params = { command: "sleep 0.15; echo DONE", timeout: 0.05 };
 
-    const result = await tool().execute(
-      "tool-id",
-      { command: "sleep 0.15; echo DONE", timeout: 0.05 } as never,
-      undefined,
-      undefined,
-      fakeExecuteCtx,
-    );
+    const result = await tool().execute("tool-id", params, undefined, undefined, executeContext);
 
     expect(Date.now() - startedAt).toBeGreaterThanOrEqual(100);
     expect(textOf(result)).toContain("DONE");
@@ -253,17 +269,10 @@ describe("bash definition", () => {
 
     if (!renderCall) throw new Error("test invariant: bash tool defines renderCall");
 
-    const text = renderCall(
-      { command: "echo hi", timeout: 45 } as never,
-      fakeTheme,
-      fakeRenderContext({}, false),
-    );
+    const params = { command: "echo hi", timeout: 45 };
+    const text = renderCall(params, theme, createRenderContext({}, false, params));
 
-    const line = text
-      .render(200)
-      .map((line) => line.trimEnd())
-      .filter(Boolean)
-      .join("|");
+    const line = lineOf(text);
 
     expect(line).toContain("$ echo hi");
     expect(line).not.toContain("timeout");
@@ -275,7 +284,7 @@ describe("bash definition", () => {
       { command: "sleep 30" },
       undefined,
       undefined,
-      fakeExecuteCtx,
+      executeContext,
     );
 
     const text = textOf(result);
@@ -302,7 +311,7 @@ describe("bash definition", () => {
       { command: "sleep 30", background: true },
       undefined,
       undefined,
-      fakeExecuteCtx,
+      executeContext,
     );
 
     const text = textOf(result);
@@ -333,7 +342,7 @@ describe("bash definition", () => {
       { command: "exit 3" },
       undefined,
       undefined,
-      fakeExecuteCtx,
+      executeContext,
     );
 
     expect(result.isError).toBe(true);
@@ -352,34 +361,27 @@ describe("bash_status and bash_cancel tool definitions", () => {
 
   interface RenderStateProbe {
     startedAt?: number;
-    interval?: ReturnType<typeof setInterval>;
+    interval: ReturnType<typeof setInterval> | undefined;
   }
 
-  const renderState = (): RenderStateProbe => ({});
+  const renderState = (): RenderStateProbe => ({ interval: undefined });
 
   it("reports no background processes when none exist", async () => {
-    expect(textOf(await statusTool().execute("id", {}, undefined, undefined, fakeExecuteCtx))).toBe(
+    expect(textOf(await statusTool().execute("id", {}, undefined, undefined, executeContext))).toBe(
       "No background processes.",
     );
   });
 
   it("counts down the wait in the call line while the call runs", () => {
-    const lineOf = (text: { render: (width: number) => string[] }) =>
-      text
-        .render(200)
-        .map((line) => line.trimEnd())
-        .filter(Boolean)
-        .join("|");
-
     const state = renderState();
-    const context = fakeRenderContext(state, true);
+    const context = createRenderContext(state, true, {});
 
     const renderCall = (args: { id?: number; wait_seconds?: number }) => {
       const call = statusTool().renderCall;
 
       if (!call) throw new Error("test invariant: status tool defines renderCall");
 
-      return call(args, fakeTheme, context);
+      return call(args, theme, context);
     };
 
     expect(lineOf(renderCall({ id: 1, wait_seconds: 10 }))).toBe("◈ Bash status 1 (wait 10s)");
@@ -395,21 +397,21 @@ describe("bash_status and bash_cancel tool definitions", () => {
 
   it("starts no ticker for a plain status call", () => {
     const state = renderState();
-    const context = fakeRenderContext(state, true);
+    const context = createRenderContext(state, true, {});
     const renderCall = statusTool().renderCall;
 
     if (!renderCall) throw new Error("test invariant: status tool defines renderCall");
-    renderCall({ id: 1 }, fakeTheme, context);
+    renderCall({ id: 1 }, theme, context);
     expect(state.interval).toBeUndefined();
   });
 
   it("clears the ticker when the result arrives", () => {
     const state = renderState();
-    const context = fakeRenderContext(state, true);
+    const context = createRenderContext(state, true, {});
     const renderCall = statusTool().renderCall;
 
     if (!renderCall) throw new Error("test invariant: status tool defines renderCall");
-    renderCall({ id: 1, wait_seconds: 10 }, fakeTheme, context);
+    renderCall({ id: 1, wait_seconds: 10 }, theme, context);
     expect(state.interval).toBeDefined();
     const renderResult = statusTool().renderResult;
 
@@ -417,7 +419,7 @@ describe("bash_status and bash_cancel tool definitions", () => {
     renderResult(
       { content: [{ type: "text", text: "x" }], details: undefined },
       { expanded: false, isPartial: false },
-      fakeTheme,
+      theme,
       context,
     );
     expect(state.interval).toBeUndefined();
@@ -425,7 +427,7 @@ describe("bash_status and bash_cancel tool definitions", () => {
 
   it("fails with a typed message for an unknown id", async () => {
     await expect(
-      statusTool().execute("id", { id: 99999 }, undefined, undefined, fakeExecuteCtx),
+      statusTool().execute("id", { id: 99999 }, undefined, undefined, executeContext),
     ).rejects.toThrow("No background process with id 99999");
   });
 
@@ -439,14 +441,14 @@ describe("bash_status and bash_cancel tool definitions", () => {
       { id: pid },
       undefined,
       undefined,
-      fakeExecuteCtx,
+      executeContext,
     );
 
     expect(textOf(result)).toBe(`Cancelled background process ${pid} (sleep 30).`);
     await waitUntilDead(pid);
 
     await expect(
-      killTool().execute("id", { id: pid }, undefined, undefined, fakeExecuteCtx),
+      killTool().execute("id", { id: pid }, undefined, undefined, executeContext),
     ).rejects.toThrow(`Background process ${pid} is not running`);
   });
 
@@ -460,7 +462,7 @@ describe("bash_status and bash_cancel tool definitions", () => {
       { id: pid, wait_seconds: 5 },
       undefined,
       undefined,
-      fakeExecuteCtx,
+      executeContext,
     );
 
     expect(textOf(result)).toContain("completed (exit 0)");
@@ -479,7 +481,7 @@ describe("bash_status and bash_cancel tool definitions", () => {
       { id: pid, wait_seconds: 1 },
       undefined,
       undefined,
-      fakeExecuteCtx,
+      executeContext,
     );
 
     expect(Date.now() - startedAt).toBeGreaterThanOrEqual(900);
@@ -496,10 +498,10 @@ describe("bash_status and bash_cancel tool definitions", () => {
       { id: pid, wait_seconds: 10 },
       undefined,
       undefined,
-      fakeExecuteCtx,
+      executeContext,
     );
 
-    await killTool().execute("id", { id: pid }, undefined, undefined, fakeExecuteCtx);
+    await killTool().execute("id", { id: pid }, undefined, undefined, executeContext);
     expect(textOf(await pending)).toContain("cancelled");
   });
 
@@ -515,7 +517,7 @@ describe("bash_status and bash_cancel tool definitions", () => {
       { id: pid, wait_seconds: 10 },
       controller.signal,
       undefined,
-      fakeExecuteCtx,
+      executeContext,
     );
 
     controller.abort();

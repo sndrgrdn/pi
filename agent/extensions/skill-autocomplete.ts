@@ -6,8 +6,6 @@ export const MIN_SKILL_QUERY_LENGTH = 2;
 
 export const MAX_SUGGESTIONS = 15;
 
-const SKILL_VALUE_PREFIX = "/skill:";
-
 export interface SlashCommandLike {
   name: string;
   description?: string;
@@ -85,6 +83,8 @@ export const createSkillAutocompleteProvider = (
   current: AutocompleteProvider,
   getSkills: () => SkillSuggestion[],
 ): AutocompleteProvider => {
+  const skillItems = new WeakSet<AutocompleteItem>();
+
   const provider: AutocompleteProvider = {
     async getSuggestions(lines, cursorLine, cursorCol, options) {
       const currentLine = lines[cursorLine] ?? "";
@@ -100,6 +100,8 @@ export const createSkillAutocompleteProvider = (
         return current.getSuggestions(lines, cursorLine, cursorCol, options);
       }
 
+      for (const item of items) skillItems.add(item);
+
       return {
         items,
         prefix: `/${token}`,
@@ -107,7 +109,7 @@ export const createSkillAutocompleteProvider = (
     },
 
     applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
-      if (!item.value.startsWith(SKILL_VALUE_PREFIX)) {
+      if (!skillItems.has(item)) {
         return current.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
       }
 

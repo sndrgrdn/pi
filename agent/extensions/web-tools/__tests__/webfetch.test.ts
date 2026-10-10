@@ -63,7 +63,7 @@ describe("fetch", () => {
     const exit = await runFetch(
       { url: "http://example.com/public", format: "text", timeout: 4 },
       async (url, init) => {
-        requests.push({ url, headers: init.headers as Record<string, string> });
+        requests.push({ url, headers: Object.fromEntries(new Headers(init.headers)) });
 
         return new Response("hello", { headers: { "content-type": "text/plain" } });
       },
@@ -84,9 +84,9 @@ describe("fetch", () => {
       {
         url: "http://example.com/public",
         headers: {
-          Accept: expect.stringContaining("text/plain;q=1.0"),
-          "Accept-Language": "en-US,en;q=0.9",
-          "User-Agent": browserUserAgent,
+          accept: expect.stringContaining("text/plain;q=1.0"),
+          "accept-language": "en-US,en;q=0.9",
+          "user-agent": browserUserAgent,
         },
       },
     ]);
@@ -109,8 +109,8 @@ describe("fetch", () => {
 
     const exit = await runFetch({ url: "https://1.1.1.1", format: "text" }, async (_url, init) => {
       count++;
-      const headers = init.headers as Record<string, string>;
-      userAgents.push(headers["User-Agent"] ?? "");
+      const headers = new Headers(init.headers);
+      userAgents.push(headers.get("User-Agent") ?? "");
 
       if (count === 1) {
         return new Response("challenge", { status: 403, headers: { "cf-mitigated": "challenge" } });

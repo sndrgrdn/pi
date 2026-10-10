@@ -3,7 +3,7 @@ import { Text } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
 import { emptyToolResult, toolErrorResult, toolPreview } from "../../utils/tool-render.ts";
 
-const theme = { fg: (_color: string, text: string) => text } as Theme;
+const theme: Pick<Theme, "fg"> = { fg: (_color, text) => text };
 
 const rendered = (component: Text) =>
   component
