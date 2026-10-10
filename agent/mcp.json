@@ -3,21 +3,28 @@
     "playwright": {
       "type": "stdio",
       "command": "pnpx",
-      "args": ["@playwright/mcp@latest"]
+      "args": [
+        "@playwright/mcp@latest"
+      ]
     },
     "chrome-devtools": {
       "type": "stdio",
       "command": "pnpx",
-      "args": ["chrome-devtools-mcp@latest"]
+      "args": [
+        "chrome-devtools-mcp@latest"
+      ]
     },
     "homeassistant": {
       "type": "http",
-      "url": "http://homeassistant.local:9583/private_L6cMaK8XnXnfqNMAX8IGeQ"
+      "url": "http://homeassistant.local:9583/private_L6cMaK8XnXnfqNMAX8IGeQ",
+      "enabled": false
     },
     "computer": {
       "type": "stdio",
       "command": "cua-driver",
-      "args": ["mcp"],
+      "args": [
+        "mcp"
+      ],
       "timeout": 60
     }
   }
