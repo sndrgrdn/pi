@@ -1,48 +1,22 @@
-/**
- * Inline skill autocomplete for mid-line slash tokens: with `use /subag`
- * in the editor, Tab (or any keystroke while the popup is open) suggests
- * `/skill:subagent`, `/skill:tdd`, etc.
- *
- * The provider never fires at message start: the built-in slash menu owns
- * that flow and already lists skills. Mid-line suggestions appear on Tab
- * because the editor only auto-triggers on `/` at message start and on
- * `@`/`#` tokens; that gate is editor behavior, not a provider choice.
- */
-
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem, AutocompleteProvider } from "@earendil-works/pi-tui";
 import { fuzzyFilter } from "@earendil-works/pi-tui";
 
-/** Minimum query length after the `/` before skill suggestions appear. */
 export const MIN_SKILL_QUERY_LENGTH = 2;
 
-/** Cap on how many suggestions are shown at once. */
 export const MAX_SUGGESTIONS = 15;
 
-/**
- * Marker that prefixes every value we produce. The built-in slash-menu
- * items carry the bare command name (e.g. "skill:subagent"), so the marker
- * discriminates our items from those. It is a heuristic, not an invariant:
- * built-in argument completions are arbitrary extension-supplied strings
- * and could in principle collide with it.
- */
 const SKILL_VALUE_PREFIX = "/skill:";
 
-/** Minimal shape of the slash-command entries pi exposes via getCommands(). */
 export interface SlashCommandLike {
-  /** Invokable name without the leading slash, e.g. "skill:subagent". */
   name: string;
   description?: string;
   source?: string;
 }
 
-/** A skill ready for display, with the "skill:" prefix stripped. */
 export interface SkillSuggestion {
-  /** Bare skill name, e.g. "subagent". */
   name: string;
-  /** Text shown in the completion list. */
   label: string;
-  /** Text inserted into the editor on accept. */
   value: string;
   description?: string;
 }
@@ -65,7 +39,6 @@ export const extractSkillToken = (textBeforeCursor: string): string | undefined 
   return token;
 };
 
-/** Filters getCommands() entries down to unique skills, user scope first. */
 export const collectSkillCommands = (commands: readonly SlashCommandLike[]): SkillSuggestion[] => {
   const seen = new Set<string>();
   const skills: SkillSuggestion[] = [];
@@ -93,7 +66,6 @@ export const collectSkillCommands = (commands: readonly SlashCommandLike[]): Ski
   return skills;
 };
 
-/** Fuzzy-matches skills against the query, capped at MAX_SUGGESTIONS. */
 export const filterSkillSuggestions = (
   skills: readonly SkillSuggestion[],
   query: string,
@@ -109,10 +81,6 @@ export const filterSkillSuggestions = (
     }));
 };
 
-/**
- * Wraps the built-in autocomplete provider: mid-line skill suggestions when
- * the cursor is in a `... /sk...` token, otherwise the built-in behavior.
- */
 export const createSkillAutocompleteProvider = (
   current: AutocompleteProvider,
   getSkills: () => SkillSuggestion[],
@@ -140,18 +108,9 @@ export const createSkillAutocompleteProvider = (
 
     applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
       if (!item.value.startsWith(SKILL_VALUE_PREFIX)) {
-        // Built-in item (slash menu, paths, arguments): let the built-in
-        // provider apply it. Its slash-prepend branch only fires for
-        // line-start prefixes, so delegating here is what keeps
-        // message-start completions correct.
         return current.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
       }
 
-      // Our item: replace the slash token with the full value. Delegating
-      // would also insert verbatim today: mid-line slash prefixes route
-      // through the built-in's argument branch, not its slash-prepend
-      // branch. That routing is a built-in implementation detail, not
-      // a stable contract, so own the insertion here.
       const currentLine = lines[cursorLine] ?? "";
       const tokenStart = Math.max(0, cursorCol - prefix.length);
       const before = currentLine.slice(0, tokenStart);
@@ -179,7 +138,6 @@ export const createSkillAutocompleteProvider = (
   return provider;
 };
 
-/** Registers the skill autocomplete provider on every session start. */
 export default function skillAutocomplete(pi: ExtensionAPI): void {
   pi.on("session_start", (_event, ctx) => {
     const getSkills = (): SkillSuggestion[] => {

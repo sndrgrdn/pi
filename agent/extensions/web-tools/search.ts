@@ -1,5 +1,3 @@
-/** Websearch engine selection, failures, orchestration, and result rendering. */
-
 import { readStoredCredential } from "@earendil-works/pi-coding-agent";
 import { Effect } from "effect";
 import * as Schema from "effect/Schema";
@@ -7,16 +5,12 @@ import { exaSearch } from "./exa.ts";
 import { type HttpFetchContract } from "./http.ts";
 import { parallelSearch } from "./parallel.ts";
 
-/** Supported websearch engines. */
 export type SearchEngine = "exa" | "parallel";
 
-/** Default websearch engine. */
 export const DEFAULT_ENGINE: SearchEngine = "exa";
 
-/** Model-facing message for an empty search result. */
 export const NO_RESULTS = "No search results found. Please try a different query.";
 
-/** Normalized websearch result. */
 export interface SearchResult {
   readonly url: string;
   readonly title?: string;
@@ -24,20 +18,17 @@ export interface SearchResult {
   readonly time: { readonly published?: number };
 }
 
-/** Optional fields collected while parsing a search result. */
 export interface SearchResultExtras {
   title?: string;
   content?: string;
 }
 
-/** Completed websearch details. */
 export interface WebSearchDetails {
   readonly engine: SearchEngine;
   readonly results: readonly SearchResult[];
   readonly fullOutputPath?: string;
 }
 
-/** Websearch failure with a stable model-facing message. */
 export class WebSearchError extends Schema.TaggedError<WebSearchError>()("WebSearch.Error", {
   kind: Schema.Union([
     Schema.Literal("invalidEngine"),
@@ -53,7 +44,6 @@ export class WebSearchError extends Schema.TaggedError<WebSearchError>()("WebSea
   cause: Schema.optionalKey(Schema.Unknown),
 }) {}
 
-/** Creates a WebSearchError with its stable message. */
 export const createWebSearchError = (
   kind: WebSearchError["kind"],
   fields: Partial<Omit<WebSearchError, "_tag" | "kind" | "message">> = {},
@@ -80,18 +70,14 @@ export const createWebSearchError = (
   return new WebSearchError({ kind, ...fields, message });
 };
 
-/** Project settings override global; an unrecognized value is an error, not a silent fallback. */
 const EngineSettings = Schema.Struct({
   websearch: Schema.optional(Schema.Struct({ engine: Schema.optional(Schema.String) })),
 });
 
-/** Websearch engine settings decoded from the larger settings object. */
 export type EngineSettingsContract = Schema.Schema.Type<typeof EngineSettings>;
 
-/** Decodes the websearch engine settings view. */
 export const decodeEngineSettings = Schema.decodeUnknownOption(EngineSettings);
 
-/** Resolves project then global engine settings and rejects unknown engines. */
 export const resolveEngine = Effect.fn("WebSearch.resolveEngine")(function* (
   globalSettings: EngineSettingsContract | undefined,
   projectSettings: EngineSettingsContract | undefined,
@@ -108,7 +94,6 @@ export const resolveEngine = Effect.fn("WebSearch.resolveEngine")(function* (
   return yield* Effect.fail(createWebSearchError("invalidEngine", { engine: raw }));
 });
 
-/** Resolves credentials in environment, stored-credential, then keyless order. */
 export const resolveEngineApiKey = (
   engine: SearchEngine,
   env: (name: string) => string | undefined = (name) => process.env[name],
@@ -123,7 +108,6 @@ export const resolveEngineApiKey = (
   return stored?.type === "api_key" && stored.key ? stored.key : undefined;
 };
 
-/** Resolved websearch request and optional credential sources. */
 export interface SearchInput {
   query: string;
   engine: SearchEngine;
@@ -132,7 +116,6 @@ export interface SearchInput {
   authPath?: string;
 }
 
-/** Runs exactly one selected engine without failover. */
 export const runWebSearch = Effect.fn("WebSearch.runWebSearch")(function* (
   http: HttpFetchContract,
   input: SearchInput,
@@ -144,7 +127,6 @@ export const runWebSearch = Effect.fn("WebSearch.runWebSearch")(function* (
     : yield* parallelSearch(http, input.query, key, input.signal);
 });
 
-/** Renders results as model-facing Markdown. */
 export function renderSearchResults(results: readonly SearchResult[]): string {
   if (results.length === 0) return NO_RESULTS;
 

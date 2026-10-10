@@ -1,13 +1,9 @@
-/** Injectable HTTP boundary for web tools. */
-
 import { Effect } from "effect";
 
-/** HTTP fetch implementation used by the web tools. */
 export interface HttpFetchContract {
   readonly fetch: (input: string, init: RequestInit) => Promise<Response>;
 }
 
-/** Reads through the byte cap and rejects declared oversize bodies before reading. */
 export const collectBoundedBody = Effect.fn("Http.collectBoundedBody")(function* <E>(
   response: Response,
   maximumBytes: number,

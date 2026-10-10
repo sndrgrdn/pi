@@ -1,12 +1,3 @@
-/**
- * Bordered prompt box.
- *
- * ╭────────────────────────────────── Claude Opus 4.6 · high ─╮
- * │ type here_                                                │
- * ╰─ 69.6K · 99.21% ───────────────────── ~/.pi/agent (main) ─╯
- *
- * The editor draws the complete box; the footer stays empty.
- */
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { PromptBoxEditor } from "./prompt-box-editor.ts";
 
@@ -20,7 +11,6 @@ const THINK_LABEL = {
   max: "max",
 } satisfies Record<string, string>;
 
-/** Replaces the editor with a bordered prompt box for each session. */
 export default function promptBox(pi: ExtensionAPI) {
   let branch: string | null = null;
 
@@ -53,9 +43,7 @@ export default function promptBox(pi: ExtensionAPI) {
     try {
       const u = ctx.getContextUsage();
       tokens = u?.tokens ?? undefined;
-    } catch {
-      // Context usage may be unavailable (e.g. right after compaction); show "?".
-    }
+    } catch {}
 
     const k = tokens ? `${(tokens / 1000).toFixed(1)}K` : "?";
     parts.push(theme.fg("dim", k));
@@ -112,7 +100,6 @@ export default function promptBox(pi: ExtensionAPI) {
   });
 }
 
-/** Latest assistant-turn prompt-cache hit rate, if cache activity has been reported. */
 export function latestCacheHitRate(entries: readonly SessionEntry[]): number | undefined {
   let rate: number | undefined;
   let reportedCache = false;

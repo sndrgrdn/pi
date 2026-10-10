@@ -1,5 +1,3 @@
-/** Parallel MCP adapter for websearch. */
-
 import { Effect } from "effect";
 import * as Schema from "effect/Schema";
 import type { HttpFetchContract } from "./http.ts";
@@ -11,7 +9,6 @@ import {
   type WebSearchError,
 } from "./search.ts";
 
-/** Parallel MCP endpoint. */
 export const PARALLEL_ENDPOINT = "https://search.parallel.ai/mcp";
 
 const ParallelOutput = Schema.Struct({
@@ -28,7 +25,6 @@ const ParallelOutput = Schema.Struct({
   }),
 });
 
-/** Parallel result payload before normalization. */
 export interface ParallelResultItem {
   readonly url: string;
   readonly title?: string | null | undefined;
@@ -36,7 +32,6 @@ export interface ParallelResultItem {
   readonly excerpts: readonly string[];
 }
 
-/** Normalizes Parallel results and drops unparseable dates. */
 export function parseParallelResults(output: {
   structuredContent: { results: readonly ParallelResultItem[] };
 }): SearchResult[] {
@@ -60,7 +55,6 @@ export function parseParallelResults(output: {
 
 const decodeParallelOutput = Schema.decodeUnknownSync(ParallelOutput);
 
-/** Searches Parallel; absent results are empty and malformed results fail decoding. */
 export const parallelSearch = Effect.fn("Parallel.search")(function* (
   http: HttpFetchContract,
   query: string,

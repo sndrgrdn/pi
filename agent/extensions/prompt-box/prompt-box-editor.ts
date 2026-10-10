@@ -8,7 +8,6 @@ import {
   type TuiMouseEventResult,
 } from "@earendil-works/pi-tui";
 
-/** Glyphs used to build the prompt-box border. */
 export const BOX_GLYPHS = {
   tl: "╭",
   tr: "╮",
@@ -28,7 +27,6 @@ function padLine(text: string, width: number): string {
   return t + " ".repeat(Math.max(0, width - visibleWidth(t)));
 }
 
-/** Builds one border with optional left and right labels. */
 export function boxBorder(
   theme: Theme,
   left: string,
@@ -55,7 +53,6 @@ export function boxBorder(
   );
 }
 
-/** Dynamic corner label providers, re-evaluated on every render. */
 export interface CornerLabels {
   tl: () => string;
   tr: () => string;
@@ -63,7 +60,6 @@ export interface CornerLabels {
   br: () => string;
 }
 
-/** Editor with one border around its body and autocomplete suggestions. */
 export class PromptBoxEditor extends CustomEditor {
   private readonly piTheme: Theme;
   private readonly corners: CornerLabels;
@@ -81,7 +77,6 @@ export class PromptBoxEditor extends CustomEditor {
     this.corners = corners;
   }
 
-  /** Maps the box inset and added body rows back to the base editor layout. */
   override handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
     const layout = this.mouseLayout;
 
@@ -92,7 +87,6 @@ export class PromptBoxEditor extends CustomEditor {
     return super.handleMouse({
       ...event,
       x: event.x - 2,
-      // Added blank rows map to the base bottom border, not autocomplete.
       y:
         event.y <= layout.bodyRows
           ? event.y
@@ -102,7 +96,6 @@ export class PromptBoxEditor extends CustomEditor {
     });
   }
 
-  /** Delegates to CustomEditor below the minimum box width. */
   override render(width: number): string[] {
     this.mouseLayout = undefined;
 

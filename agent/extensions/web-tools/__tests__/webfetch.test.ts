@@ -63,7 +63,6 @@ describe("fetch", () => {
     const exit = await runFetch(
       { url: "http://example.com/public", format: "text", timeout: 4 },
       async (url, init) => {
-        // SAFETY: runFetch supplies headers as a plain string record; HeadersInit cannot retain that shape.
         requests.push({ url, headers: init.headers as Record<string, string> });
 
         return new Response("hello", { headers: { "content-type": "text/plain" } });
@@ -110,7 +109,6 @@ describe("fetch", () => {
 
     const exit = await runFetch({ url: "https://1.1.1.1", format: "text" }, async (_url, init) => {
       count++;
-      // SAFETY: runFetch supplies headers as a plain string record; HeadersInit cannot retain that shape.
       const headers = init.headers as Record<string, string>;
       userAgents.push(headers["User-Agent"] ?? "");
 

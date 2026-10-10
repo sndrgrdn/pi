@@ -48,9 +48,6 @@ afterEach(async () => {
   await Effect.runPromise(ctx.processes.killAllBackgrounded());
 });
 
-/** Minimal execution context the builtin bash execute reads session env from. */
-// SAFETY: the builtin bash execute reads only ctx.cwd and ctx.sessionManager;
-// the real ExtensionContext demands many more members than this fake provides.
 const fakeExecuteCtx = {
   cwd: process.cwd(),
   sessionManager: { getSessionId: () => "test", getSessionFile: () => undefined },
@@ -120,18 +117,11 @@ const firstEntry = async (): Promise<BackgroundProcess> => {
   return entry;
 };
 
-/** Minimal Theme the tested renderers touch: only fg and bold. */
-// SAFETY: the tested renderCall/renderResult paths call only theme.fg and
-// theme.bold; the real Theme type demands many more members than this fake.
 const fakeTheme = {
   fg: (_color: string, text: string) => text,
   bold: (text: string) => text,
 } as never;
 
-/** Minimal ToolRenderContext for the tested renderers: state and executionStarted. */
-// SAFETY: the tested renderers read only context.state, context.executionStarted,
-// context.lastComponent and context.isError; the real ToolRenderContext type
-// demands many more members than this fake provides.
 const fakeRenderContext = <TState>(state: TState, executionStarted: boolean) =>
   ({ state, executionStarted, lastComponent: undefined }) as never;
 
@@ -148,7 +138,6 @@ describe("bash operations", () => {
   });
 
   it("ignores a passed timeout and backgrounds the command instead", async () => {
-    // Timeouts are deliberately unsupported: nothing may kill a command.
     let output = "";
 
     const result = await ctx.ops.exec("sleep 30", process.cwd(), {
@@ -172,8 +161,6 @@ describe("bash operations", () => {
   it("aborts the command when the signal fires", async () => {
     const controller = new AbortController();
     const pending = exec("sleep 30", { signal: controller.signal });
-    // The fiber attaches the abort listener before the first await yields,
-    // so aborting right away is deterministic.
     controller.abort();
     await expect(pending).rejects.toThrow("aborted");
   });
@@ -250,8 +237,6 @@ describe("bash definition", () => {
 
     const result = await tool().execute(
       "tool-id",
-      // SAFETY: legacy raw args may carry a timeout key the schema drops; the
-      // tool's execute reads only command (and background).
       { command: "sleep 0.15; echo DONE", timeout: 0.05 } as never,
       undefined,
       undefined,
@@ -268,8 +253,6 @@ describe("bash definition", () => {
 
     if (!renderCall) throw new Error("test invariant: bash tool defines renderCall");
 
-    // SAFETY: legacy raw args may carry a timeout key the schema drops; the
-    // renderer reads only command and background.
     const text = renderCall(
       { command: "echo hi", timeout: 45 } as never,
       fakeTheme,
@@ -516,8 +499,6 @@ describe("bash_status and bash_cancel tool definitions", () => {
       fakeExecuteCtx,
     );
 
-    // The wait and its Deferred are attached before execute returns; killing
-    // right away preempts the wait deterministically.
     await killTool().execute("id", { id: pid }, undefined, undefined, fakeExecuteCtx);
     expect(textOf(await pending)).toContain("cancelled");
   });
@@ -537,8 +518,6 @@ describe("bash_status and bash_cancel tool definitions", () => {
       fakeExecuteCtx,
     );
 
-    // The abort listener is attached before execute returns; aborting right
-    // away ends the wait deterministically.
     controller.abort();
     await expect(pending).rejects.toThrow("Status check aborted");
   });

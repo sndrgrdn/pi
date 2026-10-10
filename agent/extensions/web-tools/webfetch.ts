@@ -1,5 +1,3 @@
-/** Registers webfetch and bridges Pi tool calls to the fetch core. */
-
 import {
   type AgentToolResult,
   type AgentToolUpdateCallback,
@@ -21,7 +19,6 @@ import {
 import { parkTruncatedOutput } from "./tool-output.ts";
 import { emptyToolResult, toolErrorResult, toolPreview } from "../utils/tool-render.ts";
 
-/** Webfetch parameter schema with a bounded timeout. */
 export const webFetchParameters = Type.Object({
   url: Type.String({ description: "The HTTP or HTTPS URL to fetch content from" }),
   format: Type.Optional(
@@ -41,7 +38,6 @@ export const webFetchParameters = Type.Object({
 
 type WebFetchParams = Static<typeof webFetchParameters>;
 
-/** Successful webfetch details. */
 export interface WebFetchDetails {
   url: string;
   contentType: string;
@@ -63,7 +59,6 @@ async function toAgentResult(page: FetchedPage): Promise<AgentToolResult<WebFetc
   return { content: [{ type: "text", text }], details };
 }
 
-/** Registers the webfetch tool. */
 export default function webFetchOverride(pi: ExtensionAPI) {
   pi.registerTool({
     name: "webfetch",
@@ -118,7 +113,6 @@ export default function webFetchOverride(pi: ExtensionAPI) {
 
         return await toAgentResult(page);
       } catch (err) {
-        // Throwing (not returning) is what marks the tool call isError.
         const message = err instanceof Error ? err.message : "Fetch failed.";
         throw new Error(message);
       }

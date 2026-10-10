@@ -16,13 +16,11 @@ async function writeTempFile(content: string, prefix: string): Promise<string> {
   return filePath;
 }
 
-/** Bounded output and optional path to its complete content. */
 export interface ParkedOutput {
   text: string;
   fullOutputPath?: string;
 }
 
-/** Returns Pi-limited text and parks the complete output when truncated. */
 export async function parkTruncatedOutput(content: string, prefix: string): Promise<ParkedOutput> {
   const truncated = truncateHead(content, {
     maxBytes: DEFAULT_MAX_BYTES,

@@ -1,23 +1,11 @@
-/**
- * Process boundary for the bash backgrounding extension.
- *
- * Mirrors pi's local shell backend (`createLocalBashOperations` and
- * `waitForChildProcess`): spawn the user's shell detached into its own
- * process group, stream stdout/stderr, and wait for exit plus drained
- * stdio (so detached descendants holding the pipes cannot hang the wait).
- * `killTree` SIGKILLs the whole process group, with a direct-kill fallback.
- */
-
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { getShellConfig } from "@earendil-works/pi-coding-agent";
 import { Context, Deferred, Effect } from "effect";
 import { bashError, toErrorString, type BashError } from "./errors.ts";
 
-/** Grace period for late output after process exit. */
 const EXIT_STDIO_GRACE_MS = 100;
 
-/** Prefer Homebrew bash because macOS bash 3.2 mishandles quoted heredocs in command substitutions. */
 const HOMEBREW_BASH = "/opt/homebrew/bin/bash";
 
 function resolveShellConfig() {
@@ -30,12 +18,10 @@ export interface SpawnedProcess {
   readonly wait: Effect.Effect<{ exitCode: number | null }, BashError>;
 }
 
-/** Effect service tag for the process-spawn boundary. */
 export class ProcessSpawner extends Context.Service<ProcessSpawner, ProcessSpawnerContract>()(
   "@pi/bash-background/ProcessSpawner",
 ) {}
 
-/** Shell process input and output callback. */
 export interface SpawnShellOptions {
   command: string;
   cwd: string;
@@ -43,14 +29,11 @@ export interface SpawnShellOptions {
   onData: (chunk: Buffer) => void;
 }
 
-/** Spawns shell processes and kills their process trees. */
 export interface ProcessSpawnerContract {
   readonly spawn: (options: SpawnShellOptions) => Effect.Effect<SpawnedProcess, BashError>;
-  /** SIGKILL the process group; never fails. */
   readonly killTree: (pid: number) => Effect.Effect<void, never>;
 }
 
-/** Creates the Node child-process implementation of ProcessSpawnerContract. */
 export function createRealProcessSpawner(): ProcessSpawnerContract {
   return ProcessSpawner.of({
     spawn: Effect.fn("BashBackground.spawn")(function* ({ command, cwd, env, onData }) {
@@ -134,9 +117,7 @@ function killProcessTree(pid: number): void {
         detached: true,
         windowsHide: true,
       });
-    } catch {
-      // taskkill failed; nothing else to do on win32.
-    }
+    } catch {}
 
     return;
   }
@@ -145,18 +126,13 @@ function killProcessTree(pid: number): void {
     process.kill(-pid, "SIGKILL");
 
     return;
-  } catch {
-    // No such process group; fall through to a direct kill.
-  }
+  } catch {}
 
   try {
     process.kill(pid, "SIGKILL");
-  } catch {
-    // Process already gone.
-  }
+  } catch {}
 }
 
-/** Waits for exit and both output streams, with a short grace period for late output. */
 function waitForChildProcess(child: ChildProcess): Promise<{ exitCode: number | null }> {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -204,8 +180,6 @@ function waitForChildProcess(child: ChildProcess): Promise<{ exitCode: number | 
     };
 
     const onData = () => {
-      // Output is still arriving after exit; defer finalizing so we don't
-      // destroy the stream mid-write and truncate the tail.
       if (exited && !settled) armIdleTimer();
     };
 

@@ -1,5 +1,3 @@
-/** Registers websearch and bridges Pi tool calls to the search core. */
-
 import {
   type AgentToolResult,
   type AgentToolUpdateCallback,
@@ -28,7 +26,6 @@ const webSearchParameters = Type.Object({
 
 type WebSearchParams = Static<typeof webSearchParameters>;
 
-/** Registers the websearch tool. */
 export default function webSearchOverride(pi: ExtensionAPI) {
   pi.registerTool({
     name: "websearch",
@@ -40,7 +37,6 @@ export default function webSearchOverride(pi: ExtensionAPI) {
     ],
     parameters: webSearchParameters,
     renderCall(args, theme) {
-      // The engine is resolved inside execute, so the start line uses the fallback label.
       let text = theme.fg("toolTitle", "◈ Web search ");
       text += theme.fg("accent", `"${args.query}"`);
 
@@ -94,7 +90,6 @@ export default function webSearchOverride(pi: ExtensionAPI) {
 
         return { content: [{ type: "text", text }], details };
       } catch (err) {
-        // Search failures carry their own stable message with engine context; other errors stay generic.
         if (err instanceof WebSearchError) throw new Error(err.message);
         throw new Error(`Unable to search the web for ${params.query}`);
       }

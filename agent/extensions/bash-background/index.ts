@@ -1,10 +1,3 @@
-/**
- * Bash with automatic backgrounding: overrides `bash` (auto-background
- * after 30 s, or `background: true`), plus `bash_status` and `bash_cancel`.
- * All three share one registry; on `session_shutdown` and process exit
- * every still-running background process is killed, so no orphans survive.
- */
-
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Effect } from "effect";
 import { Text } from "@earendil-works/pi-tui";
@@ -22,7 +15,6 @@ const bashCancelParameters = Type.Object({
   }),
 });
 
-/** Creates a cancellation tool that kills the process group, including children. */
 export function bashCancelToolDefinition(
   processes: BackgroundProcessesContract,
 ): ToolDefinition<typeof bashCancelParameters> {
@@ -52,7 +44,6 @@ export function bashCancelToolDefinition(
   });
 }
 
-/** Registers bash process tools and kills remaining background processes on shutdown. */
 export default function bashBackground(pi: ExtensionAPI): void {
   const spawner = createRealProcessSpawner();
   const processes = createBackgroundProcesses(spawner);

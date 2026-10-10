@@ -26,8 +26,8 @@ describe("ShellOutputFile", () => {
 
   it("decodes multibyte characters split across chunks", async () => {
     const file = new ShellOutputFile(64);
-    file.appendOutput(Buffer.from([0xc3])); // first half of é
-    file.appendOutput(Buffer.from([0xa9])); // second half of é
+    file.appendOutput(Buffer.from([0xc3]));
+    file.appendOutput(Buffer.from([0xa9]));
     const snapshot = file.outputSnapshot();
     expect(snapshot.tail).toBe("é");
     file.close();

@@ -1,15 +1,3 @@
-/**
- * The bash override: backgrounding operations plus the tool definition.
- *
- * Timeouts are deliberately unsupported: a command that outlives the
- * auto-background delay is backgrounded, never killed by a deadline.
- * The foreground path plugs into pi's operations seam
- * (`createBashToolDefinition(cwd, { operations })`), so the builtin keeps
- * its output accumulation, truncation, and rendering; the
- * immediate-background path bypasses the seam (the flag cannot travel
- * through it) and spawns directly.
- */
-
 import { delimiter, join } from "node:path";
 import { Effect, Schema } from "effect";
 import { Type } from "typebox";
@@ -32,10 +20,8 @@ import {
 } from "./registry.ts";
 import { ProcessSpawner, type ProcessSpawnerContract } from "./process.ts";
 
-/** Auto-background delay in seconds. */
 export const AUTO_BACKGROUND_SECONDS = 30;
 
-/** Process services and auto-background delay for the bash tool. */
 export interface BackgroundingBashOptions {
   processes: BackgroundProcessesContract;
   spawner: ProcessSpawnerContract;
@@ -72,7 +58,6 @@ const BashCommandOutput = Schema.Union([
 
 const bashOutputDocument = Schema.toJsonSchemaDocument(BashCommandOutput);
 
-// SAFETY: TypeBox carries JSON Schema generated from the owning Effect schema, not unchecked input.
 const bashOutputSchema = Type.Unsafe<Schema.Schema.Type<typeof BashCommandOutput>>({
   ...bashOutputDocument.schema,
   $defs: bashOutputDocument.definitions,
@@ -83,7 +68,6 @@ type ExecOutcome =
   | { type: "abort" }
   | { type: "background"; pid: number; notice: string };
 
-/** Plain object like the builtin: unknown keys (e.g. legacy timeout) pass validation and are dropped. */
 export const bashParameters = Type.Object({
   command: Type.String({ description: "Bash command to execute" }),
   background: Type.Optional(
@@ -93,7 +77,6 @@ export const bashParameters = Type.Object({
   ),
 });
 
-/** Build the BashOperations seam that backs the foreground bash override. */
 export function createBackgroundingBashOperations(
   options: BackgroundingBashOptions,
   onBackground?: (pid: number) => void,
@@ -136,7 +119,6 @@ export function createBackgroundingBashOperations(
   };
 }
 
-/** Input and process services for immediate backgrounding. */
 export interface BackgroundCommandInput {
   command: string;
   cwd: string;
@@ -145,7 +127,6 @@ export interface BackgroundCommandInput {
   spawner: ProcessSpawnerContract;
 }
 
-/** Starts a background command and returns its process ID and notice. */
 export function runBackgroundCommand(
   input: BackgroundCommandInput,
 ): Promise<Extract<ExecOutcome, { type: "background" }>> {
@@ -187,9 +168,6 @@ const execProgram = Effect.fn("BashBackground.exec")(function* ({
   const spawner = yield* ProcessSpawner;
   const processes = yield* BackgroundProcesses;
 
-  // Data is routed to the builtin accumulator while the command is in the
-  // foreground and to the registry output file always (so bash_status can
-  // show progress after backgrounding).
   let entry: BackgroundProcess | undefined;
   let foreground = true;
 
@@ -207,8 +185,6 @@ const execProgram = Effect.fn("BashBackground.exec")(function* ({
   const created = yield* processes.register({ pid: spawned.pid, command, cwd });
   entry = created;
 
-  // Forked detached so the sync outlives this fiber; `spawned.wait` is
-  // memoized, so the waitExit arm below observes the same outcome.
   yield* spawned.wait
     .pipe(
       Effect.matchEffect({
@@ -272,7 +248,6 @@ const execProgram = Effect.fn("BashBackground.exec")(function* ({
     return { type: "abort" };
   }
 
-  // The process won the race to exit between the timer firing and here.
   if (!ProcessState.$is("running")(created.state)) {
     return {
       type: "exit",
@@ -286,11 +261,6 @@ const execProgram = Effect.fn("BashBackground.exec")(function* ({
   return outcome;
 });
 
-/**
- * Mirror pi's shell environment for the direct spawn path: PATH with pi's
- * bin dir first, plus the current session's PI_* metadata (same shape the
- * builtin builds for the ops seam).
- */
 function resolveSessionEnv(ctx: ExtensionContext): NodeJS.ProcessEnv {
   const binDir = join(getAgentDir(), "bin");
   const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === "path") ?? "PATH";
@@ -321,7 +291,6 @@ function resolveSessionEnv(ctx: ExtensionContext): NodeJS.ProcessEnv {
   return env;
 }
 
-/** Creates the bash override with automatic and immediate backgrounding. */
 export function createBackgroundingBashDefinition(
   cwd: string,
   options: BackgroundingBashOptions,
@@ -333,8 +302,6 @@ export function createBackgroundingBashDefinition(
     parameters: bashParameters,
     outputSchema: bashOutputSchema,
     description: `Execute a bash command in the current working directory. Returns stdout and stderr, truncated to the last 2000 lines or 50KB (whichever is hit first); if truncated, the full output is saved to a temp file. Commands that run longer than ${AUTO_BACKGROUND_SECONDS} seconds background themselves: the call returns with the output so far and the command keeps running. Pass background: true to background a command immediately. Check background processes with bash_status and cancel them with bash_cancel.`,
-    // Never render a timeout suffix; keep the builtin's startedAt state so
-    // the elapsed timer in the result row still works.
     renderCall(args, theme, context) {
       const state = context.state;
 
@@ -358,7 +325,6 @@ export function createBackgroundingBashDefinition(
       const startedAt = performance.now();
 
       if (params.background === true) {
-        // The flag cannot travel through the ops seam, so spawn directly.
         const outcome = await runBackgroundCommand({
           command: params.command,
           cwd: ctx.cwd,

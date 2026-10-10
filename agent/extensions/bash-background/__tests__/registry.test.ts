@@ -74,7 +74,6 @@ describe("BackgroundProcesses", () => {
     expect(notFound).toBeInstanceOf(BashError);
     expect(notFound.kind).toBe("not_found");
 
-    // A foreground entry is deleted when finished; kill returns not_found.
     const entry = await register(processes, 1);
     await run(processes.markFinished(entry.pid, 0));
     const finished = await run(processes.kill(entry.pid).pipe(Effect.flip));

@@ -1,14 +1,8 @@
-/**
- * Every command is registered while it runs; only processes actually moved
- * to the background are visible to `bash_status`.
- */
-
 import { Context, Data, Deferred, Duration, Effect } from "effect";
 import { bashError, toErrorString, type BashError } from "./errors.ts";
 import type { ProcessSpawnerContract } from "./process.ts";
 import { ShellOutputFile } from "./shell-output-file.ts";
 
-/** running → completed (ended on its own) | cancelled (we SIGKILLed it). Null exit code = died on a signal. */
 export type ProcessState = Data.TaggedEnum<{
   running: {};
   completed: { readonly exitCode: number | null };
@@ -17,7 +11,6 @@ export type ProcessState = Data.TaggedEnum<{
 
 const processState = Data.taggedEnum<ProcessState>();
 
-/** Constructors and matchers for process lifecycle states. */
 export const ProcessState = {
   Running: processState.running,
   Completed: processState.completed,
@@ -26,12 +19,6 @@ export const ProcessState = {
   $match: processState.$match,
 };
 
-/**
- * Live state of one spawned command.
- *
- * Mutable while it runs; `completion` resolves when the process leaves
- * "running". `backgrounded` controls visibility in `bash_status`.
- */
 export class BackgroundProcess {
   backgrounded = false;
   state: ProcessState = ProcessState.Running();
@@ -60,13 +47,11 @@ export class BackgroundProcess {
   }
 }
 
-/** Effect service tag for the background-process registry. */
 export class BackgroundProcesses extends Context.Service<
   BackgroundProcesses,
   BackgroundProcessesContract
 >()("@pi/bash-background/Processes") {}
 
-/** Tracks spawned processes and controls their background lifecycle. */
 export interface BackgroundProcessesContract {
   /** Fails with BashError("output") if the output file cannot be created. */
   register(input: {
@@ -74,7 +59,6 @@ export interface BackgroundProcessesContract {
     command: string;
     cwd: string;
   }): Effect.Effect<BackgroundProcess, BashError>;
-  /** Only these appear in bash_status. */
   markBackgrounded(id: number): Effect.Effect<void, never>;
   /** Record a natural exit (null = died on a signal); ignored once cancelled. */
   markFinished(id: number, exitCode: number | null): Effect.Effect<void, never>;
@@ -90,7 +74,6 @@ export interface BackgroundProcessesContract {
   killAllBackgrounded(): Effect.Effect<number, never>;
 }
 
-/** Creates an in-memory registry whose kill operations use the process spawner. */
 export function createBackgroundProcesses(
   spawner: ProcessSpawnerContract,
 ): BackgroundProcessesContract {

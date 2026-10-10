@@ -3,7 +3,6 @@ import { Text } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
 import { emptyToolResult, toolErrorResult, toolPreview } from "../../utils/tool-render.ts";
 
-// SAFETY: These tests access only Theme.fg.
 const theme = { fg: (_color: string, text: string) => text } as Theme;
 
 const rendered = (component: Text) =>

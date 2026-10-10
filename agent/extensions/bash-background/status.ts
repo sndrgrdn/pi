@@ -1,5 +1,3 @@
-/** Waiting observes without stopping: `bash_cancel` preempts it, an abort ends it, and the bound never kills anything. */
-
 import { Effect } from "effect";
 import { Text } from "@earendil-works/pi-tui";
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
@@ -13,10 +11,8 @@ import {
 } from "./registry.ts";
 import type { OutputSnapshot } from "./shell-output-file.ts";
 
-/** Character limit for status output tails. */
 export const STATUS_OUTPUT_TAIL_CHARS = 2000;
 
-/** Input schema for listing or waiting on background processes. */
 export const bashStatusParameters = Type.Object({
   id: Type.Optional(
     Type.Number({
@@ -31,7 +27,6 @@ export const bashStatusParameters = Type.Object({
   ),
 });
 
-/** Formats milliseconds as decimal seconds. */
 export function formatElapsed(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
@@ -45,14 +40,12 @@ function formatProcessState(state: ProcessState): string {
   });
 }
 
-/** Formats one process for the status list. */
 export function formatProcessLine(entry: BackgroundProcess, now = Date.now()): string {
   const state = formatProcessState(entry.state);
 
   return `- id ${entry.pid} · ${state} · ${formatElapsed(now - entry.startedAt)} · \`${entry.command}\``;
 }
 
-/** Formats the background-process list. */
 export function formatProcessList(entries: BackgroundProcess[], now = Date.now()): string {
   if (entries.length === 0) return "No background processes.";
 
@@ -61,7 +54,6 @@ export function formatProcessList(entries: BackgroundProcess[], now = Date.now()
   );
 }
 
-/** Formats process state and output locations for status details. */
 export function formatProcessDetail(entry: BackgroundProcess, snapshot: OutputSnapshot): string {
   const lines = [formatProcessLine(entry), `Working directory: ${entry.cwd}`];
 
@@ -108,13 +100,11 @@ const waitForProcess = (
   return Effect.raceFirst(wait, abortStatusWait(signal));
 };
 
-/** Render state retained across status-tool renders. */
 interface StatusWaitRenderState {
   startedAt?: number;
   interval: ReturnType<typeof setInterval> | undefined;
 }
 
-/** Creates the bash_status tool definition. */
 export function bashStatusToolDefinition(
   processes: BackgroundProcessesContract,
 ): ToolDefinition<typeof bashStatusParameters, unknown, StatusWaitRenderState> {
@@ -136,8 +126,6 @@ export function bashStatusToolDefinition(
 
       return { content: [{ type: "text", text }], details: undefined };
     },
-    // Results only arrive when the wait ends, so the countdown ticker lives
-    // here; renderResult clears the interval on completion.
     renderCall(args, theme, context) {
       const state = context.state;
 

@@ -1,24 +1,17 @@
-/** Webfetch core for URL validation, bounded fetches, retries, and content conversion. */
-
 import { Duration, Effect } from "effect";
 import * as Schema from "effect/Schema";
 import { Parser } from "htmlparser2";
 import TurndownService from "turndown";
 import { collectBoundedBody, type HttpFetchContract } from "./http.ts";
 
-/** Maximum fetched response size in bytes. */
 export const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
 
-/** Default fetch timeout in seconds. */
 export const DEFAULT_TIMEOUT_SECONDS = 30;
 
-/** Maximum fetch timeout in seconds. */
 export const MAX_TIMEOUT_SECONDS = 120;
 
-/** Supported webfetch output formats. */
 export type FetchFormat = "text" | "markdown" | "html";
 
-/** Webfetch request before defaults are applied. */
 export interface FetchInput {
   url: string;
   format?: FetchFormat | undefined;
@@ -26,27 +19,23 @@ export interface FetchInput {
   signal?: AbortSignal | undefined;
 }
 
-/** Webfetch request with required format and timeout. */
 export interface NormalizedFetchInput {
   url: string;
   format: FetchFormat;
   timeout: number;
 }
 
-/** Applies webfetch request defaults. */
 export const normalizeFetchInput = (input: FetchInput): NormalizedFetchInput => ({
   url: input.url,
   format: input.format ?? "markdown",
   timeout: input.timeout ?? DEFAULT_TIMEOUT_SECONDS,
 });
 
-/** Initial fetch User-Agent; a Cloudflare-challenge retry uses `opencode`. */
 export const browserUserAgent =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36";
 
 const opencodeUserAgent = "opencode";
 
-/** Webfetch failure with a stable model-facing message. */
 export class WebFetchError extends Schema.TaggedError<WebFetchError>()("WebFetch.Error", {
   kind: Schema.Union([
     Schema.Literal("invalidUrl"),
@@ -65,7 +54,6 @@ export class WebFetchError extends Schema.TaggedError<WebFetchError>()("WebFetch
   cause: Schema.optionalKey(Schema.Unknown),
 }) {}
 
-/** Creates a WebFetchError with its stable message. */
 export const makeWebFetchError = (
   kind: WebFetchError["kind"],
   fields: Partial<Omit<WebFetchError, "_tag" | "kind" | "message">> = {},
@@ -215,7 +203,6 @@ export const fetchPage = Effect.fn("WebFetch.fetchPage")(function* (
   return { url, contentType, format, body };
 });
 
-/** Extracts text while skipping active HTML containers. */
 export function extractTextFromHTML(html: string) {
   let text = "";
   let skipDepth = 0;
@@ -243,7 +230,6 @@ export function extractTextFromHTML(html: string) {
   return text.trim();
 }
 
-/** Converts HTML to Markdown without active or metadata elements. */
 export function convertHTMLToMarkdown(html: string) {
   const turndown = new TurndownService({
     headingStyle: "atx",
@@ -258,7 +244,6 @@ export function convertHTMLToMarkdown(html: string) {
   return turndown.turndown(html);
 }
 
-/** Converts HTML content to the requested format. */
 export const convertFetchedContent = (
   content: string,
   contentType: string,
@@ -273,7 +258,6 @@ export const convertFetchedContent = (
   return content;
 };
 
-/** Converted webfetch result. */
 export interface FetchedPage {
   url: string;
   contentType: string;
@@ -281,7 +265,6 @@ export interface FetchedPage {
   content: string;
 }
 
-/** Fetches and converts a page, failing with WebFetchError for expected errors. */
 export const fetchAndConvert = Effect.fn("WebFetch.fetchAndConvert")(function* (
   http: HttpFetchContract,
   input: FetchInput,

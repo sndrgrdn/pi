@@ -1,5 +1,3 @@
-/** Exa MCP adapter for websearch. */
-
 import { Effect } from "effect";
 import * as Schema from "effect/Schema";
 import type { HttpFetchContract } from "./http.ts";
@@ -11,14 +9,12 @@ import {
   type WebSearchError,
 } from "./search.ts";
 
-/** Exa MCP endpoint. */
 export const EXA_ENDPOINT = "https://mcp.exa.ai/mcp";
 
 const ExaOutput = Schema.Struct({
   content: Schema.Array(Schema.Struct({ type: Schema.Literal("text"), text: Schema.String })),
 });
 
-/** Parses Exa result blocks and skips entries without a URL. */
 export function parseExaResults(text: string): SearchResult[] {
   return text.split(/\n\n---\n\n/).flatMap((block) => {
     const url = block.match(/^URL:\s*(.+)$/m)?.[1]?.trim();
@@ -47,8 +43,6 @@ export function parseExaResults(text: string): SearchResult[] {
   });
 }
 
-// The API key rides in the query string (the provider's supported pattern).
-// Keep this URL out of errors and logs: it contains ?exaApiKey=.
 const exaUrl = (key: string | undefined) => {
   const url = new URL(EXA_ENDPOINT);
 
@@ -59,7 +53,6 @@ const exaUrl = (key: string | undefined) => {
 
 const decodeExaOutput = Schema.decodeUnknownSync(ExaOutput);
 
-/** Searches Exa; absent results are empty and malformed results fail decoding. */
 export const exaSearch = Effect.fn("Exa.search")(function* (
   http: HttpFetchContract,
   query: string,

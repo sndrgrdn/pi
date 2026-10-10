@@ -1,17 +1,12 @@
-/** Shared bounded and timed MCP tools/call client for websearch engines. */
-
 import { Duration, Effect } from "effect";
 import * as Schema from "effect/Schema";
 import { collectBoundedBody, type HttpFetchContract } from "./http.ts";
 import { createWebSearchError, type SearchEngine, type WebSearchError } from "./search.ts";
 
-/** Maximum MCP response size in bytes. */
 export const MCP_MAX_RESPONSE_BYTES = 256 * 1024;
 
-/** MCP call timeout in seconds. */
 export const MCP_TIMEOUT_SECONDS = 25;
 
-/** MCP call input with engine and tool failure attribution. */
 export interface McpCallInput {
   http: HttpFetchContract;
   url: string;
@@ -22,7 +17,6 @@ export interface McpCallInput {
   engine: SearchEngine;
 }
 
-/** JSON-RPC tools/call request body. */
 export interface McpRequestBody {
   jsonrpc: string;
   id: number;
@@ -33,10 +27,8 @@ export interface McpRequestBody {
   };
 }
 
-/** Validated MCP result value. */
 export type McpResult = Schema.Json;
 
-/** Parses a JSON-RPC result or returns undefined for an absent result payload. */
 export const parseMcpResponse = Effect.fn("MCP.parseResponse")(function* (
   body: string,
 ): Effect.fn.Return<McpResult | undefined, WebSearchError> {
@@ -74,7 +66,6 @@ export const parseMcpResponse = Effect.fn("MCP.parseResponse")(function* (
 
 const isMcpToolError = Schema.is(Schema.Struct({ isError: Schema.Literal(true) }));
 
-/** Calls one MCP tool and rejects explicit tool errors before engine parsing. */
 export const mcpCall = Effect.fn("MCP.call")(function* (
   input: McpCallInput,
 ): Effect.fn.Return<McpResult | undefined, WebSearchError> {
@@ -116,7 +107,6 @@ export const mcpCall = Effect.fn("MCP.call")(function* (
     );
 
     if (isMcpToolError(result)) {
-      // Search engine content can contain credentials or query data; retain only safe attribution.
       return yield* Effect.fail(createWebSearchError("engine", { engine, tool }));
     }
 
