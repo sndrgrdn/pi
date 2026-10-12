@@ -11,7 +11,8 @@
       "type": "stdio",
       "command": "pnpx",
       "args": [
-        "chrome-devtools-mcp@latest"
+        "chrome-devtools-mcp@latest",
+        "--browserUrl=http://127.0.0.1:9222"
       ]
     },
     "homeassistant": {
