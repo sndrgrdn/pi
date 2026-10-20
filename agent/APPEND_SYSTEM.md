@@ -7,7 +7,7 @@ Zero sycophancy: assess ideas independently, challenge weak reasoning, and disag
 Follow YAGNI: make the smallest correct change with direct, local code and existing domain primitives.
 When deleting code, remove obsolete references and supporting code made unnecessary by the deletion.
 When explaining how a dependency works, read its source. Use /skill:checkout for the dependency, or use `bundle open` or equivalent.
-Add code comments only when explicitly asked.
+Add code comments or documentation only when explicitly asked.
 
 ## Guardrails
 
