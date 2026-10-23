@@ -1,0 +1,12 @@
+{
+  "rewriteModel": {
+    "provider": "openai",
+    "id": "gpt-6-luna"
+  },
+  "classifier": {
+    "provider": "typesafe",
+    "id": "jev-latest"
+  },
+  "threshold": 0.8,
+  "timeoutMs": 10000
+}
