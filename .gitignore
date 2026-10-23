@@ -4,6 +4,7 @@ models-store.json
 sessions
 node_modules
 mcp-auth.json
+mcp.json
 settings.json
 agent/missions
 agent/pi-subagents
