@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { isAbsolute, resolve } from "node:path";
+import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { ExtensionAPI, Theme, ToolRenderers } from "@earendil-works/pi-coding-agent";
 import {
@@ -59,7 +59,8 @@ function pathLabel(path: string, cwd: string, theme: Theme): string {
 
   if (!getCapabilities().hyperlinks) return styled;
 
-  const absolute = isAbsolute(path) ? path : resolve(cwd, path);
+  const absolute =
+    path === "~" || path.startsWith("~/") ? resolve(homedir(), path.slice(2)) : resolve(cwd, path);
 
   return hyperlink(styled, pathToFileURL(absolute).href);
 }
@@ -151,6 +152,14 @@ function hiddenResult(
   theme: Theme,
   context: RenderContext,
 ): Component {
+  const renderResult = base?.renderResult;
+
+  const rendered = renderResult
+    ? delegate(context, "baseResult", (delegated) =>
+        renderResult(result, options, theme, delegated),
+      )
+    : undefined;
+
   if (!options.expanded) {
     if (!context.isError) return new Text("", 0, 0);
 
@@ -167,17 +176,11 @@ function hiddenResult(
     return new Text(theme.fg("error", line), 0, 0);
   }
 
-  if (!base?.renderResult) {
-    const text = textOf(result).trim();
+  if (rendered) return rendered;
 
-    if (!text) return new Text("", 0, 0);
+  const text = textOf(result).trim();
 
-    return new Text(theme.fg(context.isError ? "error" : "toolOutput", text), 0, 0);
-  }
-
-  return delegate(context, "baseResult", (delegated) =>
-    base.renderResult!(result, options, theme, delegated),
-  );
+  return new Text(text ? theme.fg(context.isError ? "error" : "toolOutput", text) : "", 0, 0);
 }
 
 export default function minimalToolRows(pi: ExtensionAPI) {
