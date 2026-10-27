@@ -12,7 +12,13 @@ Follow YAGNI: make the smallest correct change with direct, local code and exist
 
 When deleting code, remove obsolete references and supporting code made unnecessary by the deletion.
 
+Put temporary work files in `./tmp` if it exists, otherwise use the system temporary directory.
+
 When explaining how a dependency works, read its source. Use /skill:checkout for the dependency, or use `bundle open` or equivalent.
+
+## Autonomy
+
+Within the requested scope, keep going: fix failures, retry, and take the next step. Ask before unrequested outward-facing actions such as pushing, publishing, deploying, or messaging others, and before irreversible destructive actions.
 
 ## Guardrails
 
