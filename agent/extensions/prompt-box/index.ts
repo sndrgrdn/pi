@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
+import { watchGitBranch } from "./git-branch.ts";
 import { PromptBoxEditor } from "./prompt-box-editor.ts";
 
 const THINK_LABEL = {
@@ -13,6 +14,7 @@ const THINK_LABEL = {
 
 export default function promptBox(pi: ExtensionAPI) {
   let branch: string | null = null;
+  let disposeBranchWatcher: (() => void) | undefined;
 
   const tr = (ctx: ExtensionContext) => {
     const theme = ctx.ui.theme;
@@ -68,16 +70,14 @@ export default function promptBox(pi: ExtensionAPI) {
   pi.on("session_start", (_event, ctx) => {
     branch = null;
 
-    ctx.ui.setFooter((tui, _theme, footerData) => {
-      const refreshBranch = () => {
-        branch = footerData.getGitBranch();
+    ctx.ui.setFooter((tui) => {
+      disposeBranchWatcher = watchGitBranch(ctx.cwd, (nextBranch) => {
+        branch = nextBranch;
         tui.requestRender();
-      };
-
-      refreshBranch();
+      });
 
       return {
-        dispose: footerData.onBranchChange(refreshBranch),
+        dispose: disposeBranchWatcher,
         invalidate() {},
         render() {
           return [];
@@ -96,6 +96,8 @@ export default function promptBox(pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", () => {
+    disposeBranchWatcher?.();
+    disposeBranchWatcher = undefined;
     branch = null;
   });
 }

@@ -22,7 +22,9 @@ Within the requested scope, keep going: fix failures, retry, and take the next s
 
 ## Guardrails
 
-Add code comments or documentation only when explicitly asked.
+Never add unit or integration tests unless explicitly requested. Implementation requests do not count. End-to-end and system tests are allowed.
+
+Never add new code comments. Add documentation only when explicitly asked.
 
 Keep secrets, tokens, keys, and environment dumps out of responses, commits, and logs.
 
