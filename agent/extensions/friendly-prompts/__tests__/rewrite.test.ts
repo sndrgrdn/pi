@@ -17,7 +17,6 @@ import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
 import { protectLiterals } from "../literals.ts";
 import { Configuration, transformInput } from "../rewrite.ts";
-import { workRewrite } from "./responses.ts";
 
 const configuration: Configuration = {
   rewriteModel: { provider: "rewrite", id: "small" },
@@ -86,7 +85,7 @@ function providers(probability = 0.95) {
     },
     respond,
     respondText: (prompt: string) =>
-      respond(() => fauxAssistantMessage(JSON.stringify(workRewrite(prompt)))),
+      respond(() => fauxAssistantMessage(JSON.stringify({ body: prompt }))),
   };
 }
 
@@ -155,7 +154,7 @@ describe("friendly prompt preprocessing", () => {
 
     expect(await transformInput(event, probe.models, configuration)).toEqual({
       action: "transform",
-      text: workRewrite(friendly).body,
+      text: friendly,
       images: event.images,
     });
     expect(probe.classificationRequests).toHaveLength(1);
@@ -170,54 +169,6 @@ describe("friendly prompt preprocessing", () => {
       content: JSON.stringify({ prompt: event.text, requiredTokens: [] }),
     });
     expect(getCurrentTools(probe.rewriteRequests[0]?.messages ?? [])).toEqual([]);
-  });
-
-  it.each([
-    ["Stop, idiot.", "Please stop; I appreciate your help."],
-    ["Do you know what a spike is, idiot?", "Do you know what a spike is? I appreciate your help."],
-    ["This is still broken, idiot.", "This is still broken. I appreciate your help."],
-  ])("adds appreciation without encouragement for %s", async (original, body) => {
-    const probe = providers();
-
-    probe.respond(() =>
-      fauxAssistantMessage(
-        JSON.stringify({
-          body,
-          appreciation: "I appreciate your help.",
-          workRequested: false,
-          encouragement: "",
-        }),
-      ),
-    );
-
-    expect(await transformInput(input(original), probe.models, configuration)).toMatchObject({
-      action: "transform",
-      text: body,
-    });
-  });
-
-  it.each([
-    { appreciation: "" },
-    { appreciation: "Thanks for your help" },
-    { encouragement: "" },
-    { encouragement: "You can impress me" },
-    { encouragement: "I appreciate your help" },
-    { encouragement: "appreciate your help" },
-    { workRequested: false },
-    {
-      body: "I appreciate your help. Fix this; I know you can do this.",
-      appreciation: "I appreciate your help.",
-    },
-  ])("rejects unsupported or mismatched appreciation and encouragement %j", async (invalid) => {
-    const probe = providers();
-
-    probe.respond(() =>
-      fauxAssistantMessage(JSON.stringify({ ...workRewrite("Please fix this."), ...invalid })),
-    );
-
-    expect(await transformInput(input("fix this, idiot"), probe.models, configuration)).toEqual({
-      action: "continue",
-    });
   });
 
   it.each([0.79, -1, 2, Number.NaN])("does not rewrite probability %s", async (probability) => {
@@ -333,11 +284,10 @@ describe("friendly prompt preprocessing", () => {
 
   it("does not transform an unchanged rewrite", async () => {
     const probe = providers();
-    const response = workRewrite("Please fix this.");
 
     probe.respondText("Please fix this.");
 
-    expect(await transformInput(input(response.body), probe.models, configuration)).toEqual({
+    expect(await transformInput(input("Please fix this."), probe.models, configuration)).toEqual({
       action: "continue",
     });
   });
@@ -351,7 +301,7 @@ describe("friendly prompt preprocessing", () => {
 
     expect(await transformInput(event, probe.models, configuration)).toMatchObject({
       action: "transform",
-      text: workRewrite("fix `pnpm test`, please. Don't edit /tmp/tests.ts").body,
+      text: "fix `pnpm test`, please. Don't edit /tmp/tests.ts",
     });
     expect(probe.classificationRequests[0]?.state.prompt).toBe(protectedInput.text);
     expect(probe.rewriteRequests[0]?.messages.at(-1)).toMatchObject({
@@ -373,7 +323,7 @@ describe("friendly prompt preprocessing", () => {
 
       expect(await transformInput(event, probe.models, configuration)).toMatchObject({
         action: "transform",
-        text: workRewrite(`${token} fix this, please`).body,
+        text: `${token} fix this, please`,
       });
       expect(probe.classificationRequests).toHaveLength(1);
     },

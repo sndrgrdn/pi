@@ -19,7 +19,6 @@ import {
   type TerminalInputHandler,
 } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { workRewrite } from "./responses.ts";
 
 let directory: string;
 
@@ -129,20 +128,20 @@ describe("friendly prompt extension", () => {
       timeoutMs: 10_000,
     });
 
-    rewrite.setResponses([fauxAssistantMessage(JSON.stringify(workRewrite("Please fix this.")))]);
+    rewrite.setResponses([fauxAssistantMessage(JSON.stringify({ body: "Please fix this." }))]);
 
     expect(await runner.emitInput("fix this, idiot", undefined, "interactive")).toMatchObject({
       action: "transform",
-      text: workRewrite("Please fix this.").body,
+      text: "Please fix this.",
     });
 
     await runner.emit({ type: "session_start", reason: "reload" });
     rewrite.setResponses([
-      fauxAssistantMessage(JSON.stringify(workRewrite("Please fix this again."))),
+      fauxAssistantMessage(JSON.stringify({ body: "Please fix this again." })),
     ]);
 
     expect(await runner.emitInput("fix this again, idiot", undefined, "interactive")).toMatchObject(
-      { action: "transform", text: workRewrite("Please fix this again.").body },
+      { action: "transform", text: "Please fix this again." },
     );
     expect(errors).toEqual([]);
   });

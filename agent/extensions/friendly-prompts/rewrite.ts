@@ -31,42 +31,7 @@ const hostilityQuestion = {
   },
 } satisfies ClassifierContext["questions"][string];
 
-const RewriteResponse = Schema.Struct({
-  body: Schema.NonEmptyString,
-  appreciation: Schema.NonEmptyString,
-  workRequested: Schema.Boolean,
-  encouragement: Schema.String,
-});
-
-function parseRewrite(text: string): string | undefined {
-  const response = Schema.decodeUnknownSync(RewriteResponse)(JSON.parse(text));
-  const { appreciation, workRequested, encouragement } = response;
-  const body = response.body.trim();
-  const appreciationStart = body.indexOf(appreciation);
-
-  if (!appreciation.trim() || appreciationStart < 0) return undefined;
-
-  if (workRequested) {
-    if (
-      appreciationStart === 0 &&
-      (/[.!?。！？]["'”’]*$/.test(appreciation.trim()) ||
-        /^[.!?。！？]/.test(body.slice(appreciation.length).trimStart()))
-    )
-      return undefined;
-
-    if (!encouragement.trim() || !body.includes(encouragement)) return undefined;
-
-    const distinct =
-      appreciationStart + appreciation.length <= body.lastIndexOf(encouragement) ||
-      body.indexOf(encouragement) + encouragement.length <= body.lastIndexOf(appreciation);
-
-    if (appreciation === encouragement || !distinct) return undefined;
-  } else if (encouragement !== "") {
-    return undefined;
-  }
-
-  return body;
-}
+const RewriteResponse = Schema.Struct({ body: Schema.NonEmptyString });
 
 async function rewritePrompt(
   text: string,
@@ -132,9 +97,9 @@ async function rewritePrompt(
     .flatMap((part) => (part.type === "text" ? [part.text] : []))
     .join("");
 
-  const body = parseRewrite(responseText);
+  const { body } = Schema.decodeUnknownSync(RewriteResponse)(JSON.parse(responseText));
 
-  return body ? protectedInput.restore(body) : undefined;
+  return protectedInput.restore(body.trim());
 }
 
 export async function transformInput(
