@@ -27,5 +27,5 @@
     "noPropertyAccessFromIndexSignature": false
   },
   "include": ["**/*.ts"],
-  "exclude": ["**/node_modules/**", "**/dist/**", "agent/git/**", "agent/npm/**", "agent/sessions/**"]
+  "exclude": ["**/node_modules/**", "**/dist/**", "agent/git/**", "agent/extensions/meridian/**", "agent/npm/**", "agent/sessions/**"]
 }

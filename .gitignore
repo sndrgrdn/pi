@@ -9,3 +9,4 @@ settings.json
 agent/missions
 agent/pi-subagents
 agent/run-history.jsonl
+agent/extensions/meridian

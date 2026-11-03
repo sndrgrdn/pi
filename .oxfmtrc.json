@@ -3,6 +3,7 @@
   "ignorePatterns": [
     "**/node_modules/**/*",
     "agent/git/**/*",
+    "agent/extensions/meridian/**/*",
     "agent/npm/**/*",
     "agent/sessions/**/*"
   ]

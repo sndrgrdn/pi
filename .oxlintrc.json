@@ -43,6 +43,7 @@
     "**/dist",
     "**/*.d.ts",
     "agent/git/**",
+    "agent/extensions/meridian/**",
     "vendor/oxlint/anti-slop/**"
   ]
 }
