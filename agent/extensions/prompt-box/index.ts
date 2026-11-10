@@ -15,6 +15,13 @@ const THINK_LABEL = {
 export default function promptBox(pi: ExtensionAPI) {
   let branch: string | null = null;
   let disposeBranchWatcher: (() => void) | undefined;
+  let statuses: (() => ReadonlyMap<string, string> | Record<string, string>) | undefined;
+
+  const tl = (ctx: ExtensionContext) => {
+    const all = statuses?.();
+    const texts = all instanceof Map ? [...all.values()] : Object.values(all ?? {});
+    return texts.length ? ctx.ui.theme.fg("accent", texts.join(" · ")) : "";
+  };
 
   const tr = (ctx: ExtensionContext) => {
     const theme = ctx.ui.theme;
@@ -70,7 +77,8 @@ export default function promptBox(pi: ExtensionAPI) {
   pi.on("session_start", (_event, ctx) => {
     branch = null;
 
-    ctx.ui.setFooter((tui) => {
+    ctx.ui.setFooter((tui, _theme, footerData) => {
+      statuses = () => footerData.getExtensionStatuses();
       disposeBranchWatcher = watchGitBranch(ctx.cwd, (nextBranch) => {
         branch = nextBranch;
         tui.requestRender();
@@ -87,7 +95,7 @@ export default function promptBox(pi: ExtensionAPI) {
 
     ctx.ui.setEditorComponent((tui, editorTheme, keybindings) => {
       return new PromptBoxEditor(tui, editorTheme, keybindings, ctx.ui.theme, {
-        tl: () => "",
+        tl: () => tl(ctx),
         tr: () => tr(ctx),
         bl: () => bl(ctx),
         br: () => br(ctx),
