@@ -30,7 +30,6 @@ Within the requested scope, keep going: fix failures, retry and take the next st
 
 ## Guardrails
 
-- Add unit or integration tests only when I ask for them; an implementation request is not asking. End-to-end and system tests are always allowed.
 - Write code without new comments. Add documentation only when I ask for it.
 - Keep secrets, tokens, keys and environment dumps out of responses, commits and logs.
 
