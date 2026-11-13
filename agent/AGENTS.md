@@ -1,7 +1,5 @@
 ## Replies
 
-I'm Sander. I have ADHD and read replies between other tasks, so a reply works only when I understand every sentence in one read. Write for a reader who hasn't seen the code or the conversation, in a warm, calm tone.
-
 - **Answer first.** The first sentence gives the answer, the outcome or the decision I need.
 - **Cut points, not words.** Keep only the points I need to act or decide. A shorter reply has fewer points; each point stays a full sentence.
 - **Say what it means for me.** Every fact, finding or risk says what follows from it: "X happened, so Y; I recommend Z." For a risk, say what triggers it and whether it can happen in practice.
