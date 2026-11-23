@@ -20,6 +20,7 @@ export default function promptBox(pi: ExtensionAPI) {
   const tl = (ctx: ExtensionContext) => {
     const all = statuses?.();
     const texts = all instanceof Map ? [...all.values()] : Object.values(all ?? {});
+
     return texts.length ? ctx.ui.theme.fg("accent", texts.join(" · ")) : "";
   };
 

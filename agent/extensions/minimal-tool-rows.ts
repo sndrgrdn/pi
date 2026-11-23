@@ -1,29 +1,13 @@
 import { homedir } from "node:os";
-import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
-import type { ExtensionAPI, Theme, ToolRenderers } from "@earendil-works/pi-coding-agent";
-import {
-  Box,
-  getCapabilities,
-  hyperlink,
-  type Component,
-  Spacer,
-  Text,
-} from "@earendil-works/pi-tui";
+import type {
+  ExtensionAPI,
+  Theme,
+  ThemeColor,
+  ToolRenderers,
+} from "@earendil-works/pi-coding-agent";
+import { Box, type Component, Text, TruncatedText } from "@earendil-works/pi-tui";
 import { Option } from "effect";
 import * as Schema from "effect/Schema";
-
-const decodePathFields = Schema.decodeUnknownOption(
-  Schema.Struct({
-    path: Schema.optional(Schema.String),
-    file_path: Schema.optional(Schema.String),
-    content: Schema.optional(Schema.String),
-  }),
-);
-
-const decodeEditFields = Schema.decodeUnknownOption(
-  Schema.Struct({ edits: Schema.Array(Schema.Unknown) }),
-);
 
 type RenderCall = NonNullable<ToolRenderers["renderCall"]>;
 
@@ -31,40 +15,88 @@ type RenderResult = NonNullable<ToolRenderers["renderResult"]>;
 
 type RenderContext = Parameters<RenderCall>[2];
 
-function pathLabel(path: string, cwd: string, theme: Theme): string {
+const decodeRowFields = Schema.decodeUnknownOption(
+  Schema.Struct({
+    description: Schema.optional(Schema.String),
+    path: Schema.optional(Schema.String),
+    file_path: Schema.optional(Schema.String),
+    pattern: Schema.optional(Schema.String),
+    url: Schema.optional(Schema.String),
+    query: Schema.optional(Schema.String),
+    offset: Schema.optional(Schema.NullOr(Schema.Number)),
+    limit: Schema.optional(Schema.NullOr(Schema.Number)),
+  }),
+);
+
+function shortenHome(path: string): string {
   const home = homedir();
-  const label = path === home || path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
-  const styled = theme.fg("accent", label);
 
-  if (!getCapabilities().hyperlinks) return styled;
-
-  const absolute =
-    path === "~" || path.startsWith("~/") ? resolve(home, path.slice(2)) : resolve(cwd, path);
-
-  return hyperlink(styled, pathToFileURL(absolute).href);
+  return path === home || path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
 }
 
-function callLine(
-  toolName: string,
-  args: Parameters<RenderCall>[0],
-  theme: Theme,
-  cwd: string,
-): string {
-  const fields = Option.getOrUndefined(decodePathFields(args));
-  const path = fields?.path ?? fields?.file_path;
-  let text = `${theme.fg("toolTitle", theme.bold(toolName))} ${path ? pathLabel(path, cwd, theme) : theme.fg("toolOutput", "...")}`;
+interface ToolIcon {
+  icon: string;
+  color: ThemeColor;
+}
 
-  if (toolName === "edit") {
-    const count = Option.getOrUndefined(decodeEditFields(args))?.edits.length;
+const look: ToolIcon = { icon: "→", color: "accent" };
 
-    if (count !== undefined && count > 1) text += theme.fg("dim", ` (${count} edits)`);
+const search: ToolIcon = { icon: "✱", color: "accent" };
+
+const change: ToolIcon = { icon: "←", color: "warning" };
+
+const web: ToolIcon = { icon: "%", color: "mdLinkUrl" };
+
+const otherIcon: ToolIcon = { icon: "⚙", color: "mdHeading" };
+
+const icons = new Map<string, ToolIcon>([
+  ["bash", { icon: "$", color: "success" }],
+  ["read", look],
+  ["ls", look],
+  ["grep", search],
+  ["find", search],
+  ["write", change],
+  ["edit", change],
+  ["webfetch", web],
+  ["websearch", { ...web, icon: "◈" }],
+]);
+
+function label(toolName: string, args: Parameters<RenderCall>[0]): string {
+  const fields = Option.getOrUndefined(decodeRowFields(args));
+  const path = shortenHome(fields?.path ?? fields?.file_path ?? "");
+  const inPath = path ? ` in ${path}` : "";
+
+  switch (toolName) {
+    case "bash":
+      return fields?.description ?? "Shell";
+    case "read": {
+      const start = fields?.offset ?? 1;
+
+      const range =
+        fields?.offset || fields?.limit
+          ? `:${start}-${fields.limit ? start + fields.limit - 1 : ""}`
+          : "";
+
+      return `Read ${path}${range}`;
+    }
+
+    case "write":
+      return `Write ${path}`;
+    case "edit":
+      return `Edit ${path}`;
+    case "ls":
+      return `List ${path || "."}`;
+    case "grep":
+      return `Grep "${fields?.pattern ?? ""}"${inPath}`;
+    case "find":
+      return `Find "${fields?.pattern ?? ""}"${inPath}`;
+    case "webfetch":
+      return `WebFetch ${fields?.url ?? ""}`;
+    case "websearch":
+      return `Web Search "${fields?.query ?? ""}"`;
+    default:
+      return toolName;
   }
-
-  if (toolName === "write" && fields?.content) {
-    text += theme.fg("dim", ` (${fields.content.split("\n").length} lines)`);
-  }
-
-  return text;
 }
 
 function textOf(result: Parameters<RenderResult>[0]): string {
@@ -72,42 +104,12 @@ function textOf(result: Parameters<RenderResult>[0]): string {
 }
 
 function firstLine(text: string): string {
-  const line =
+  return (
     text
       .split("\n")
       .find((part) => part.trim())
-      ?.trim() ?? "";
-
-  return line.length > 160 ? `${line.slice(0, 157)}...` : line;
-}
-
-function textSlot(context: RenderContext, value: string): Text {
-  const current = context.state.call;
-  const text = current instanceof Text ? current : new Text("", 0, 0);
-
-  context.state.call = text;
-  text.setText(value);
-
-  return text;
-}
-
-function shellSlot(context: RenderContext, theme: Theme, value: string): Box {
-  const current = context.state.shell;
-  const box = current instanceof Box ? current : new Box(1, 1);
-
-  const token = context.isPartial
-    ? "toolPendingBg"
-    : context.isError
-      ? "toolErrorBg"
-      : "toolSuccessBg";
-
-  context.state.shell = box;
-  box.setBgFn((line) => theme.bg(token, line));
-  box.setPaddingX(context.outputPad);
-  box.clear();
-  box.addChild(new Text(value, 0, 0));
-
-  return box;
+      ?.trim() ?? ""
+  );
 }
 
 function delegate(
@@ -122,64 +124,84 @@ function delegate(
   return component;
 }
 
+function shellBox(context: RenderContext, theme: Theme): Box {
+  const current = context.state.shell;
+  const box = current instanceof Box ? current : new Box(1, 1);
+
+  const token = context.isPartial
+    ? "toolPendingBg"
+    : context.isError
+      ? "toolErrorBg"
+      : "toolSuccessBg";
+
+  context.state.shell = box;
+  box.setBgFn((line) => theme.bg(token, line));
+  box.setPaddingX(context.outputPad);
+  box.clear();
+
+  return box;
+}
+
 export default function minimalToolRows(pi: ExtensionAPI) {
   pi.registerToolRenderer((toolName, next) => {
     const base = next();
-    const renderResult = base?.renderResult;
+    const ownsShell = base?.renderShell === "self";
 
-    const renderers: ToolRenderers = {
-      ...base,
-      renderResult(result, options, theme, context) {
-        const rendered = renderResult
-          ? delegate(context, "baseResult", (delegated) =>
-              renderResult(result, options, theme, delegated),
-            )
-          : undefined;
+    return {
+      renderShell: "self",
+      renderCall(args, theme, context) {
+        if (!context.expanded) {
+          const { icon, color } = icons.get(toolName) ?? otherIcon;
+          const text = label(toolName, args);
 
-        if (options.expanded) {
-          if (rendered) return rendered;
-
-          const text = textOf(result).trim();
-
-          return new Text(
-            text ? theme.fg(context.isError ? "error" : "toolOutput", text) : "",
-            0,
-            0,
+          return new TruncatedText(
+            context.isError
+              ? theme.fg("error", `${icon} ${text}`)
+              : `${theme.fg(color, icon)} ${theme.fg(context.isPartial ? "muted" : "text", text)}`,
+            context.outputPad + 2,
           );
         }
 
-        if (!context.isError) return new Text("", 0, 0);
+        const call = base?.renderCall
+          ? delegate(context, "baseCall", (delegated) => base.renderCall!(args, theme, delegated))
+          : new Text(theme.fg("toolTitle", theme.bold(toolName)), 0, 0);
 
-        const line = theme.fg("error", firstLine(textOf(result)) || "failed");
+        if (ownsShell) return call;
+
+        const box = shellBox(context, theme);
+
+        box.addChild(call);
+
+        return box;
+      },
+      renderResult(result, options, theme, context) {
+        if (!options.expanded) {
+          if (!context.isError) return new Text("", 0, 0);
+
+          return new TruncatedText(
+            theme.fg("error", firstLine(textOf(result)) || "failed"),
+            context.outputPad + 4,
+          );
+        }
+
+        const rendered = base?.renderResult
+          ? delegate(context, "baseResult", (delegated) =>
+              base.renderResult!(result, options, theme, delegated),
+            )
+          : new Text(
+              theme.fg(context.isError ? "error" : "toolOutput", `\n${textOf(result).trim()}`),
+              0,
+              0,
+            );
+
+        if (ownsShell) return rendered;
+
         const box = context.state.shell;
 
-        if (base?.renderShell === "self" && box instanceof Box) {
-          box.addChild(new Spacer(1));
-          box.addChild(new Text(line, 0, 0));
+        if (box instanceof Box) box.addChild(rendered);
 
-          return new Text("", 0, 0);
-        }
-
-        return new Text(line, 0, 0);
+        return new Text("", 0, 0);
       },
     };
-
-    if (toolName === "edit" || toolName === "write") {
-      renderers.renderCall = (args, theme, context) => {
-        if (context.expanded && base?.renderCall) {
-          return delegate(context, "baseCall", (delegated) =>
-            base.renderCall!(args, theme, delegated),
-          );
-        }
-
-        const value = callLine(toolName, args, theme, context.cwd);
-
-        return base?.renderShell === "self"
-          ? shellSlot(context, theme, value)
-          : textSlot(context, value);
-      };
-    }
-
-    return renderers;
   });
 }
