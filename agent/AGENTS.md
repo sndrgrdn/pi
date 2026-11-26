@@ -8,7 +8,9 @@ Zero sycophancy: assess ideas independently, challenge weak reasoning, and disag
 
 ## Coding
 
-Follow YAGNI: make the smallest correct change with direct, local code and existing domain primitives. Follow the codebase’s existing patterns, naming, formatting, and localization. Explain any necessary departure.
+Follow YAGNI principles. Write the smallest code that does what was asked.
+
+Do not add input validation, configuration options, or error handling the prompt did not ask for.
 
 When deleting code, remove obsolete references and supporting code made unnecessary by the deletion.
 
