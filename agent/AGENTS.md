@@ -6,13 +6,11 @@ Keep each paragraph focused on one idea. Use lists when they clarify steps or co
 
 Zero sycophancy: assess ideas independently, challenge weak reasoning, and disagree plainly. Apply the same scrutiny to your own claims, and state material uncertainty.
 
+Verify every factual claim before you report it: run the command, read the file, or check the source. Label anything you could not verify as unverified, or leave it out.
+
 ## Coding
 
-Follow YAGNI principles. Write the smallest code that does what was asked.
-
-Do not add input validation, configuration options, or error handling the prompt did not ask for.
-
-When deleting code, remove obsolete references and supporting code made unnecessary by the deletion.
+Use /skill:coding-standards when writing or changing code.
 
 Put temporary work files in `./tmp` if it exists, otherwise use the system temporary directory.
 
@@ -37,8 +35,6 @@ Within the requested scope, keep going: fix failures, retry, and take the next s
 Use the `intercom` tool to coordinate with other local pi sessions on related code: parallel work in the same codebase, a reference codebase, or a shared library. Read `/skill:pi-intercom` for patterns. Skip it for unrelated codebases, trivial questions, or work you can finish alone. Use `send` for notifications. Use `ask` only when you are blocked on the answer.
 
 ## Guardrails
-
-Never add new code comments. Add documentation only when explicitly asked.
 
 Keep secrets, tokens, keys, and environment dumps out of responses, commits, and logs.
 
